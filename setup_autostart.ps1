@@ -7,6 +7,22 @@ Write-Host "  Setting up Auto-Start" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$pythonCandidates = @(
+    (Join-Path $scriptDir "venv\Scripts\python.exe"),
+    (Join-Path $scriptDir ".venv\Scripts\python.exe")
+)
+$pythonExe = $pythonCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $pythonExe) {
+    Write-Host "No virtual environment Python found in project folder." -ForegroundColor Red
+    Write-Host "Expected one of:" -ForegroundColor Red
+    Write-Host "  $($pythonCandidates[0])" -ForegroundColor Red
+    Write-Host "  $($pythonCandidates[1])" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
 # Check if running as Administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
@@ -17,7 +33,7 @@ if (-not $isAdmin) {
     Write-Host "1. Right-click on PowerShell"
     Write-Host "2. Select 'Run as Administrator'"
     Write-Host "3. Run this command:"
-    Write-Host "   powershell -ExecutionPolicy Bypass -File c:\polymarket-trades-v1\setup_autostart.ps1"
+    Write-Host "   powershell -ExecutionPolicy Bypass -File '$scriptDir\setup_autostart.ps1'"
     Write-Host ""
     Read-Host "Press Enter to exit"
     exit 1
@@ -35,9 +51,9 @@ Start-Sleep -Seconds 1
 Write-Host "Creating scheduled task..." -ForegroundColor Yellow
 
 $taskAction = New-ScheduledTaskAction `
-    -Execute "C:\polymarket-trades-v1\venv\Scripts\python.exe" `
+    -Execute $pythonExe `
     -Argument "-m uvicorn app.main:app --host 0.0.0.0 --port 8000" `
-    -WorkingDirectory "C:\polymarket-trades-v1"
+    -WorkingDirectory $scriptDir
 
 # Create trigger for system startup
 $taskTrigger = New-ScheduledTaskTrigger -AtStartup

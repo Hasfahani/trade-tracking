@@ -35,12 +35,36 @@ Write-Host ""
 Write-Host "📝 Press Ctrl+C to stop the server" -ForegroundColor Gray
 Write-Host ""
 
-Set-Location c:\polymarket-trades-v1
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $scriptDir
+
+$pythonCandidates = @(
+    (Join-Path $scriptDir "venv\Scripts\python.exe"),
+    (Join-Path $scriptDir ".venv\Scripts\python.exe")
+)
+
+$pythonExe = $pythonCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $pythonExe) {
+    Write-Host "No virtual environment Python found." -ForegroundColor Red
+    Write-Host "Expected one of:" -ForegroundColor Red
+    Write-Host "  $($pythonCandidates[0])" -ForegroundColor Red
+    Write-Host "  $($pythonCandidates[1])" -ForegroundColor Red
+    Write-Host "Create a venv and install dependencies first." -ForegroundColor Yellow
+    exit 1
+}
+
+& $pythonExe -c "import uvicorn" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "uvicorn is not installed in this environment." -ForegroundColor Red
+    Write-Host "Run: & '$pythonExe' -m pip install -r requirements.txt" -ForegroundColor Yellow
+    exit 1
+}
 
 # Run server with auto-restart on crash
 while ($true) {
     try {
-        & ".\venv\Scripts\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 2>&1
+        & $pythonExe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 2>&1
     }
     catch {
         Write-Host "Server error: $_" -ForegroundColor Red

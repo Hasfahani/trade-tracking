@@ -8,9 +8,41 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def _ensure_wallet_columns():
+    """Add missing wallet columns for older SQLite databases."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+
+    expected_columns = {
+        "tags": "TEXT",
+        "is_pinned": "INTEGER",
+        "last_checked_at": "DATETIME",
+        "last_refresh_count": "INTEGER",
+        "last_error_at": "DATETIME",
+        "last_error_message": "TEXT",
+    }
+
+    with engine.begin() as conn:
+        table_exists = conn.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='wallets'"
+        ).first()
+        if not table_exists:
+            return
+
+        rows = conn.exec_driver_sql("PRAGMA table_info(wallets)").fetchall()
+        existing_columns = {row[1] for row in rows}
+
+        for column_name, column_type in expected_columns.items():
+            if column_name not in existing_columns:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE wallets ADD COLUMN {column_name} {column_type}"
+                )
+
+
 def init_db():
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
+    _ensure_wallet_columns()
 
 
 @contextmanager
