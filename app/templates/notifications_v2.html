@@ -1,0 +1,37 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div>
+        <p class="eyebrow">Alerts</p>
+        <h1>Notifications</h1>
+        <p class="subtle">{{ unread_count }} unread alert{% if unread_count != 1 %}s{% endif %}.</p>
+    </div>
+    <button class="btn" id="markReadBtn">Mark all read</button>
+</section>
+
+<section class="card">
+    <div class="stack-list">
+        {% for notification in notifications %}
+        <div class="alert-item {% if notification.is_read == 0 %}alert-unread{% endif %}">
+            <strong>{{ wallet_map.get(notification.wallet_address).label if wallet_map.get(notification.wallet_address) else notification.wallet_address }}</strong>
+            <p>{{ notification.message }}</p>
+            <p>{{ notification.market_title or 'Unknown market' }} · {{ notification.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if notification.created_at else 'Unknown time' }}</p>
+        </div>
+        {% else %}
+        <p>No notifications yet.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('markReadBtn').addEventListener('click', async () => {
+    await fetch('/notifications/mark-read', { method: 'POST' });
+    window.location.reload();
+});
+</script>
+{% endblock %}

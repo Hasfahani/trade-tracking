@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Polymarket Trades{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style_v2.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="nav-shell">
+            <a href="/dashboard" class="brand">Polymarket Trades</a>
+            <nav class="top-nav">
+                <a href="/dashboard">Dashboard</a>
+                <a href="/wallets">Wallets</a>
+                <a href="/all-trades">All Trades</a>
+                <a href="/charts">Charts</a>
+                <a href="/notifications">Alerts</a>
+                <a href="/settings/notifications">Settings</a>
+                <a href="/admin/sync-status">Sync</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <p>Manual migration only. Existing URLs remain supported.</p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

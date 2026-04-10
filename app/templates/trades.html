@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Trades - {{ wallet.address[:10] }}...{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="breadcrumb">
+        <a href="/wallets">← Back to Wallets</a>
+    </div>
+    
+    <h2>Trades for {{ wallet.label or wallet.address[:10] + '...' }}</h2>
+    <p class="wallet-address">{{ wallet.address }}</p>
+    
+    <!-- Filters Section -->
+    <div class="filters-section">
+        <form method="get" action="/wallets/{{ wallet.address }}/trades" class="filters-form">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="side">Side:</label>
+                    <select name="side" id="side">
+                        <option value="">All</option>
+                        <option value="YES" {% if side == "YES" %}selected{% endif %}>YES</option>
+                        <option value="NO" {% if side == "NO" %}selected{% endif %}>NO</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="market_search">Market:</label>
+                    <input type="text" name="market_search" id="market_search" 
+                           placeholder="Search markets..." 
+                           value="{{ market_search or '' }}">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="date_from">From:</label>
+                    <input type="date" name="date_from" id="date_from" 
+                           value="{{ date_from or '' }}">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="date_to">To:</label>
+                    <input type="date" name="date_to" id="date_to" 
+                           value="{{ date_to or '' }}">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="sort_by">Sort:</label>
+                    <select name="sort_by" id="sort_by">
+                        <option value="time_desc" {% if sort_by == "time_desc" or not sort_by %}selected{% endif %}>Newest First</option>
+                        <option value="time_asc" {% if sort_by == "time_asc" %}selected{% endif %}>Oldest First</option>
+                        <option value="size_desc" {% if sort_by == "size_desc" %}selected{% endif %}>Largest First</option>
+                        <option value="size_asc" {% if sort_by == "size_asc" %}selected{% endif %}>Smallest First</option>
+                    </select>
+                </div>
+                
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-secondary">Clear</a>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    {% if trades %}
+    <div class="pagination-info">
+        <div>
+            <p>Showing {{ trades|length }} of {{ total_trades }} trades (Page {{ page }} of {{ total_pages }})</p>
+        </div>
+        <div>
+            <a href="/wallets/{{ wallet.address }}/trades/export?side={{ side or '' }}&market_search={{ market_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&sort_by={{ sort_by or 'time_desc' }}" 
+               class="btn btn-export" 
+               download>
+                📥 Export to CSV
+            </a>
+        </div>
+    </div>
+    
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date (UTC)</th>
+                    <th>Market</th>
+                    <th>Side</th>
+                    <th>Price</th>
+                    <th>Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trade in trades %}
+                <tr>
+                    <td>{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td class="market-title">
+                        {{ trade.market_title or trade.condition_id }}
+                    </td>
+                    <td>
+                        <span class="badge badge-{{ 'yes' if trade.side == 'YES' else 'no' }}">
+                            {{ trade.side }}
+                        </span>
+                    </td>
+                    <td>{{ '%.4f'|format(trade.price) }}</td>
+                    <td>{{ '%.2f'|format(trade.size) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="/wallets/{{ wallet.address }}/trades?page={{ page - 1 }}&page_size={{ page_size }}&side={{ side or '' }}&market_search={{ market_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&sort_by={{ sort_by or 'time_desc' }}" class="btn">← Previous</a>
+        {% endif %}
+        
+        <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+        
+        {% if page < total_pages %}
+        <a href="/wallets/{{ wallet.address }}/trades?page={{ page + 1 }}&page_size={{ page_size }}&side={{ side or '' }}&market_search={{ market_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&sort_by={{ sort_by or 'time_desc' }}" class="btn">Next →</a>
+        {% endif %}
+    </div>
+    
+    {% else %}
+    <p class="empty-state">No trades found for this wallet. Run a refresh to fetch trades.</p>
+    <code>curl -X POST http://localhost:8000/admin/refresh?address={{ wallet.address }}</code>
+    {% endif %}
+</div>
+{% endblock %}

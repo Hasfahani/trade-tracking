@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}P&amp;L – {{ wallet.label or wallet.address[:10] }}…{% endblock %}
+
+{% block content %}
+<div class="container">
+
+  {# ── breadcrumb ── #}
+  <div class="breadcrumb">
+    <a href="/wallets">← Back to Wallets</a>
+    <span>|</span>
+    <a href="/wallets/{{ wallet.address }}/trades">View Trades</a>
+  </div>
+
+  <h2>Profit &amp; Loss — {{ wallet.label or (wallet.address[:10] + '…') }}</h2>
+  <p class="wallet-address">{{ wallet.address }}</p>
+
+  {# ── Period summary cards ── #}
+  <div class="pnl-periods">
+
+    {% for period_key, label in [('all_time','All Time'),('this_month','This Month'),('last_month','Last Month')] %}
+    {% set s = summary[period_key] %}
+    <div class="pnl-period-card">
+      <div class="pnl-period-title">{{ label }}</div>
+      <div class="pnl-period-stats">
+
+        <div class="pnl-stat">
+          <div class="pnl-stat-label">Realized P&amp;L</div>
+          <div class="pnl-stat-value {% if s.pnl > 0 %}win{% elif s.pnl < 0 %}loss{% else %}neutral{% endif %}">
+            {% if s.pnl >= 0 %}+{% endif %}${{ '%.2f'|format(s.pnl) }}
+          </div>
+        </div>
+
+        <div class="pnl-stat">
+          <div class="pnl-stat-label">Bets Closed</div>
+          <div class="pnl-stat-value neutral">{{ s.count }}</div>
+        </div>
+
+        <div class="pnl-stat">
+          <div class="pnl-stat-label">Wins / Losses</div>
+          <div class="pnl-stat-value neutral">
+            <span style="color:var(--success)">{{ s.wins }}</span>
+            /
+            <span style="color:var(--danger)">{{ s.losses }}</span>
+          </div>
+        </div>
+
+        <div class="pnl-stat">
+          <div class="pnl-stat-label">Win Rate</div>
+          <div class="pnl-stat-value neutral">
+            {% if s.count > 0 %}
+            <span class="winrate-pill {% if s.win_rate >= 50 %}win{% else %}loss{% endif %}">
+              {{ '%.0f'|format(s.win_rate) }}%
+            </span>
+            {% else %}
+            <span class="winrate-pill">—</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="pnl-stat">
+          <div class="pnl-stat-label">Success Rate</div>
+          <div class="pnl-stat-value neutral">
+            {% if (s.wins + s.losses) > 0 %}
+            <span class="winrate-pill {% if s.success_rate >= 50 %}win{% else %}loss{% endif %}">
+              {{ '%.1f'|format(s.success_rate) }}%
+            </span>
+            {% else %}
+            <span class="winrate-pill">—</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="pnl-stat">
+          <div class="pnl-stat-label">Avg Win</div>
+          <div class="pnl-stat-value {% if s.avg_win_usd > 0 %}win{% else %}neutral{% endif %}">
+            {% if s.avg_win_usd > 0 %}+${{ '%.2f'|format(s.avg_win_usd) }}{% else %}—{% endif %}
+          </div>
+        </div>
+
+        <div class="pnl-stat">
+          <div class="pnl-stat-label">Avg Loss</div>
+          <div class="pnl-stat-value {% if s.avg_loss_usd > 0 %}loss{% else %}neutral{% endif %}">
+            {% if s.avg_loss_usd > 0 %}-${{ '%.2f'|format(s.avg_loss_usd) }}{% else %}—{% endif %}
+          </div>
+        </div>
+
+      </div>
+    </div>
+    {% endfor %}
+
+  </div>{# /pnl-periods #}
+
+  {# ── Filters ── #}
+  <form method="get" class="filters-section" style="margin-bottom:1.5rem;">
+    <div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end;">
+
+      <div>
+        <label class="form-label">Result</label>
+        <select name="result" class="form-control" style="min-width:130px;">
+          <option value="">All</option>
+          {% for opt in ['WIN','LOSS','BREAKEVEN'] %}
+          <option value="{{ opt }}" {% if f_result == opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">Side</label>
+        <select name="side" class="form-control" style="min-width:110px;">
+          <option value="">All</option>
+          <option value="YES" {% if f_side == 'YES' %}selected{% endif %}>YES (Buys)</option>
+          <option value="NO"  {% if f_side == 'NO'  %}selected{% endif %}>NO  (Sells)</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">Market search</label>
+        <input type="text" name="market_search" class="form-control" value="{{ f_market }}"
+               placeholder="keyword…" style="min-width:180px;">
+      </div>
+
+      <div>
+        <label class="form-label">Closed from</label>
+        <input type="date" name="date_from" class="form-control" value="{{ f_date_from }}">
+      </div>
+
+      <div>
+        <label class="form-label">Closed to</label>
+        <input type="date" name="date_to" class="form-control" value="{{ f_date_to }}">
+      </div>
+
+      <div style="display:flex;gap:.5rem;">
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="/wallets/{{ wallet.address }}/pnl" class="btn" style="background:var(--bg-secondary);border:1px solid var(--border);color:var(--text-primary);">Clear</a>
+      </div>
+
+    </div>
+  </form>
+
+  {# ── Closed bets table ── #}
+  <div class="section-header">
+    <span>Closed Bets</span>
+    <span class="section-count">{{ closed|length }}</span>
+  </div>
+
+  {% if closed %}
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Market</th>
+          <th>Side</th>
+          <th>Amount Bet</th>
+          <th>Proceeds</th>
+          <th>P&amp;L</th>
+          <th>ROI</th>
+          <th>Opened</th>
+          <th>Closed</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in closed %}
+        <tr>
+          <td class="market-title" title="{{ p.market_title }}">
+            {{ p.market_title[:70] }}{% if p.market_title|length > 70 %}…{% endif %}
+          </td>
+          <td>
+            <span class="badge badge-{{ p.side|lower }}">{{ p.side }}</span>
+          </td>
+          <td>${{ '%.2f'|format(p.amount_bet) }}</td>
+          <td>${{ '%.2f'|format(p.proceeds) }}</td>
+          <td class="{% if p.realized_pnl > 0 %}pnl-positive{% elif p.realized_pnl < 0 %}pnl-negative{% else %}pnl-zero{% endif %}">
+            {% if p.realized_pnl >= 0 %}+{% endif %}${{ '%.2f'|format(p.realized_pnl) }}
+          </td>
+          <td class="{% if p.roi_pct > 0 %}pnl-positive{% elif p.roi_pct < 0 %}pnl-negative{% else %}pnl-zero{% endif %}">
+            {% if p.roi_pct >= 0 %}+{% endif %}{{ '%.1f'|format(p.roi_pct) }}%
+          </td>
+          <td>{{ p.opened_at.strftime('%Y-%m-%d') if p.opened_at else '—' }}</td>
+          <td>{{ p.closed_at.strftime('%Y-%m-%d') if p.closed_at else '—' }}</td>
+          <td>
+            <span class="result-badge result-{{ p.result|lower }}">{{ p.result }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">No closed bets match the current filters.</p>
+  {% endif %}
+
+  {# ── Open bets table ── #}
+  <div class="section-header" style="margin-top:2rem;">
+    <span>Open Bets</span>
+    <span class="section-count">{{ open|length }}</span>
+  </div>
+
+  <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem;">
+    Unrealized P&amp;L requires live prices from Polymarket — showing cost basis only.
+  </p>
+
+  {% if open %}
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Market</th>
+          <th>Side</th>
+          <th>Shares Held</th>
+          <th>Avg Buy Price</th>
+          <th>Cost Basis</th>
+          <th>Opened</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in open %}
+        <tr>
+          <td class="market-title" title="{{ p.market_title }}">
+            {{ p.market_title[:70] }}{% if p.market_title|length > 70 %}…{% endif %}
+          </td>
+          <td>
+            <span class="badge badge-{{ p.side|lower }}">{{ p.side }}</span>
+          </td>
+          <td>{{ '%.4f'|format(p.net_shares) }}</td>
+          <td>{{ '%.4f'|format(p.avg_buy_price) }}</td>
+          <td>${{ '%.2f'|format(p.cost_basis) }}</td>
+          <td>{{ p.opened_at.strftime('%Y-%m-%d') if p.opened_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">No open bets found.</p>
+  {% endif %}
+
+</div>{# /container #}
+{% endblock %}

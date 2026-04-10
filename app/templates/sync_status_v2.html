@@ -1,0 +1,62 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Sync Status{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div>
+        <p class="eyebrow">Data quality</p>
+        <h1>Sync status</h1>
+        <p class="subtle">Review sync outcomes, duplicate groups, and cleanup actions.</p>
+    </div>
+    <button class="btn btn-danger" id="cleanupBtn">Cleanup duplicates</button>
+</section>
+
+<section class="two-col">
+    <article class="card">
+        <div class="section-head">
+            <h2>Recent sync events</h2>
+            <span class="pill">{{ events|length }} rows</span>
+        </div>
+        <div class="stack-list">
+            {% for event in events %}
+            <div class="alert-item">
+                <strong>{{ event.wallet_address or 'System' }} · {{ event.status or 'unknown' }}</strong>
+                <p>Fetched {{ event.fetched_count or 0 }}, inserted {{ event.inserted_count or 0 }}, duplicates {{ event.duplicate_count or 0 }}</p>
+                {% if event.error_message %}<p class="error-text">{{ event.error_message }}</p>{% endif %}
+            </div>
+            {% else %}
+            <p>No sync events yet.</p>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-head">
+            <h2>Duplicate detection</h2>
+            <span class="pill">{{ duplicates|length }} groups</span>
+        </div>
+        <div class="stack-list">
+            {% for duplicate in duplicates %}
+            <div class="alert-item">
+                <strong>{{ duplicate.wallet_address }}</strong>
+                <p>{{ duplicate.condition_id }} · {{ duplicate.side }} · {{ duplicate.duplicate_count }} copies</p>
+            </div>
+            {% else %}
+            <p>No semantic duplicates found.</p>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('cleanupBtn').addEventListener('click', async () => {
+    const response = await fetch('/admin/sync-status/cleanup', { method: 'POST' });
+    const payload = await response.json();
+    alert(`Removed ${payload.removed} duplicate trades.`);
+    window.location.reload();
+});
+</script>
+{% endblock %}

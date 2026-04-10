@@ -1,0 +1,58 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Trade Detail{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div>
+        <p class="eyebrow">Trade detail</p>
+        <h1>{{ trade.market_title or trade.condition_id }}</h1>
+        <p class="subtle">Condition {{ trade.condition_id }}</p>
+    </div>
+    <div class="stack-tight">
+        <span class="pill">{{ trade.side }}</span>
+        <span class="pill">${{ '%.2f'|format(trade.price * trade.size) }}</span>
+    </div>
+</section>
+
+<section class="card">
+    <div class="detail-grid">
+        <div><strong>Trade ID</strong><span class="mono">{{ trade.trade_id }}</span></div>
+        <div><strong>Wallet</strong><a href="/wallets/{{ trade.wallet_address }}/trades">{{ wallet_map.get(trade.wallet_address).label or trade.wallet_address }}</a></div>
+        <div><strong>Price</strong><span>${{ '%.4f'|format(trade.price) }}</span></div>
+        <div><strong>Size</strong><span>{{ '%.2f'|format(trade.size) }}</span></div>
+        <div><strong>Time</strong><span>{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</span></div>
+    </div>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Same market across all wallets</h2>
+        <span class="pill">{{ related_trades|length }} trades</span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Wallet</th>
+                    <th>Side</th>
+                    <th>Price</th>
+                    <th>Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in related_trades %}
+                <tr {% if item.trade_id == trade.trade_id %}class="wallet-row-flash"{% endif %}>
+                    <td>{{ item.traded_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+                    <td><a href="/wallets/{{ item.wallet_address }}/trades">{{ wallet_map.get(item.wallet_address).label or item.wallet_address }}</a></td>
+                    <td><span class="pill {% if item.side == 'YES' %}success{% else %}danger{% endif %}">{{ item.side }}</span></td>
+                    <td>${{ '%.4f'|format(item.price) }}</td>
+                    <td>{{ '%.2f'|format(item.size) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

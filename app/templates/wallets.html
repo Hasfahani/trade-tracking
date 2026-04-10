@@ -1,0 +1,300 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Wallets - Polymarket Trades{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Wallets</h2>
+        <div class="auto-refresh-indicator" id="liveStatus">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Connecting to live updates...</span>
+        </div>
+    </div>
+
+    <!-- Live Trade Feed -->
+    <div class="live-feed-card" id="liveFeedCard" style="display: none;">
+        <h3 style="margin-top: 0; display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.25rem;">⚡</span> Live Trade Feed
+        </h3>
+        <div id="liveFeed" style="max-height: 200px; overflow-y: auto; font-size: 0.875rem;"></div>
+    </div>
+
+    <div class="card">
+        <h3>Add Wallet</h3>
+        <form method="post" action="/wallets">
+            <div class="form-group">
+                <label for="address">Wallet Address *</label>
+                <input type="text" id="address" name="address" required placeholder="0x...">
+            </div>
+            <div class="form-group">
+                <label for="label">Label (optional)</label>
+                <input type="text" id="label" name="label" placeholder="My Wallet">
+            </div>
+            <button type="submit" class="btn btn-primary">Add Wallet</button>
+        </form>
+    </div>
+
+    <div class="wallets-list">
+        <h3>Your Wallets ({{ wallets|length }})</h3>
+
+        {% if wallets %}
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Address</th>
+                        <th>Label</th>
+                        <th>Stats</th>
+                        <th>Added</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="walletsTableBody">
+                    {% for wallet in wallets %}
+                    {% set stats = wallet_stats.get(wallet.address, {}) %}
+                    <tr data-wallet="{{ wallet.address }}">
+                        <td>
+                            <a href="/wallets/{{ wallet.address }}/trades" class="wallet-link">
+                                {{ wallet.address[:10] }}...{{ wallet.address[-8:] }}
+                            </a>
+                        </td>
+                        <td>{{ wallet.label or '-' }}</td>
+                        <td>
+                            <div class="stats-compact">
+                                <span class="stat-badge"><span class="trade-count">{{ stats.total_trades or 0 }}</span> trades</span>
+                                <span class="stat-badge">$<span class="volume">{{ stats.total_volume or 0 }}</span></span>
+                                <span class="stat-badge">{{ stats.unique_markets or 0 }} mkts</span>
+                                <span class="stat-yes"><span class="yes-count">{{ stats.yes_trades or 0 }}</span> YES</span> |
+                                <span class="stat-no"><span class="no-count">{{ stats.no_trades or 0 }}</span> NO</span> |
+                                <span class="stat-neutral">Avg ${{ stats.avg_trade_size or 0 }}</span>
+                            </div>
+                        </td>
+                        <td>{{ wallet.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+                        <td>
+                            <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-sm"> Trades</a>
+                            <a href="/wallets/{{ wallet.address }}/pnl" class="btn btn-sm btn-success"> P&L</a>
+                            <form method="post" action="/wallets/{{ wallet.address }}/delete" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this wallet and all its trades?')">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No wallets added yet. Add one above to get started.</p>
+        {% endif %}
+    </div>
+
+    <div class="card admin-section">
+        <h3>Refresh Trades</h3>
+        <p>Live tracking is enabled. New trades are automatically detected every 2 minutes.</p>
+        <p>Manual refresh: <code>curl -X POST http://localhost:8000/admin/refresh</code></p>
+    </div>
+</div>
+
+<script>
+// Live updates via Server-Sent Events
+let eventSource = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+function connectToLiveUpdates() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    eventSource = new EventSource('/live-updates');
+    
+    eventSource.onopen = () => {
+        console.log(' Connected to live updates');
+        reconnectAttempts = 0;
+        updateStatus('connected', ' Live updates active');
+    };
+
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            handleLiveEvent(data);
+        } catch (e) {
+            console.error('Error parsing live event:', e);
+        }
+    };
+
+    eventSource.onerror = (error) => {
+        console.error(' Live updates error:', error);
+        updateStatus('disconnected', ' Disconnected');
+        
+        eventSource.close();
+        
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            console.log(`Reconnecting... (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+            setTimeout(connectToLiveUpdates, 3000);
+        }
+    };
+}
+
+function handleLiveEvent(event) {
+    console.log('Live event:', event);
+    
+    switch (event.type) {
+        case 'connected':
+            console.log('Connected:', event.message);
+            break;
+            
+        case 'heartbeat':
+            // Keep-alive heartbeat
+            break;
+            
+        case 'new_trade':
+            handleNewTrade(event.data);
+            break;
+            
+        default:
+            console.log('Unknown event type:', event.type);
+    }
+}
+
+function handleNewTrade(trade) {
+    console.log(' New trade detected:', trade);
+    
+    // Show live feed card if hidden
+    const feedCard = document.getElementById('liveFeedCard');
+    feedCard.style.display = 'block';
+    
+    // Add trade to live feed
+    const feed = document.getElementById('liveFeed');
+    const tradeEl = document.createElement('div');
+    tradeEl.style.cssText = 'padding: 0.5rem; margin: 0.25rem 0; background: rgba(255,255,255,0.1); border-radius: 4px;';
+    
+    const sideColor = trade.side === 'YES' ? 'var(--profit, #22c55e)' : 'var(--loss, #ef4444)';
+    const sideIcon = trade.side === 'YES' ? '▲' : '▼';
+    
+    tradeEl.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; margin: 0.25rem 0; background: rgba(255,255,255,0.04); border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+            <div>
+                <strong style="color: ${sideColor};">${sideIcon} ${trade.side}</strong>
+                <span style="color: #94a3b8; margin-left: 0.5rem;">${trade.market_title || 'Unknown Market'}</span>
+            </div>
+            <div style="text-align: right; font-size: 0.8rem; color: #94a3b8;">
+                <div><strong style="color: #f8fafc;">${trade.size.toFixed(2)}</strong> @ <strong style="color: #f8fafc;">$${trade.price.toFixed(4)}</strong></div>
+                <div>${new Date(trade.traded_at).toLocaleTimeString()}</div>
+            </div>
+        </div>
+    `;
+    
+    // Add to top of feed
+    feed.insertBefore(tradeEl, feed.firstChild);
+    
+    // Limit feed to 10 items
+    while (feed.children.length > 10) {
+        feed.removeChild(feed.lastChild);
+    }
+    
+    // Update wallet stats in table
+    updateWalletRow(trade.wallet_address);
+    
+    // Show notification
+    showNotification(`New ${trade.side} trade: ${trade.size.toFixed(2)} @ $${trade.price.toFixed(4)}`);
+}
+
+function updateWalletRow(walletAddress) {
+    // Find the wallet row
+    const row = document.querySelector(`tr[data-wallet="${walletAddress}"]`);
+    if (!row) return;
+    
+    // Fetch updated stats for this wallet
+    fetch(`/api/stats`)
+        .then(r => r.json())
+        .then(data => {
+            // Update the notification badge
+            updateNotificationBadge();
+        })
+        .catch(e => console.error('Error updating stats:', e));
+    
+    // Add visual indicator on new trade
+    row.style.background = 'rgba(59,130,246,0.12)';
+    setTimeout(() => { row.style.background = ''; }, 2000);
+}
+
+function updateStatus(status, text) {
+    const dot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    
+    statusText.textContent = text;
+    
+    if (status === 'connected') {
+        dot.style.backgroundColor = '#10b981';
+        dot.style.animation = 'pulse 2s infinite';
+    } else {
+        dot.style.backgroundColor = '#ef4444';
+        dot.style.animation = 'none';
+    }
+}
+
+function showNotification(message) {
+    // Check if browser supports notifications
+    if (!("Notification" in window)) {
+        return;
+    }
+    
+    // Check if permission is granted
+    if (Notification.permission === "granted") {
+        new Notification("Polymarket Trade Alert", {
+            body: message,
+            icon: "/static/logo.png"
+        });
+    } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                new Notification("Polymarket Trade Alert", {
+                    body: message,
+                    icon: "/static/logo.png"
+                });
+            }
+        });
+    }
+}
+
+// Connect on page load
+connectToLiveUpdates();
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    if (eventSource) {
+        eventSource.close();
+    }
+});
+</script>
+
+<style>
+/* Page-scoped live indicator — uses CSS variables so dark mode works */
+.auto-refresh-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.875rem;
+    background: var(--card-bg);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    flex-shrink: 0;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+}
+</style>
+{% endblock %}

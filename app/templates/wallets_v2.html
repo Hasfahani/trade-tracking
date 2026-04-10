@@ -1,0 +1,207 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Wallets{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div>
+        <p class="eyebrow">Wallet Organization</p>
+        <h1>Tracked wallets</h1>
+        <p class="subtle">Edit labels, add tags, pin important wallets, and refresh each wallet individually.</p>
+    </div>
+    <div class="live-chip" id="liveStatus">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Connecting to live updates...</span>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Add wallet</h2>
+    <form method="post" action="/wallets" class="grid-form">
+        <label>
+            Address
+            <input type="text" name="address" required placeholder="0x...">
+        </label>
+        <label>
+            Label
+            <input type="text" name="label" placeholder="Desk wallet">
+        </label>
+        <label>
+            Tags
+            <input type="text" name="tags" placeholder="whale, politics, alpha">
+        </label>
+        <label class="checkbox-row">
+            <input type="checkbox" name="is_pinned" value="1">
+            <span>Pin to top</span>
+        </label>
+        <button type="submit" class="btn btn-primary">Add wallet</button>
+    </form>
+</section>
+
+<section class="card live-feed-card" id="liveFeedCard" style="display:none;">
+    <div class="section-head">
+        <h2>Live activity</h2>
+        <span class="pill">Server-sent events</span>
+    </div>
+    <div id="liveFeed" class="feed-list"></div>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Your wallets</h2>
+        <span class="pill">{{ wallets|length }} tracked</span>
+    </div>
+    {% if wallets %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Wallet</th>
+                    <th>Label / tags</th>
+                    <th>Stats</th>
+                    <th>Sync</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="walletTable">
+                {% for wallet in wallets %}
+                {% set stats = wallet_stats.get(wallet.address, {}) %}
+                <tr id="wallet-row-{{ wallet.id }}" data-wallet-id="{{ wallet.id }}" data-wallet-address="{{ wallet.address }}">
+                    <td>
+                        <div class="stack-tight">
+                            <a href="/wallets/{{ wallet.address }}/trades" class="mono-link">{{ wallet.address }}</a>
+                            <span class="pill pill-soft">{% if wallet.is_pinned %}Pinned{% else %}Unpinned{% endif %}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <form method="post" action="/wallets/{{ wallet.address }}/update" class="inline-edit-form">
+                            <input type="text" name="label" value="{{ wallet.label or '' }}" placeholder="Label">
+                            <input type="text" name="tags" value="{{ wallet.tags or '' }}" placeholder="Tags">
+                            <label class="checkbox-row">
+                                <input type="checkbox" name="is_pinned" value="1" {% if wallet.is_pinned %}checked{% endif %}>
+                                <span>Pin</span>
+                            </label>
+                            <button type="submit" class="btn btn-small">Save</button>
+                        </form>
+                    </td>
+                    <td>
+                        <div class="stat-grid">
+                            <span class="pill"><strong class="trade-count">{{ stats.total_trades or 0 }}</strong> trades</span>
+                            <span class="pill">$<strong class="volume">{{ stats.total_volume or 0 }}</strong></span>
+                            <span class="pill"><strong class="unique-markets">{{ stats.unique_markets or 0 }}</strong> markets</span>
+                            <span class="pill success"><strong class="yes-count">{{ stats.yes_trades or 0 }}</strong> YES</span>
+                            <span class="pill danger"><strong class="no-count">{{ stats.no_trades or 0 }}</strong> NO</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="stack-tight">
+                            <span class="sync-time">Last checked: <span class="last-checked">{% if wallet.last_checked_at %}{{ wallet.last_checked_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}{% else %}Never{% endif %}</span></span>
+                            <span class="sync-count">Last refresh inserted: <span class="last-refresh-count">{{ wallet.last_refresh_count or 0 }}</span></span>
+                            {% if wallet.last_error_message %}
+                            <span class="error-text">{{ wallet.last_error_message }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="action-row">
+                            <button type="button" class="btn btn-small btn-primary refresh-wallet" data-wallet-id="{{ wallet.id }}">Refresh</button>
+                            <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-small">Trades</a>
+                            <a href="/wallets/{{ wallet.address }}/pnl" class="btn btn-small">P&amp;L</a>
+                            <form method="post" action="/wallets/{{ wallet.address }}/delete">
+                                <button type="submit" class="btn btn-small btn-danger" onclick="return confirm('Delete this wallet and all its trades?')">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">No wallets yet. Add one above to start tracking.</p>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let eventSource;
+
+function updateStatus(connected, label) {
+    document.getElementById('statusText').textContent = label;
+    document.getElementById('statusDot').style.background = connected ? '#22c55e' : '#ef4444';
+}
+
+function formatUtc(value) {
+    if (!value) return 'Never';
+    return new Date(value).toLocaleString();
+}
+
+function paintWalletRow(payload) {
+    const row = document.getElementById(`wallet-row-${payload.wallet_id || payload.id || ''}`) ||
+        document.querySelector(`[data-wallet-address="${payload.wallet_address}"]`);
+    if (!row) return;
+
+    const stats = payload.stats || {};
+    row.querySelector('.trade-count').textContent = stats.total_trades ?? 0;
+    row.querySelector('.volume').textContent = stats.total_volume ?? 0;
+    row.querySelector('.unique-markets').textContent = stats.unique_markets ?? 0;
+    row.querySelector('.yes-count').textContent = stats.yes_trades ?? 0;
+    row.querySelector('.no-count').textContent = stats.no_trades ?? 0;
+    row.querySelector('.last-checked').textContent = formatUtc(payload.last_checked_at);
+    row.querySelector('.last-refresh-count').textContent = payload.last_refresh_count ?? payload.inserted ?? 0;
+    row.classList.add('wallet-row-flash');
+    setTimeout(() => row.classList.remove('wallet-row-flash'), 1800);
+}
+
+function prependFeed(messageHtml) {
+    const card = document.getElementById('liveFeedCard');
+    const feed = document.getElementById('liveFeed');
+    card.style.display = 'block';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'feed-item';
+    wrapper.innerHTML = messageHtml;
+    feed.prepend(wrapper);
+    while (feed.children.length > 8) {
+        feed.removeChild(feed.lastChild);
+    }
+}
+
+function connectLiveFeed() {
+    eventSource = new EventSource('/live-updates');
+    eventSource.onopen = () => updateStatus(true, 'Live updates connected');
+    eventSource.onerror = () => updateStatus(false, 'Live updates disconnected');
+    eventSource.onmessage = (event) => {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'new_trade') {
+            paintWalletRow(payload.data || {});
+            prependFeed(`<strong>${payload.data.side}</strong> ${payload.data.market_title || 'Unknown market'}<span>${payload.data.size.toFixed(2)} @ $${payload.data.price.toFixed(4)}</span>`);
+        }
+        if (payload.type === 'wallet_refreshed') {
+            paintWalletRow(payload.data || {});
+            prependFeed(`<strong>Wallet refreshed</strong><span>${payload.data.wallet_address}</span>`);
+        }
+    };
+}
+
+async function refreshWallet(walletId, button) {
+    button.disabled = true;
+    button.textContent = 'Refreshing...';
+    try {
+        const response = await fetch(`/api/wallet/${walletId}/refresh`, { method: 'POST' });
+        const payload = await response.json();
+        paintWalletRow(payload);
+        prependFeed(`<strong>Manual refresh</strong><span>${payload.wallet}</span>`);
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Refresh';
+    }
+}
+
+document.querySelectorAll('.refresh-wallet').forEach((button) => {
+    button.addEventListener('click', () => refreshWallet(button.dataset.walletId, button));
+});
+
+connectLiveFeed();
+</script>
+{% endblock %}

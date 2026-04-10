@@ -1,0 +1,60 @@
+{% extends "base_v2.html" %}
+
+{% block title %}All Trades{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div>
+        <p class="eyebrow">Global search</p>
+        <h1>All tracked trades</h1>
+        <p class="subtle">Search every wallet from one place.</p>
+    </div>
+</section>
+
+<section class="card">
+    <form method="get" class="filter-bar">
+        <input type="text" name="wallet_search" placeholder="Wallet address" value="{{ wallet_search or '' }}">
+        <input type="text" name="market_search" placeholder="Market or condition" value="{{ market_search or '' }}">
+        <select name="side">
+            <option value="">All sides</option>
+            <option value="YES" {% if side == 'YES' %}selected{% endif %}>YES</option>
+            <option value="NO" {% if side == 'NO' %}selected{% endif %}>NO</option>
+        </select>
+        <input type="date" name="date_from" value="{{ date_from or '' }}">
+        <input type="date" name="date_to" value="{{ date_to or '' }}">
+        <button class="btn btn-primary" type="submit">Search</button>
+    </form>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Results</h2>
+        <span class="pill">{{ total_trades }} matches</span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Wallet</th>
+                    <th>Market</th>
+                    <th>Side</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trade in trades %}
+                {% set wallet = wallet_map.get(trade.wallet_address) %}
+                <tr>
+                    <td>{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+                    <td><a href="/wallets/{{ trade.wallet_address }}/trades">{{ wallet.label or trade.wallet_address }}</a></td>
+                    <td><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
+                    <td><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
+                    <td>${{ '%.2f'|format(trade.price * trade.size) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
