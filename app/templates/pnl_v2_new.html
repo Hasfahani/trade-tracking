@@ -1,0 +1,246 @@
+{% extends "base_v2.html" %}
+
+{% block title %}P&amp;L{% endblock %}
+
+{% block content %}
+{% set all_time = summary["all_time"] %}
+{% set this_month = summary["this_month"] %}
+{% set last_month = summary["last_month"] %}
+<section class="hero-card pnl-hero">
+    <div>
+        <p class="eyebrow">Exact P&amp;L</p>
+        <h1>{{ wallet.label or wallet.address }}</h1>
+        <p class="subtle mono">{{ wallet.address }}</p>
+        <p class="pnl-hero-note">Realized P&amp;L now uses FIFO-matched trade history for exact cost basis on imported trades.</p>
+    </div>
+    <a href="/wallets/{{ wallet.address }}/trades" class="btn">View trades</a>
+</section>
+
+{% if analysis.unmatched_exit_shares > 0 %}
+<section class="card pnl-warning">
+    <strong>Data note:</strong>
+    {{ '%.4f'|format(analysis.unmatched_exit_shares) }} exit shares across {{ analysis.unmatched_market_count }} markets could not be matched to imported buys.
+    Realized P&amp;L below only includes matched history, which is more accurate than estimating those exits.
+</section>
+{% endif %}
+
+<section class="pnl-summary-grid">
+    <article class="card pnl-summary-card">
+        <span class="pnl-kicker">All-time realized P&amp;L</span>
+        <strong class="{% if analysis.realized_pnl > 0 %}text-success{% elif analysis.realized_pnl < 0 %}text-danger{% endif %}">
+            {% if analysis.realized_pnl >= 0 %}+{% endif %}${{ '%.2f'|format(analysis.realized_pnl) }}
+        </strong>
+        <small>${{ '%.2f'|format(analysis.realized_cost_basis) }} matched cost basis · {{ all_time.count }} closed markets</small>
+    </article>
+    <article class="card pnl-summary-card">
+        <span class="pnl-kicker">Current open exposure</span>
+        <strong>${{ '%.2f'|format(analysis.open_cost_basis) }}</strong>
+        <small>{{ analysis.open_position_count }} open markets · {{ '%.4f'|format(analysis.open_shares) }} shares</small>
+    </article>
+    <article class="card pnl-summary-card">
+        <span class="pnl-kicker">Net realized ROI</span>
+        <strong class="{% if analysis.net_roi_pct > 0 %}text-success{% elif analysis.net_roi_pct < 0 %}text-danger{% endif %}">
+            {% if analysis.net_roi_pct >= 0 %}+{% endif %}{{ '%.2f'|format(analysis.net_roi_pct) }}%
+        </strong>
+        <small>${{ '%.2f'|format(analysis.realized_proceeds) }} total matched proceeds</small>
+    </article>
+</section>
+
+<section class="pnl-period-grid">
+    {% for period_key, label in [('all_time','All Time'),('this_month','This Month'),('last_month','Last Month')] %}
+    {% set s = summary[period_key] %}
+    <article class="card pnl-period-card-v2">
+        <div class="section-head">
+            <h2>{{ label }}</h2>
+            <span class="pill">{{ s.count }} closed</span>
+        </div>
+        <div class="pnl-period-metrics">
+            <div>
+                <span>Realized P&amp;L</span>
+                <strong class="{% if s.pnl > 0 %}text-success{% elif s.pnl < 0 %}text-danger{% endif %}">
+                    {% if s.pnl >= 0 %}+{% endif %}${{ '%.2f'|format(s.pnl) }}
+                </strong>
+            </div>
+            <div>
+                <span>Wins / Losses / Flat</span>
+                <strong>{{ s.wins }} / {{ s.losses }} / {{ s.breakeven }}</strong>
+            </div>
+            <div>
+                <span>Win rate</span>
+                <strong>{{ '%.1f'|format(s.win_rate) }}%</strong>
+            </div>
+            <div>
+                <span>Success rate</span>
+                <strong>{{ '%.1f'|format(s.success_rate) }}%</strong>
+            </div>
+            <div>
+                <span>Avg win</span>
+                <strong>{% if s.avg_win_usd > 0 %}+${{ '%.2f'|format(s.avg_win_usd) }}{% else %}-{% endif %}</strong>
+            </div>
+            <div>
+                <span>Avg loss</span>
+                <strong>{% if s.avg_loss_usd > 0 %}-${{ '%.2f'|format(s.avg_loss_usd) }}{% else %}-{% endif %}</strong>
+            </div>
+        </div>
+    </article>
+    {% endfor %}
+</section>
+
+<section class="two-col pnl-analysis-grid">
+    <article class="card">
+        <div class="section-head">
+            <h2>Analysis</h2>
+            <span class="pill">All time</span>
+        </div>
+        <div class="pnl-analysis-list">
+            <div class="pnl-analysis-item">
+                <span>Profit factor</span>
+                <strong>
+                    {% if analysis.profit_factor == 'inf' %}
+                    Perfect
+                    {% elif analysis.profit_factor is not none %}
+                    {{ '%.2f'|format(analysis.profit_factor) }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </strong>
+            </div>
+            <div class="pnl-analysis-item">
+                <span>Expectancy per closed market</span>
+                <strong class="{% if analysis.expectancy_usd > 0 %}text-success{% elif analysis.expectancy_usd < 0 %}text-danger{% endif %}">
+                    {% if analysis.expectancy_usd >= 0 %}+{% endif %}${{ '%.2f'|format(analysis.expectancy_usd) }}
+                </strong>
+            </div>
+            <div class="pnl-analysis-item">
+                <span>Average trade ROI</span>
+                <strong class="{% if analysis.avg_trade_roi_pct > 0 %}text-success{% elif analysis.avg_trade_roi_pct < 0 %}text-danger{% endif %}">
+                    {% if analysis.avg_trade_roi_pct >= 0 %}+{% endif %}{{ '%.2f'|format(analysis.avg_trade_roi_pct) }}%
+                </strong>
+            </div>
+            <div class="pnl-analysis-item">
+                <span>Current streak</span>
+                <strong>
+                    {% if analysis.current_streak.count > 0 %}
+                    {{ analysis.current_streak.result }} x{{ analysis.current_streak.count }}
+                    {% else %}
+                    No streak
+                    {% endif %}
+                </strong>
+            </div>
+            <div class="pnl-analysis-item">
+                <span>Best trade</span>
+                <strong class="{% if analysis.best_trade_pnl > 0 %}text-success{% elif analysis.best_trade_pnl < 0 %}text-danger{% endif %}">
+                    {% if analysis.best_trade_pnl >= 0 %}+{% endif %}${{ '%.2f'|format(analysis.best_trade_pnl) }}
+                </strong>
+                <small>{{ analysis.best_trade_market or '-' }}</small>
+            </div>
+            <div class="pnl-analysis-item">
+                <span>Worst trade</span>
+                <strong class="{% if analysis.worst_trade_pnl > 0 %}text-success{% elif analysis.worst_trade_pnl < 0 %}text-danger{% endif %}">
+                    {% if analysis.worst_trade_pnl >= 0 %}+{% endif %}${{ '%.2f'|format(analysis.worst_trade_pnl) }}
+                </strong>
+                <small>{{ analysis.worst_trade_market or '-' }}</small>
+            </div>
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-head">
+            <h2>Filters</h2>
+            <span class="pill">{{ closed|length }} shown</span>
+        </div>
+        <form method="get" class="filter-bar pnl-filter-grid">
+            <select name="result">
+                <option value="">All results</option>
+                <option value="WIN" {% if f_result == 'WIN' %}selected{% endif %}>WIN</option>
+                <option value="LOSS" {% if f_result == 'LOSS' %}selected{% endif %}>LOSS</option>
+                <option value="BREAKEVEN" {% if f_result == 'BREAKEVEN' %}selected{% endif %}>BREAKEVEN</option>
+            </select>
+            <select name="side">
+                <option value="">All sides</option>
+                <option value="YES" {% if f_side == 'YES' %}selected{% endif %}>YES</option>
+                <option value="NO" {% if f_side == 'NO' %}selected{% endif %}>NO</option>
+            </select>
+            <input type="text" name="market_search" value="{{ f_market }}" placeholder="Market search">
+            <input type="date" name="date_from" value="{{ f_date_from }}">
+            <input type="date" name="date_to" value="{{ f_date_to }}">
+            <div class="pnl-filter-actions">
+                <button type="submit" class="btn btn-primary">Filter</button>
+                <a href="/wallets/{{ wallet.address }}/pnl" class="btn">Clear</a>
+            </div>
+        </form>
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Closed bets</h2>
+        <span class="pill">{{ closed|length }}</span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Market</th>
+                    <th>Matched Shares</th>
+                    <th>Amount Bet</th>
+                    <th>Proceeds</th>
+                    <th>P&amp;L</th>
+                    <th>ROI</th>
+                    <th>Closed</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in closed %}
+                <tr>
+                    <td>{{ item.market_title }}</td>
+                    <td>{{ '%.4f'|format(item.matched_shares) }}</td>
+                    <td>${{ '%.2f'|format(item.amount_bet) }}</td>
+                    <td>${{ '%.2f'|format(item.proceeds) }}</td>
+                    <td class="{% if item.realized_pnl > 0 %}text-success{% elif item.realized_pnl < 0 %}text-danger{% endif %}">
+                        {% if item.realized_pnl >= 0 %}+{% endif %}${{ '%.2f'|format(item.realized_pnl) }}
+                    </td>
+                    <td class="{% if item.roi_pct > 0 %}text-success{% elif item.roi_pct < 0 %}text-danger{% endif %}">
+                        {% if item.roi_pct >= 0 %}+{% endif %}{{ '%.2f'|format(item.roi_pct) }}%
+                    </td>
+                    <td>{{ item.closed_at.strftime('%Y-%m-%d') if item.closed_at else '-' }}</td>
+                    <td>{{ item.result }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Open bets</h2>
+        <span class="pill">${{ '%.2f'|format(total_cost) }} cost basis</span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Market</th>
+                    <th>Shares</th>
+                    <th>Avg Entry</th>
+                    <th>Cost Basis</th>
+                    <th>Opened</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in open %}
+                <tr>
+                    <td>{{ item.market_title }}</td>
+                    <td>{{ '%.4f'|format(item.net_shares) }}</td>
+                    <td>{{ '%.4f'|format(item.avg_buy_price) }}</td>
+                    <td>${{ '%.2f'|format(item.cost_basis) }}</td>
+                    <td>{{ item.opened_at.strftime('%Y-%m-%d') if item.opened_at else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

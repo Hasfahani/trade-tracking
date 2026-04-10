@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -98,6 +99,7 @@ def calculate_pnl_analytics(db: Session, wallet_address: str) -> Dict[str, Any]:
         .order_by(Trade.traded_at)
         .all()
     )
+    epsilon = 1e-9
     markets: Dict[str, Dict[str, Any]] = {}
     for trade in trades:
         market = markets.setdefault(
@@ -116,62 +118,173 @@ def calculate_pnl_analytics(db: Session, wallet_address: str) -> Dict[str, Any]:
         else:
             market["sells"].append(trade)
 
+    def classify_result(realized_pnl: float) -> str:
+        if realized_pnl > 0.005:
+            return "WIN"
+        if realized_pnl < -0.005:
+            return "LOSS"
+        return "BREAKEVEN"
+
+    def calculate_streak(positions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        streak_positions = [item for item in positions if item["result"] in {"WIN", "LOSS"}]
+        if not streak_positions:
+            return {"result": "NONE", "count": 0}
+
+        latest_result = streak_positions[0]["result"]
+        count = 0
+        for item in streak_positions:
+            if item["result"] != latest_result:
+                break
+            count += 1
+        return {"result": latest_result, "count": count}
+
+    def summarize_positions(positions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        wins = sum(1 for p in positions if p["result"] == "WIN")
+        losses = sum(1 for p in positions if p["result"] == "LOSS")
+        breakeven = sum(1 for p in positions if p["result"] == "BREAKEVEN")
+        count = len(positions)
+        decisive_count = wins + losses
+        total_pnl_raw = sum(p["realized_pnl_raw"] for p in positions)
+        total_amount_bet_raw = sum(p["amount_bet_raw"] for p in positions)
+        total_proceeds_raw = sum(p["proceeds_raw"] for p in positions)
+        avg_win_values = [p["realized_pnl_raw"] for p in positions if p["result"] == "WIN"]
+        avg_loss_values = [abs(p["realized_pnl_raw"]) for p in positions if p["result"] == "LOSS"]
+        roi_values = [p["roi_pct_raw"] for p in positions if p["amount_bet_raw"] > epsilon]
+        gross_profit = sum(value for value in avg_win_values)
+        gross_loss = sum(value for value in avg_loss_values)
+        best_trade = max(positions, key=lambda p: p["realized_pnl_raw"], default=None)
+        worst_trade = min(positions, key=lambda p: p["realized_pnl_raw"], default=None)
+        streak = calculate_streak(positions)
+        return {
+            "pnl": round(total_pnl_raw, 2),
+            "wins": wins,
+            "losses": losses,
+            "breakeven": breakeven,
+            "count": count,
+            "win_rate": round(wins / decisive_count * 100, 1) if decisive_count else 0,
+            "success_rate": round(wins / count * 100, 1) if count else 0,
+            "avg_win_usd": round(sum(avg_win_values) / len(avg_win_values), 2) if avg_win_values else 0,
+            "avg_loss_usd": round(sum(avg_loss_values) / len(avg_loss_values), 2) if avg_loss_values else 0,
+            "amount_bet": round(total_amount_bet_raw, 2),
+            "proceeds": round(total_proceeds_raw, 2),
+            "net_roi_pct": round(total_pnl_raw / total_amount_bet_raw * 100, 2) if total_amount_bet_raw > epsilon else 0,
+            "avg_roi_pct": round(sum(roi_values) / len(roi_values), 2) if roi_values else 0,
+            "profit_factor": round(gross_profit / gross_loss, 2) if gross_loss > epsilon else (None if gross_profit <= epsilon else "inf"),
+            "expectancy_usd": round(total_pnl_raw / count, 2) if count else 0,
+            "best_trade_pnl": round(best_trade["realized_pnl_raw"], 2) if best_trade else 0,
+            "best_trade_market": best_trade["market_title"] if best_trade else None,
+            "worst_trade_pnl": round(worst_trade["realized_pnl_raw"], 2) if worst_trade else 0,
+            "worst_trade_market": worst_trade["market_title"] if worst_trade else None,
+            "current_streak": streak,
+        }
+
     closed_positions: List[Dict[str, Any]] = []
     open_positions: List[Dict[str, Any]] = []
+    unmatched_exit_shares = 0.0
+    unmatched_exit_value = 0.0
+    unmatched_markets = 0
+
     for cid, market in markets.items():
         buys = market["buys"]
         sells = market["sells"]
-        total_buy_shares = sum(t.size for t in buys)
-        total_buy_cost = sum(t.price * t.size for t in buys)
-        total_sell_shares = sum(t.size for t in sells)
-        total_sell_proceeds = sum(t.price * t.size for t in sells)
-        avg_buy_price = (total_buy_cost / total_buy_shares) if total_buy_shares > 0 else 0.0
-        closed_shares = min(total_buy_shares, total_sell_shares)
-        net_shares = total_buy_shares - total_sell_shares
+        ordered_trades = sorted(buys + sells, key=lambda item: (item.traded_at, item.id))
+        lots: deque[Dict[str, Any]] = deque()
+        total_buy_shares = 0.0
+        total_buy_cost = 0.0
+        total_sell_shares = 0.0
+        matched_shares = 0.0
+        matched_cost = 0.0
+        matched_proceeds = 0.0
+        realized_pnl = 0.0
         opened_at = buys[0].traded_at if buys else None
-        closed_at = sells[-1].traded_at if sells else None
+        closed_at = None
+        market_unmatched_shares = 0.0
+        market_unmatched_value = 0.0
 
-        if closed_shares > 0.0001:
-            realized_pnl = total_sell_proceeds - (closed_shares * avg_buy_price)
-            amount_bet = closed_shares * avg_buy_price
-            roi_pct = (realized_pnl / amount_bet * 100) if amount_bet > 0 else 0.0
-            result = "WIN" if realized_pnl > 0.005 else "LOSS" if realized_pnl < -0.005 else "BREAKEVEN"
+        for trade in ordered_trades:
+            if trade.side == "YES":
+                total_buy_shares += trade.size
+                total_buy_cost += trade.price * trade.size
+                lots.append({"shares": trade.size, "price": trade.price, "traded_at": trade.traded_at})
+                continue
+
+            total_sell_shares += trade.size
+            remaining = trade.size
+            while remaining > epsilon and lots:
+                lot = lots[0]
+                matched = min(remaining, lot["shares"])
+                matched_shares += matched
+                matched_cost += matched * lot["price"]
+                matched_proceeds += matched * trade.price
+                realized_pnl += matched * (trade.price - lot["price"])
+                closed_at = trade.traded_at
+                lot["shares"] -= matched
+                remaining -= matched
+                if lot["shares"] <= epsilon:
+                    lots.popleft()
+
+            if remaining > epsilon:
+                market_unmatched_shares += remaining
+                market_unmatched_value += remaining * trade.price
+
+        remaining_shares = sum(lot["shares"] for lot in lots)
+        remaining_cost = sum(lot["shares"] * lot["price"] for lot in lots)
+        remaining_opened_at = lots[0]["traded_at"] if lots else None
+
+        if matched_shares > epsilon:
+            amount_bet = matched_cost
+            roi_pct = (realized_pnl / amount_bet * 100) if amount_bet > epsilon else 0.0
+            avg_buy_price = (matched_cost / matched_shares) if matched_shares > epsilon else 0.0
+            avg_sell_price = (matched_proceeds / matched_shares) if matched_shares > epsilon else 0.0
             closed_positions.append(
                 {
                     "condition_id": cid,
                     "market_title": market["market_title"],
                     "buy_shares": round(total_buy_shares, 4),
                     "sell_shares": round(total_sell_shares, 4),
+                    "matched_shares": round(matched_shares, 4),
                     "amount_bet": round(amount_bet, 2),
-                    "proceeds": round(total_sell_proceeds, 2),
+                    "amount_bet_raw": amount_bet,
+                    "proceeds": round(matched_proceeds, 2),
+                    "proceeds_raw": matched_proceeds,
                     "realized_pnl": round(realized_pnl, 2),
-                    "roi_pct": round(roi_pct, 1),
+                    "realized_pnl_raw": realized_pnl,
+                    "roi_pct": round(roi_pct, 2),
+                    "roi_pct_raw": roi_pct,
                     "avg_buy_price": round(avg_buy_price, 4),
+                    "avg_sell_price": round(avg_sell_price, 4),
                     "opened_at": opened_at,
                     "closed_at": closed_at,
-                    "result": result,
-                    "net_shares": round(net_shares, 4),
+                    "result": classify_result(realized_pnl),
+                    "net_shares": round(remaining_shares, 4),
                     "side": "YES" if buys else ("NO" if sells else "-"),
+                    "unmatched_exit_shares": round(market_unmatched_shares, 4),
                 }
             )
 
-        if net_shares > 0.0001:
+        if remaining_shares > epsilon:
             open_positions.append(
                 {
                     "condition_id": cid,
                     "market_title": market["market_title"],
-                    "net_shares": round(net_shares, 4),
-                    "avg_buy_price": round(avg_buy_price, 4),
-                    "cost_basis": round(net_shares * avg_buy_price, 2),
-                    "opened_at": opened_at,
+                    "net_shares": round(remaining_shares, 4),
+                    "avg_buy_price": round((remaining_cost / remaining_shares), 4),
+                    "cost_basis": round(remaining_cost, 2),
+                    "cost_basis_raw": remaining_cost,
+                    "opened_at": remaining_opened_at or opened_at,
                     "side": "YES" if buys else "-",
                 }
             )
 
+        if market_unmatched_shares > epsilon:
+            unmatched_markets += 1
+            unmatched_exit_shares += market_unmatched_shares
+            unmatched_exit_value += market_unmatched_value
+
     closed_positions.sort(key=lambda item: item["closed_at"] or datetime.min, reverse=True)
     open_positions.sort(key=lambda item: item["opened_at"] or datetime.min, reverse=True)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     this_month, this_year = now.month, now.year
     last_month = 12 if this_month == 1 else this_month - 1
     last_year = this_year - 1 if this_month == 1 else this_year
@@ -181,46 +294,41 @@ def calculate_pnl_analytics(db: Session, wallet_address: str) -> Dict[str, Any]:
             p for p in positions
             if p["closed_at"] and p["closed_at"].month == month and p["closed_at"].year == year
         ]
-        wins = sum(1 for p in filtered if p["result"] == "WIN")
-        losses = sum(1 for p in filtered if p["result"] == "LOSS")
-        total = wins + losses
-        win_amounts = [p["realized_pnl"] for p in filtered if p["result"] == "WIN"]
-        loss_amounts = [abs(p["realized_pnl"]) for p in filtered if p["result"] == "LOSS"]
-        return {
-            "pnl": round(sum(p["realized_pnl"] for p in filtered), 2),
-            "wins": wins,
-            "losses": losses,
-            "count": len(filtered),
-            "win_rate": round(wins / total * 100, 1) if total else 0,
-            "success_rate": round(wins / total * 100, 1) if total else 0,
-            "avg_win_usd": round(sum(win_amounts) / len(win_amounts), 2) if win_amounts else 0,
-            "avg_loss_usd": round(sum(loss_amounts) / len(loss_amounts), 2) if loss_amounts else 0,
-        }
+        return summarize_positions(filtered)
 
-    all_wins = sum(1 for p in closed_positions if p["result"] == "WIN")
-    all_losses = sum(1 for p in closed_positions if p["result"] == "LOSS")
-    all_total = all_wins + all_losses
-    all_win_amounts = [p["realized_pnl"] for p in closed_positions if p["result"] == "WIN"]
-    all_loss_amounts = [abs(p["realized_pnl"]) for p in closed_positions if p["result"] == "LOSS"]
+    all_time_summary = summarize_positions(closed_positions)
+    open_cost_total = sum(p["cost_basis_raw"] for p in open_positions)
+    open_shares_total = sum(p["net_shares"] for p in open_positions)
 
     return {
         "closed": closed_positions,
         "open": open_positions,
         "summary": {
-            "all_time": {
-                "pnl": round(sum(p["realized_pnl"] for p in closed_positions), 2),
-                "wins": all_wins,
-                "losses": all_losses,
-                "count": len(closed_positions),
-                "win_rate": round(all_wins / all_total * 100, 1) if all_total else 0,
-                "success_rate": round(all_wins / all_total * 100, 1) if all_total else 0,
-                "avg_win_usd": round(sum(all_win_amounts) / len(all_win_amounts), 2) if all_win_amounts else 0,
-                "avg_loss_usd": round(sum(all_loss_amounts) / len(all_loss_amounts), 2) if all_loss_amounts else 0,
-            },
+            "all_time": all_time_summary,
             "this_month": _period_stats(closed_positions, this_month, this_year),
             "last_month": _period_stats(closed_positions, last_month, last_year),
         },
-        "total_cost": round(sum(p["cost_basis"] for p in open_positions), 2),
+        "analysis": {
+            "realized_pnl": all_time_summary["pnl"],
+            "realized_cost_basis": all_time_summary["amount_bet"],
+            "realized_proceeds": all_time_summary["proceeds"],
+            "net_roi_pct": all_time_summary["net_roi_pct"],
+            "avg_trade_roi_pct": all_time_summary["avg_roi_pct"],
+            "profit_factor": all_time_summary["profit_factor"],
+            "expectancy_usd": all_time_summary["expectancy_usd"],
+            "best_trade_pnl": all_time_summary["best_trade_pnl"],
+            "best_trade_market": all_time_summary["best_trade_market"],
+            "worst_trade_pnl": all_time_summary["worst_trade_pnl"],
+            "worst_trade_market": all_time_summary["worst_trade_market"],
+            "current_streak": all_time_summary["current_streak"],
+            "open_cost_basis": round(open_cost_total, 2),
+            "open_position_count": len(open_positions),
+            "open_shares": round(open_shares_total, 4),
+            "unmatched_exit_shares": round(unmatched_exit_shares, 4),
+            "unmatched_exit_value": round(unmatched_exit_value, 2),
+            "unmatched_market_count": unmatched_markets,
+        },
+        "total_cost": round(open_cost_total, 2),
     }
 
 
@@ -538,11 +646,12 @@ async def view_pnl(
         except ValueError:
             pass
     return templates.TemplateResponse(
-        "pnl_v2.html",
+        "pnl_v2_new.html",
         {
             "request": request,
             "wallet": wallet,
             "summary": data["summary"],
+            "analysis": data["analysis"],
             "closed": closed,
             "open": data["open"],
             "total_cost": data["total_cost"],

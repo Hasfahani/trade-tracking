@@ -50,9 +50,11 @@ Start-Sleep -Seconds 1
 # Create the task action
 Write-Host "Creating scheduled task..." -ForegroundColor Yellow
 
+$launcherScript = Join-Path $scriptDir "start_server.ps1"
+
 $taskAction = New-ScheduledTaskAction `
-    -Execute $pythonExe `
-    -Argument "-m uvicorn app.main:app --host 0.0.0.0 --port 8000" `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$launcherScript`"" `
     -WorkingDirectory $scriptDir
 
 # Create trigger for system startup
@@ -85,7 +87,8 @@ Write-Host "What happens next:" -ForegroundColor Cyan
 Write-Host "  1️⃣  Every time you restart your computer, the server auto-starts"
 Write-Host "  2️⃣  Open browser: http://localhost:8000/wallets"
 Write-Host "  3️⃣  Live tracking is automatically active (every 2 minutes)"
-Write-Host "  4️⃣  Close browser, close everything, server keeps running!"
+Write-Host "  4️⃣  If the server crashes, it auto-restarts"
+Write-Host "  5️⃣  Close browser, close everything, server keeps running!"
 Write-Host ""
 Write-Host "To start the server RIGHT NOW:" -ForegroundColor Yellow
 Write-Host "  Start-ScheduledTask -TaskName 'PolymarketTracker'"
