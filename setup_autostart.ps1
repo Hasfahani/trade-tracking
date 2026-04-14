@@ -1,4 +1,4 @@
-# Polymarket Trades Tracker - Auto-Start Setup
+# Polymarket Wallet Watchlist - Auto-Start Setup
 # This script sets up the server to start automatically with Windows
 
 Write-Host ""
@@ -27,7 +27,7 @@ if (-not $pythonExe) {
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 
 if (-not $isAdmin) {
-    Write-Host "❌ This script must be run as Administrator!" -ForegroundColor Red
+    Write-Host "This script must be run as Administrator." -ForegroundColor Red
     Write-Host ""
     Write-Host "Please follow these steps:" -ForegroundColor Yellow
     Write-Host "1. Right-click on PowerShell"
@@ -39,7 +39,7 @@ if (-not $isAdmin) {
     exit 1
 }
 
-Write-Host "✅ Running as Administrator" -ForegroundColor Green
+Write-Host "Running as Administrator" -ForegroundColor Green
 Write-Host ""
 
 # Kill any existing scheduled tasks
@@ -75,18 +75,18 @@ Register-ScheduledTask `
     -Trigger $taskTrigger `
     -Settings $taskSettings `
     -RunLevel Highest `
-    -Description "Polymarket Trades Tracker - Auto-starts the live trading dashboard server" `
+    -Description "Polymarket Wallet Watchlist - Auto-starts the manual refresh watchlist server" `
     -Force | Out-Null
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "  ✅ AUTO-START SETUP COMPLETE!" -ForegroundColor Green
+Write-Host "  AUTO-START SETUP COMPLETE" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "What happens next:" -ForegroundColor Cyan
 Write-Host "  1️⃣  Every time you restart your computer, the server auto-starts"
 Write-Host "  2️⃣  Open browser: http://localhost:8000/wallets"
-Write-Host "  3️⃣  Live tracking is automatically active (every 2 minutes)"
+Write-Host "  3️⃣  Use manual refresh buttons in the app when you want new data"
 Write-Host "  4️⃣  If the server crashes, it auto-restarts"
 Write-Host "  5️⃣  Close browser, close everything, server keeps running!"
 Write-Host ""

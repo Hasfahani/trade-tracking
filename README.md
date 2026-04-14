@@ -1,205 +1,204 @@
-# Polymarket Trades Watchlist V1
+# Polymarket Wallet Trades Watchlist
 
-A minimal, server-rendered web app to track Polymarket wallet trades. No analytics, no PnL, no positions - just trades storage and viewing.
+A focused, server-rendered watchlist app for tracking Polymarket wallet trades.
 
-## Features
+The product is intentionally narrow: add wallets, refresh trades manually, and inspect stored trade history quickly from local SQLite.
 
-- Add/remove wallet addresses with optional labels
-- Fetch and store trades in local SQLite database (append-only)
-- View paginated trades per wallet
-- Mobile-friendly responsive design
-- Server-rendered HTML (no JavaScript frontend)
+## Product Scope
+
+Included:
+- Wallet watchlist with optional labels
+- Manual refresh per wallet or for all wallets
+- Trade storage in local SQLite
+- Trade filtering, sorting, pagination, CSV export
+- Sync status and refresh event visibility
+- Refresh result visibility per wallet, including last refresh time/status/error
+
+Explicitly excluded:
+- PnL and position analytics
+- Win/loss dashboards
+- Copy trading
+- Strategy analytics
+- Live auto-refresh on page render
 
 ## Hard Rules
 
-- **NO external API calls during page render** - all page loads read from SQLite only
-- **NO positions, PnL, profit, win/loss, analytics, or copy trading**
-- Ingestion is isolated from web routes (see `app/ingest.py`)
-- Trade deduplication via unique `trade_id`
+- No external API calls during page render
+- All page loads read from SQLite only
+- Ingestion stays isolated from web routes (via app/ingest.py)
+- Trade deduplication via unique trade_id
+- Manual refresh is the operating model
+
+## Tech Stack
+
+- FastAPI
+- SQLAlchemy
+- SQLite
+- Jinja2 templates
+- Server-rendered HTML/CSS
+
+## Architecture
+
+- app/main.py: App bootstrap and startup initialization
+- app/routes_v2.py: HTTP routes and server-rendered page handlers
+- app/ingest.py: Polymarket fetch, normalize, and ingest logic
+- app/models.py: SQLAlchemy models
+- app/db.py: Engine/session setup and lightweight schema backfill
+- app/templates/: Jinja templates
+- app/static/style_v2.css: Shared design system and responsive UI
+
+Design decisions:
+- Keep ingestion side effects out of page rendering paths
+- Keep routes simple and explicit
+- Prefer local query-driven pages over background complexity
+- Favor maintainability over feature volume
+
+Operational model:
+- Page renders never call external APIs
+- Refresh happens only when a user triggers it from the UI or admin endpoints
+- Refresh results are stored in SQLite and shown later on the wallet and sync pages
 
 ## Setup
 
-### 1. Create virtual environment
+1. Create and activate virtual environment
 
-```bash
-python -m venv venv
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-### 2. Activate virtual environment
+2. Install dependencies
 
-Windows:
-```bash
-venv\Scripts\activate
-```
-
-Linux/Mac:
-```bash
-source venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
-### 4. Initialize database
+3. Initialize database
 
-```bash
+```powershell
 python scripts/init_db.py
 ```
 
-This creates `./data/app.db` with the required schema.
+4. Run server
 
-## Run
-
-```bash
-uvicorn app.main:app --reload
+```powershell
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Server runs at: http://localhost:8000
+Open:
+- http://localhost:8000/wallets
+
+## Runtime Configuration
+
+Environment variables:
+- APP_NAME: app title shown in the UI
+- LOG_LEVEL: application log level
+- PORT: server port (default 8000)
+- HOST: server host (default 0.0.0.0)
+- DATABASE_URL: SQLAlchemy database URL
+- DEFAULT_PAGE_SIZE: trade page size default
+- MAX_PAGE_SIZE: trade page size cap
+- DEFAULT_REFRESH_LIMIT: per-refresh fetch limit
+
+Example (PowerShell):
+
+```powershell
+$env:PORT = "8010"
+uvicorn app.main:app --reload --host 0.0.0.0 --port $env:PORT
+```
 
 ## Usage
 
-### 1. Add wallets
+1. Add wallet on /wallets
+- Address must be 0x + 40 hex chars
+- Optional label for readability
 
-- Navigate to http://localhost:8000/wallets
-- Enter wallet address (required) and optional label
-- Click "Add Wallet"
+2. Refresh data manually
+- Use Refresh this wallet or Refresh all wallets in UI
+- Or call admin API endpoints
+- Refresh status, inserted trade count, and errors are written to SQLite for later review
 
-### 2. Fetch trades
-
-Trades are NOT fetched automatically. You must manually trigger ingestion:
-
-```bash
-# Refresh all wallets (limit 200 trades per wallet)
-curl -X POST http://localhost:8000/admin/refresh?limit_per_wallet=200
-
-# Refresh specific wallet
-curl -X POST "http://localhost:8000/admin/refresh?address=0x..."
-```
-
-Returns JSON stats: `{"status": "success", "wallets_refreshed": N, "results": {...}}`
-
-### 3. View trades
-
-- Click on any wallet in the list
-- View paginated trades (50 per page by default)
-- Trades display: timestamp (UTC), market title, side (YES/NO), price, size
-
-### 4. Delete wallet
-
-- Click "Delete" button on wallet list
-- Deletes wallet and all associated trades
-
-## Database Schema
-
-### wallets
-- `id` - Primary key
-- `address` - Unique wallet address (lowercase)
-- `label` - Optional label
-- `created_at` - Timestamp
-
-### trades
-- `id` - Primary key
-- `wallet_address` - Foreign reference to wallet
-- `trade_id` - Unique trade identifier (prevents duplicates)
-- `condition_id` - Market identifier
-- `market_title` - Market name (if available)
-- `side` - 'YES' or 'NO'
-- `price` - Trade price
-- `size` - Trade size
-- `traded_at` - Trade timestamp (UTC)
-- `inserted_at` - Record creation timestamp
+3. Review trades
+- Open wallet trades page
+- Filter by side/date/market search
+- Sort by newest, oldest, or largest size
+- Use copy buttons for wallet, trade, and condition IDs where helpful
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | / | Redirect to /wallets |
-| GET | /wallets | List all wallets + add form |
-| POST | /wallets | Add new wallet |
-| POST | /wallets/{address}/delete | Delete wallet + trades |
-| GET | /wallets/{address}/trades | View paginated trades |
-| POST | /admin/refresh | Fetch & store trades |
+Core:
+- GET /wallets
+- POST /wallets
+- POST /wallets/{identifier}/refresh
+- POST /wallets/refresh-all
+- GET /wallets/{identifier}/trades
+- GET /wallets/{identifier}/trades/export
+- GET /all-trades
+- GET /trades/{trade_id}
+- GET /wallets/{identifier}/delete-confirm
+- POST /wallets/{identifier}/delete
 
-## Important Notes
+Operational:
+- POST /admin/refresh
+- POST /admin/refresh-all
+- GET /admin/sync-status
+- POST /admin/sync-status/cleanup
 
-### Polymarket API
+## Schema Notes
 
-The ingestion code in `app/ingest.py` contains a **placeholder** for the Polymarket API endpoint. The actual API URL and response format need to be verified and updated:
+The app performs lightweight SQLite compatibility backfills at startup for missing wallet columns, including refresh metadata columns.
 
-```python
-BASE_URL = "https://api.polymarket.com/v1"  # TODO: Verify actual endpoint
+Newer schema fields used by refresh status:
+- wallets.last_checked_at
+- wallets.last_refresh_status
+- wallets.last_refresh_count
+- wallets.last_error_at
+- wallets.last_error_message
+- sync_events.duplicate_count
+
+Indexes added for responsiveness:
+- trades(wallet_address, traded_at)
+- trades(wallet_address, side, traded_at)
+- trades(wallet_address, market_title)
+- sync_events(wallet_address, created_at)
+
+No external migration framework is required for this project.
+
+## Troubleshooting
+
+Port already in use:
+- Change port: uvicorn app.main:app --reload --port 8010
+- Or set PORT and rerun
+- PowerShell example:
+
+```powershell
+$env:PORT = "8010"
+uvicorn app.main:app --reload --host 0.0.0.0 --port $env:PORT
 ```
 
-You must update:
-1. `fetch_trades_for_wallet()` - API endpoint and parameters
-2. `normalize_trade()` - Field mappings based on actual API response
+- Batch/launcher scripts also respect `PORT`
 
-### Trade Deduplication
+Virtual environment issues:
+- Confirm interpreter exists under .venv/Scripts/python.exe or venv/Scripts/python.exe
+- Reinstall dependencies with pip install -r requirements.txt
 
-Trades are deduplicated using `trade_id`:
-- If the API provides an `id`, that is used
-- Otherwise, a deterministic hash is computed from (wallet, condition_id, side, price, size, timestamp)
+No new trades after refresh:
+- This can be normal if nothing new is available
+- Check /admin/sync-status for refresh events and errors
 
-### NO Real-time Updates
+## Testing
 
-This is V1 - manual refresh only. No background jobs, no websockets, no automatic updates.
+Run tests:
 
-### Page Load Performance
-
-All page renders read **exclusively from SQLite**. No external API calls during page load. This ensures fast, reliable page loads.
-
-## Project Structure
-
-```
-polymarket-trades-v1/
-├── app/
-│   ├── main.py           # FastAPI app initialization
-│   ├── routes.py         # Web routes and handlers
-│   ├── db.py             # Database session management
-│   ├── models.py         # SQLAlchemy models
-│   ├── ingest.py         # Trade fetching and ingestion
-│   ├── settings.py       # Configuration
-│   ├── templates/        # Jinja2 templates
-│   │   ├── base.html
-│   │   ├── wallets.html
-│   │   └── trades.html
-│   └── static/
-│       └── style.css     # Mobile-friendly CSS
-├── scripts/
-│   └── init_db.py        # Database initialization
-├── data/                 # SQLite database (created at runtime)
-│   └── app.db
-├── requirements.txt
-└── README.md
+```powershell
+pytest -q
 ```
 
-## Technology Stack
-
-- Python 3.11+
-- FastAPI
-- SQLAlchemy (ORM)
-- SQLite
-- Jinja2 templates
-- httpx (for API requests)
-- Uvicorn (ASGI server)
-
-## What's NOT Included (by design)
-
-- Authentication/users
-- Background job schedulers
-- Database migrations
-- Docker/containers
-- Caching layers
-- WebSockets
-- React/Vue/frontend frameworks
-- Positions tracking
-- PnL calculations
-- Win/loss ratios
-- Copy trading execution
-- Strategy analysis
-- Real-time updates
-
-Keep it simple. Keep it boring. Keep it correct.
+Tests cover:
+- Wallet address validation behavior
+- Trade dedup logic
+- Trade normalization behavior
+- Core route behavior for wallet/trades pages
+- Manual refresh route messaging

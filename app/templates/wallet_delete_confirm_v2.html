@@ -1,0 +1,31 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Delete Wallet{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div>
+        <p class="eyebrow">Danger zone</p>
+        <h1>Delete wallet</h1>
+        <p class="subtle">This permanently deletes the wallet and all associated stored trades.</p>
+    </div>
+</section>
+
+<section class="card warning-card">
+    <h2>{{ wallet.label or 'Unlabeled wallet' }}</h2>
+    <p class="mono">{{ wallet.address }} ({{ short_address(wallet.address) }})</p>
+    <p>This action will remove <strong>{{ trade_count }}</strong> stored trades from SQLite and remove the wallet from your watchlist.</p>
+    <p class="subtle">This cannot be undone. If you only want fresh data later, keep the wallet and use manual refresh when needed.</p>
+
+    <form method="post" action="/wallets/{{ wallet.address }}/delete" class="grid-form">
+        <label>
+            Type DELETE to confirm
+            <input type="text" name="confirm_text" required placeholder="DELETE">
+        </label>
+        <div class="action-row">
+            <a class="btn" href="/wallets">Cancel</a>
+            <button type="submit" class="btn btn-danger">Delete wallet and trades</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

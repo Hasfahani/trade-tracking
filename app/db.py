@@ -17,6 +17,7 @@ def _ensure_wallet_columns():
         "tags": "TEXT",
         "is_pinned": "INTEGER",
         "last_checked_at": "DATETIME",
+        "last_refresh_status": "VARCHAR(32)",
         "last_refresh_count": "INTEGER",
         "last_error_at": "DATETIME",
         "last_error_message": "TEXT",
@@ -39,10 +40,28 @@ def _ensure_wallet_columns():
                 )
 
 
+def _ensure_sqlite_indexes():
+    """Create lightweight indexes for older SQLite databases."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+
+    index_statements = [
+        "CREATE INDEX IF NOT EXISTS ix_trades_wallet_traded_at ON trades (wallet_address, traded_at)",
+        "CREATE INDEX IF NOT EXISTS ix_trades_wallet_side_traded_at ON trades (wallet_address, side, traded_at)",
+        "CREATE INDEX IF NOT EXISTS ix_trades_wallet_market_title ON trades (wallet_address, market_title)",
+        "CREATE INDEX IF NOT EXISTS ix_sync_events_wallet_created ON sync_events (wallet_address, created_at)",
+    ]
+
+    with engine.begin() as conn:
+        for statement in index_statements:
+            conn.exec_driver_sql(statement)
+
+
 def init_db():
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
     _ensure_wallet_columns()
+    _ensure_sqlite_indexes()
 
 
 @contextmanager

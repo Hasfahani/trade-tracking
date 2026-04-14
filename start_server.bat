@@ -1,8 +1,8 @@
 @echo off
-REM Polymarket Trades Tracker - Server Launcher
+REM Polymarket Wallet Watchlist - Server Launcher
 REM This script starts the FastAPI server persistently
 
-title Polymarket Trades Tracker Server
+title Polymarket Wallet Watchlist Server
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
@@ -28,17 +28,18 @@ if errorlevel 1 (
 
 echo.
 echo ========================================
-echo   Polymarket Trades Tracker Server
-echo   Version 1.0
+echo   Polymarket Wallet Watchlist Server
+echo   Manual Refresh Watchlist
 echo ========================================
 echo.
-echo Starting server on http://localhost:8000
-echo Open browser and visit: http://localhost:8000/wallets
+if "%PORT%"=="" set "PORT=8000"
+echo Starting server on http://localhost:%PORT%
+echo Open browser and visit: http://localhost:%PORT%/wallets
 echo.
 
 :LOOP
 REM Run server directly via the selected virtual environment Python
-"%PYTHON_EXE%" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+"%PYTHON_EXE%" -m uvicorn app.main:app --host 0.0.0.0 --port %PORT% --workers 1
 
 REM If the server crashes, restart it after 5 seconds
 echo.

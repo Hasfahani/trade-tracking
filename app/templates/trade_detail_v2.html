@@ -4,24 +4,38 @@
 
 {% block content %}
 <section class="hero-card">
-    <div>
+    <div class="hero-copy">
         <p class="eyebrow">Trade detail</p>
         <h1>{{ trade.market_title or trade.condition_id }}</h1>
         <p class="subtle">Condition {{ trade.condition_id }}</p>
     </div>
-    <div class="stack-tight">
-        <span class="pill">{{ trade.side }}</span>
+    <div class="stack-tight hero-actions">
+        <span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span>
         <span class="pill">${{ '%.2f'|format(trade.price * trade.size) }}</span>
     </div>
 </section>
 
 <section class="card">
     <div class="detail-grid">
-        <div><strong>Trade ID</strong><span class="mono">{{ trade.trade_id }}</span></div>
-        <div><strong>Wallet</strong><a href="/wallets/{{ trade.wallet_address }}/trades">{{ wallet_map.get(trade.wallet_address).label or trade.wallet_address }}</a></div>
+        {% set trade_wallet = wallet_map.get(trade.wallet_address) %}
+        <div>
+            <strong>Trade ID</strong>
+            <span class="mono">{{ trade.trade_id }}</span>
+            <button type="button" class="btn btn-small" data-copy="{{ trade.trade_id }}" data-copy-label="Copy trade ID">Copy trade ID</button>
+        </div>
+        <div>
+            <strong>Wallet</strong>
+            <a href="/wallets/{{ trade.wallet_address }}/trades">{{ trade_wallet.label if trade_wallet and trade_wallet.label else short_address(trade.wallet_address) }}</a>
+            <button type="button" class="btn btn-small" data-copy="{{ trade.wallet_address }}" data-copy-label="Copy wallet address">Copy wallet address</button>
+        </div>
         <div><strong>Price</strong><span>${{ '%.4f'|format(trade.price) }}</span></div>
         <div><strong>Size</strong><span>{{ '%.2f'|format(trade.size) }}</span></div>
         <div><strong>Time</strong><span>{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</span></div>
+        <div>
+            <strong>Condition ID</strong>
+            <span class="mono">{{ trade.condition_id }}</span>
+            <button type="button" class="btn btn-small" data-copy="{{ trade.condition_id }}" data-copy-label="Copy condition ID">Copy condition ID</button>
+        </div>
     </div>
 </section>
 
@@ -43,9 +57,10 @@
             </thead>
             <tbody>
                 {% for item in related_trades %}
+                {% set item_wallet = wallet_map.get(item.wallet_address) %}
                 <tr {% if item.trade_id == trade.trade_id %}class="wallet-row-flash"{% endif %}>
                     <td>{{ item.traded_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
-                    <td><a href="/wallets/{{ item.wallet_address }}/trades">{{ wallet_map.get(item.wallet_address).label or item.wallet_address }}</a></td>
+                    <td><a href="/wallets/{{ item.wallet_address }}/trades">{{ item_wallet.label if item_wallet and item_wallet.label else short_address(item.wallet_address) }}</a></td>
                     <td><span class="pill {% if item.side == 'YES' %}success{% else %}danger{% endif %}">{{ item.side }}</span></td>
                     <td>${{ '%.4f'|format(item.price) }}</td>
                     <td>{{ '%.2f'|format(item.size) }}</td>

@@ -15,4 +15,4 @@ if __name__ == "__main__":
     print("Initializing database...")
     init_db()
     print("Database initialized successfully!")
-    print("Tables created: wallets, trades")
+    print("Core tables available: wallets, trades, notifications, notification_settings, sync_events")

@@ -4,38 +4,74 @@
 
 {% block content %}
 <section class="hero-card">
-    <div>
-        <p class="eyebrow">Global search</p>
-        <h1>All tracked trades</h1>
-        <p class="subtle">Search every wallet from one place.</p>
+    <div class="hero-copy">
+        <p class="eyebrow">Global view</p>
+        <h1>All stored trades</h1>
+        <p class="subtle">Unified search across all tracked wallets from local SQLite data.</p>
+    </div>
+    <div class="hero-actions">
+        <span class="pill">Manual refresh only</span>
     </div>
 </section>
 
 <section class="card">
-    <form method="get" class="filter-bar">
-        <input type="text" name="wallet_search" placeholder="Wallet address" value="{{ wallet_search or '' }}">
-        <input type="text" name="market_search" placeholder="Market or condition" value="{{ market_search or '' }}">
-        <select name="side">
-            <option value="">All sides</option>
-            <option value="YES" {% if side == 'YES' %}selected{% endif %}>YES</option>
-            <option value="NO" {% if side == 'NO' %}selected{% endif %}>NO</option>
-        </select>
-        <input type="date" name="date_from" value="{{ date_from or '' }}">
-        <input type="date" name="date_to" value="{{ date_to or '' }}">
-        <button class="btn btn-primary" type="submit">Search</button>
+    <form method="get" class="filter-grid">
+        <label>
+            Wallet search
+            <input type="text" name="wallet_search" placeholder="0x..." value="{{ wallet_search or '' }}">
+        </label>
+        <label>
+            Market search
+            <input type="text" name="market_search" placeholder="Market title or condition ID" value="{{ market_search or '' }}">
+        </label>
+        <label>
+            Side
+            <select name="side">
+                <option value="">All sides</option>
+                <option value="YES" {% if side == 'YES' %}selected{% endif %}>YES</option>
+                <option value="NO" {% if side == 'NO' %}selected{% endif %}>NO</option>
+            </select>
+        </label>
+        <label>
+            Date from
+            <input type="date" name="date_from" value="{{ date_from or '' }}">
+        </label>
+        <label>
+            Date to
+            <input type="date" name="date_to" value="{{ date_to or '' }}">
+        </label>
+        <label>
+            Sort
+            <select name="sort_by">
+                <option value="time_desc" {% if sort_by == 'time_desc' %}selected{% endif %}>Newest first</option>
+                <option value="time_asc" {% if sort_by == 'time_asc' %}selected{% endif %}>Oldest first</option>
+                <option value="size_desc" {% if sort_by == 'size_desc' %}selected{% endif %}>Largest size</option>
+            </select>
+        </label>
+        <label>
+            Page size
+            <select name="page_size">
+                <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
+            </select>
+        </label>
+        <button class="btn btn-primary" type="submit">Apply filters</button>
     </form>
 </section>
 
 <section class="card">
     <div class="section-head">
         <h2>Results</h2>
-        <span class="pill">{{ total_trades }} matches</span>
+        <span class="pill">Showing {{ pagination.start }}-{{ pagination.end }} of {{ total_trades }} matches</span>
     </div>
+
+    {% if trades %}
     <div class="table-wrap">
-        <table>
+        <table class="trade-table">
             <thead>
                 <tr>
-                    <th>Date</th>
+                    <th>Date (UTC)</th>
                     <th>Wallet</th>
                     <th>Market</th>
                     <th>Side</th>
@@ -46,15 +82,31 @@
                 {% for trade in trades %}
                 {% set wallet = wallet_map.get(trade.wallet_address) %}
                 <tr>
-                    <td>{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
-                    <td><a href="/wallets/{{ trade.wallet_address }}/trades">{{ wallet.label or trade.wallet_address }}</a></td>
-                    <td><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
-                    <td><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
-                    <td>${{ '%.2f'|format(trade.price * trade.size) }}</td>
+                    <td data-label="Date">{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td data-label="Wallet"><a href="/wallets/{{ trade.wallet_address }}/trades">{{ wallet.label if wallet and wallet.label else short_address(trade.wallet_address) }}</a></td>
+                    <td data-label="Market"><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
+                    <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
+                    <td data-label="Value">${{ '%.2f'|format(trade.price * trade.size) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    <div class="pagination-row">
+        {% if page > 1 %}
+        <a class="btn" href="{{ request.url.include_query_params(page=page - 1) }}">Previous</a>
+        {% endif %}
+        <span class="pagination-meta">Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a class="btn" href="{{ request.url.include_query_params(page=page + 1) }}">Next</a>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No results</h3>
+        <p>No trades match your filters.</p>
+    </div>
+    {% endif %}
 </section>
 {% endblock %}

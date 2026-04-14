@@ -4,7 +4,7 @@
 
 {% block content %}
 <section class="hero-card">
-    <div>
+    <div class="hero-copy">
         <p class="eyebrow">Data quality</p>
         <h1>Sync status</h1>
         <p class="subtle">Review sync outcomes, duplicate groups, and cleanup actions.</p>
@@ -53,6 +53,9 @@
 {% block scripts %}
 <script>
 document.getElementById('cleanupBtn').addEventListener('click', async () => {
+    if (!window.confirm('Remove duplicate trade rows from local SQLite?')) {
+        return;
+    }
     const response = await fetch('/admin/sync-status/cleanup', { method: 'POST' });
     const payload = await response.json();
     alert(`Removed ${payload.removed} duplicate trades.`);

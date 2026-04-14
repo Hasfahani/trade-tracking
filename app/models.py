@@ -1,40 +1,13 @@
-"""
-Manual SQLite migration notes for existing databases.
-Run these statements yourself; the app will not apply them automatically.
+"""SQLAlchemy models for the watchlist app.
 
-ALTER TABLE wallets ADD COLUMN tags TEXT;
-ALTER TABLE wallets ADD COLUMN is_pinned INTEGER;
-ALTER TABLE wallets ADD COLUMN last_checked_at DATETIME;
-ALTER TABLE wallets ADD COLUMN last_refresh_count INTEGER;
-ALTER TABLE wallets ADD COLUMN last_error_at DATETIME;
-ALTER TABLE wallets ADD COLUMN last_error_message TEXT;
-
-CREATE TABLE notification_settings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sound_enabled INTEGER,
-    min_trade_value FLOAT,
-    dedupe_window_seconds INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE sync_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    wallet_address VARCHAR(255),
-    status VARCHAR(32),
-    fetched_count INTEGER,
-    inserted_count INTEGER,
-    error_message TEXT,
-    duplicate_count INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+SQLite compatibility columns are backfilled in app.db._ensure_wallet_columns.
 """
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, CheckConstraint
+from sqlalchemy import CheckConstraint, Column, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
@@ -48,6 +21,7 @@ class Wallet(Base):
     tags = Column(Text, nullable=True)
     is_pinned = Column(Integer, nullable=True, default=0)
     last_checked_at = Column(DateTime, nullable=True)
+    last_refresh_status = Column(String(32), nullable=True)
     last_refresh_count = Column(Integer, nullable=True)
     last_error_at = Column(DateTime, nullable=True)
     last_error_message = Column(Text, nullable=True)
@@ -70,6 +44,9 @@ class Trade(Base):
 
     __table_args__ = (
         CheckConstraint("side IN ('YES', 'NO')", name="check_side"),
+        Index("ix_trades_wallet_traded_at", "wallet_address", "traded_at"),
+        Index("ix_trades_wallet_side_traded_at", "wallet_address", "side", "traded_at"),
+        Index("ix_trades_wallet_market_title", "wallet_address", "market_title"),
     )
 
 
@@ -110,3 +87,7 @@ class SyncEvent(Base):
     error_message = Column(Text, nullable=True)
     duplicate_count = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index("ix_sync_events_wallet_created", "wallet_address", "created_at"),
+    )

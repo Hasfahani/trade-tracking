@@ -3,20 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Polymarket Trades{% endblock %}</title>
+    <title>{% block title %}{{ app_name or "Polymarket Wallet Watchlist" }}{% endblock %}</title>
     <link rel="stylesheet" href="/static/style_v2.css">
 </head>
 <body>
     <header class="site-header">
         <div class="nav-shell">
-            <a href="/dashboard" class="brand">Polymarket Trades</a>
+            <div class="brand-block">
+                <a href="/wallets" class="brand">{{ app_name or "Polymarket Wallet Watchlist" }}</a>
+                <p class="brand-subtitle">Manual refresh watchlist. Pages read from local SQLite only.</p>
+            </div>
             <nav class="top-nav">
-                <a href="/dashboard">Dashboard</a>
                 <a href="/wallets">Wallets</a>
                 <a href="/all-trades">All Trades</a>
-                <a href="/charts">Charts</a>
-                <a href="/notifications">Alerts</a>
-                <a href="/settings/notifications">Settings</a>
                 <a href="/admin/sync-status">Sync</a>
             </nav>
         </div>
@@ -27,9 +26,26 @@
     </main>
 
     <footer class="site-footer">
-        <p>Manual migration only. Existing URLs remain supported.</p>
+        <p>Manual refresh only. Page loads read from SQLite, and refresh actions call Polymarket only when you trigger them.</p>
     </footer>
 
+    <script>
+    document.querySelectorAll('[data-copy]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const text = button.getAttribute('data-copy');
+            const original = button.dataset.copyLabel || button.textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                button.textContent = 'Copied';
+            } catch (_) {
+                button.textContent = 'Copy failed';
+            }
+            window.setTimeout(() => {
+                button.textContent = original;
+            }, 1200);
+        });
+    });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
