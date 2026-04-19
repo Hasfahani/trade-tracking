@@ -92,18 +92,24 @@ python scripts/init_db.py
 4. Run server
 
 ```powershell
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+./start_dev.ps1
 ```
 
 Alternative launchers (Windows):
 - PowerShell launcher: `./start_server.ps1`
 - Batch launcher: `./start_server.bat`
+- Dev launcher with scoped reload: `./start_dev.ps1`
 
 The PowerShell launcher:
 - Resolves virtualenv Python from `venv` or `.venv`
 - Checks that `uvicorn` is installed
 - Starts on `PORT` (default 8000)
 - Restarts server automatically if it exits
+
+The dev launcher:
+- Enables `--reload`
+- Watches only `app` and `tests`
+- Excludes `venv`, `.venv`, `.venv313`, and `data` to avoid Windows file-watch slowdowns
 
 Open:
 - http://localhost:8000/wallets
@@ -134,7 +140,7 @@ Example (PowerShell):
 
 ```powershell
 $env:PORT = "8010"
-uvicorn app.main:app --reload --host 0.0.0.0 --port $env:PORT
+./start_dev.ps1
 ```
 
 ## Usage
@@ -221,13 +227,13 @@ No external migration framework is required for this project.
 ## Troubleshooting
 
 Port already in use:
-- Change port: uvicorn app.main:app --reload --port 8010
+- Change port: set `PORT` and run `./start_dev.ps1`
 - Or set PORT and rerun
 - PowerShell example:
 
 ```powershell
 $env:PORT = "8010"
-uvicorn app.main:app --reload --host 0.0.0.0 --port $env:PORT
+./start_dev.ps1
 ```
 
 - Batch/launcher scripts also respect `PORT`
