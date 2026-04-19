@@ -177,7 +177,26 @@ def sorted_trade_query(query: Query, sort_by: str) -> Query:
         return query.order_by(Trade.traded_at.asc())
     if sort_by == "size_desc":
         return query.order_by(Trade.size.desc(), Trade.traded_at.desc())
+    if sort_by == "value_desc":
+        return query.order_by((Trade.price * Trade.size).desc(), Trade.traded_at.desc())
     return query.order_by(Trade.traded_at.desc())
+
+
+def trade_pnl_summary(query: Query) -> Dict[str, float]:
+    row = query.with_entities(
+        func.sum(case((Trade.side == "YES", Trade.price * Trade.size), else_=0)).label("yes_value"),
+        func.sum(case((Trade.side == "NO", Trade.price * Trade.size), else_=0)).label("no_value"),
+        func.sum(Trade.price * Trade.size).label("total_value"),
+        func.avg(Trade.price).label("avg_price"),
+        func.count(Trade.id).label("trade_count"),
+    ).first()
+    return {
+        "yes_value": float(row.yes_value or 0),
+        "no_value": float(row.no_value or 0),
+        "total_value": float(row.total_value or 0),
+        "avg_price": float(row.avg_price or 0),
+        "trade_count": int(row.trade_count or 0),
+    }
 
 
 def wallet_stats_map(db: Session, wallet_addresses: Optional[List[str]] = None) -> Dict[str, Dict[str, Any]]:

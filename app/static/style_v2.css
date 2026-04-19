@@ -96,9 +96,14 @@ a:hover {
     font-weight: 600;
 }
 
-.top-nav a:hover {
-    background: rgba(94, 200, 255, 0.12);
+.top-nav a:hover,
+.top-nav a.active {
+    background: rgba(94, 200, 255, 0.15);
     color: var(--text);
+}
+
+.top-nav a.active {
+    border-bottom: 2px solid var(--accent);
 }
 
 .page-shell {
@@ -428,6 +433,26 @@ textarea {
 
 .flash {
     border-left: 4px solid var(--accent);
+    position: relative;
+}
+
+.flash-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+.flash-close:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .flash-success {
@@ -594,6 +619,10 @@ th {
 .error-text,
 .text-danger {
     color: var(--danger);
+}
+
+.text-success {
+    color: var(--success);
 }
 
 .pagination-row {

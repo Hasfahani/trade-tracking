@@ -30,6 +30,7 @@
     </footer>
 
     <script>
+    // Copy-to-clipboard buttons
     document.querySelectorAll('[data-copy]').forEach((button) => {
         button.addEventListener('click', async () => {
             const text = button.getAttribute('data-copy');
@@ -40,11 +41,46 @@
             } catch (_) {
                 button.textContent = 'Copy failed';
             }
-            window.setTimeout(() => {
-                button.textContent = original;
-            }, 1200);
+            window.setTimeout(() => { button.textContent = original; }, 1200);
         });
     });
+
+    // Active nav highlighting
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.top-nav a').forEach((a) => {
+        const href = a.getAttribute('href');
+        if (href === currentPath || (href !== '/' && currentPath.startsWith(href))) {
+            a.classList.add('active');
+        }
+    });
+
+    // Loading state: disable submit buttons on form submit to prevent double-click
+    document.querySelectorAll('form').forEach((form) => {
+        form.addEventListener('submit', () => {
+            const btn = form.querySelector('button[type="submit"]:not([data-no-loading])');
+            if (btn && !btn.disabled) {
+                btn.disabled = true;
+                btn.dataset.orig = btn.textContent;
+                btn.textContent = 'Loading…';
+            }
+        });
+    });
+
+    // Flash message: close button + auto-dismiss after 9 seconds
+    const flash = document.querySelector('.flash');
+    if (flash) {
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'flash-close';
+        closeBtn.setAttribute('aria-label', 'Dismiss');
+        closeBtn.textContent = '×';
+        closeBtn.addEventListener('click', () => flash.remove());
+        flash.appendChild(closeBtn);
+        setTimeout(() => {
+            flash.style.transition = 'opacity 0.6s ease';
+            flash.style.opacity = '0';
+            setTimeout(() => flash.remove(), 650);
+        }, 9000);
+    }
     </script>
     {% block scripts %}{% endblock %}
 </body>

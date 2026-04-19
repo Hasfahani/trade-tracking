@@ -16,6 +16,8 @@ from app.models import SyncEvent, Trade, Wallet
 from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, DEFAULT_REFRESH_LIMIT, MAX_PAGE_SIZE
 from app import view_helpers as vh
 
+_BOM = "\ufeff"
+
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
@@ -346,6 +348,7 @@ async def view_trades(
         func.min(Trade.traded_at).label("oldest_trade_at"),
         func.max(Trade.traded_at).label("newest_trade_at"),
     ).first()
+    pnl = vh.trade_pnl_summary(base_query)
     activity_timeline = vh.build_wallet_activity_timeline(db, wallet.address)
 
     return templates.TemplateResponse(
@@ -368,6 +371,7 @@ async def view_trades(
             "date_preset": date_preset,
             "sort_by": sort_by,
             "summary_row": summary_row,
+            "pnl": pnl,
             "activity_timeline": activity_timeline,
             "short_address": vh.short_address,
             "duration_label": vh.duration_label,
@@ -415,6 +419,7 @@ async def all_trades(
         func.min(Trade.traded_at).label("oldest_trade_at"),
         func.max(Trade.traded_at).label("newest_trade_at"),
     ).first()
+    pnl = vh.trade_pnl_summary(query)
     wallet_map = {wallet.address: wallet for wallet in db.query(Wallet).all()}
     return templates.TemplateResponse(
         request,
@@ -436,6 +441,7 @@ async def all_trades(
             "wallet_search": wallet_search,
             "sort_by": sort_by,
             "summary_row": summary_row,
+            "pnl": pnl,
             "wallet_map": wallet_map,
             "short_address": vh.short_address,
         },
@@ -497,6 +503,7 @@ async def export_trades(
     query = vh.sorted_trade_query(query, sort_by)
 
     output = io.StringIO()
+    output.write(_BOM)
     writer = csv.writer(output)
     writer.writerow(["Trade ID", "Date (UTC)", "Market Title", "Condition ID", "Side", "Price", "Size", "Value"])
     for trade in query.all():
@@ -516,7 +523,7 @@ async def export_trades(
     filename = f"trades_{wallet.address[:8]}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
-        media_type="text/csv",
+        media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 

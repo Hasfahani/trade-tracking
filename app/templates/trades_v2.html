@@ -24,20 +24,28 @@
 
 <section class="metrics-grid">
     <article class="metric-card">
-        <span class="metric-label">Stored trades</span>
+        <span class="metric-label">Matching trades</span>
         <strong>{{ total_trades }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Total value</span>
+        <strong>${{ '%.2f'|format(pnl.total_value) }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">YES value</span>
+        <strong class="text-success">${{ '%.2f'|format(pnl.yes_value) }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">NO value</span>
+        <strong class="text-danger">${{ '%.2f'|format(pnl.no_value) }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Avg price</span>
+        <strong>{{ '%.4f'|format(pnl.avg_price) }}</strong>
     </article>
     <article class="metric-card">
         <span class="metric-label">Last refresh</span>
         <strong>{% if wallet.last_checked_at %}{{ wallet.last_checked_at.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}Never{% endif %}</strong>
-    </article>
-    <article class="metric-card">
-        <span class="metric-label">Refresh status</span>
-        <strong>{% if wallet.last_refresh_status %}{{ wallet.last_refresh_status|replace('_', ' ')|title }}{% else %}Not refreshed{% endif %}</strong>
-    </article>
-    <article class="metric-card">
-        <span class="metric-label">Last refresh result</span>
-        <strong>{% if wallet.last_refresh_status == 'success' %}{{ wallet.last_refresh_count or 0 }} trades added{% elif wallet.last_refresh_status == 'no_new' %}No new trades{% elif wallet.last_refresh_status == 'error' %}Failed{% else %}No data yet{% endif %}</strong>
     </article>
 </section>
 
@@ -83,6 +91,7 @@
                 <option value="time_desc" {% if sort_by == 'time_desc' %}selected{% endif %}>Newest first</option>
                 <option value="time_asc" {% if sort_by == 'time_asc' %}selected{% endif %}>Oldest first</option>
                 <option value="size_desc" {% if sort_by == 'size_desc' %}selected{% endif %}>Largest size</option>
+                <option value="value_desc" {% if sort_by == 'value_desc' %}selected{% endif %}>Highest value</option>
             </select>
         </label>
         <label>

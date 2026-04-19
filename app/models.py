@@ -3,8 +3,6 @@
 SQLite compatibility columns are backfilled in app.db._ensure_wallet_columns.
 """
 
-from datetime import datetime, timezone
-
 from sqlalchemy import CheckConstraint, Column, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
@@ -51,31 +49,6 @@ class Trade(Base):
         Index("ix_trades_wallet_market_title", "wallet_address", "market_title"),
     )
 
-
-class Notification(Base):
-    __tablename__ = 'notifications'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    wallet_address = Column(String(255), nullable=False, index=True)
-    trade_id = Column(String(255), nullable=False)
-    message = Column(Text, nullable=False)
-    market_title = Column(Text)
-    side = Column(String(3))
-    price = Column(Float)
-    size = Column(Float)
-    is_read = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-
-class NotificationSetting(Base):
-    __tablename__ = "notification_settings"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    sound_enabled = Column(Integer, nullable=True, default=1)
-    min_trade_value = Column(Float, nullable=True, default=0.0)
-    dedupe_window_seconds = Column(Integer, nullable=True, default=120)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class SyncEvent(Base):
