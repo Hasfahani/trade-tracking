@@ -1,36 +1,23 @@
 import csv
 import io
-import re
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import desc, func, or_
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.ingest import cleanup_duplicate_trades, find_duplicate_groups, refresh_wallet
 from app.models import SyncEvent, Trade, Wallet
 from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, DEFAULT_REFRESH_LIMIT, MAX_PAGE_SIZE
+from app import view_helpers as vh
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
-
-WALLET_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
-
-
-def _wallet_order_query(db: Session):
-    return db.query(Wallet).order_by(desc(func.coalesce(Wallet.is_pinned, 0)), desc(Wallet.created_at))
-
-
-def _short_address(address: str) -> str:
-    if len(address) <= 14:
-        return address
-    return f"{address[:8]}...{address[-6:]}"
-
 
 def _flash_redirect(message: str, level: str = "info") -> RedirectResponse:
     return RedirectResponse(url=f"/wallets?flash={quote(message)}&level={quote(level)}", status_code=303)
@@ -42,52 +29,16 @@ def _flash_redirect_with_form(
     level: str = "info",
     address: str = "",
     label: str = "",
+    tags: str = "",
+    notes: str = "",
 ) -> RedirectResponse:
     return RedirectResponse(
-        url=f"/wallets?flash={quote(message)}&level={quote(level)}&address={quote(address)}&label={quote(label)}",
+        url=(
+            f"/wallets?flash={quote(message)}&level={quote(level)}&address={quote(address)}"
+            f"&label={quote(label)}&tags={quote(tags)}&notes={quote(notes)}"
+        ),
         status_code=303,
     )
-
-
-def _validate_wallet_address(address: str) -> Optional[str]:
-    candidate = (address or "").strip().lower()
-    if not candidate:
-        return "Wallet address is required."
-    if not WALLET_ADDRESS_RE.match(candidate):
-        return "Wallet address must be a valid 42-character hex address starting with 0x."
-    return None
-
-
-def _parse_datetime_start(value: Optional[str]) -> Optional[datetime]:
-    if not value:
-        return None
-    text = value.strip()
-    try:
-        if len(text) == 10:
-            return datetime.fromisoformat(text)
-        return datetime.fromisoformat(text)
-    except ValueError:
-        return None
-
-
-def _parse_datetime_end(value: Optional[str]) -> Optional[datetime]:
-    if not value:
-        return None
-    text = value.strip()
-    try:
-        if len(text) == 10:
-            return datetime.fromisoformat(text) + timedelta(days=1)
-        return datetime.fromisoformat(text)
-    except ValueError:
-        return None
-
-
-def _pagination_meta(page: int, page_size: int, total_items: int) -> Dict[str, int]:
-    if total_items <= 0:
-        return {"start": 0, "end": 0}
-    start = ((page - 1) * page_size) + 1
-    end = min(total_items, page * page_size)
-    return {"start": start, "end": end}
 
 
 def resolve_wallet(db: Session, identifier: str) -> Wallet:
@@ -101,80 +52,33 @@ def resolve_wallet(db: Session, identifier: str) -> Wallet:
     return wallet
 
 
-def _wallet_stats_map(db: Session) -> Dict[str, Dict[str, Any]]:
-    rows = (
-        db.query(
-            Trade.wallet_address,
-            func.count(Trade.id).label("trade_count"),
-            func.max(Trade.traded_at).label("last_trade_at"),
-        )
-        .group_by(Trade.wallet_address)
-        .all()
-    )
-
-    stats_map: Dict[str, Dict[str, Any]] = {}
-    for row in rows:
-        stats_map[row.wallet_address] = {
-            "trade_count": int(row.trade_count or 0),
-            "last_trade_at": row.last_trade_at,
-        }
-    return stats_map
-
-
-def _apply_trade_filters(
-    query,
-    *,
-    wallet_address: Optional[str] = None,
-    side: Optional[str] = None,
-    market_search: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-):
-    if wallet_address:
-        query = query.filter(Trade.wallet_address == wallet_address)
-
-    if side in {"YES", "NO"}:
-        query = query.filter(Trade.side == side)
-
-    if market_search:
-        term = f"%{market_search.strip()}%"
-        query = query.filter(or_(Trade.market_title.ilike(term), Trade.condition_id.ilike(term)))
-
-    start_at = _parse_datetime_start(date_from)
-    if start_at is not None:
-        query = query.filter(Trade.traded_at >= start_at)
-
-    end_at = _parse_datetime_end(date_to)
-    if end_at is not None:
-        query = query.filter(Trade.traded_at < end_at)
-
-    return query
-
-
-def _sorted_trade_query(query, sort_by: str):
-    if sort_by == "time_asc":
-        return query.order_by(Trade.traded_at.asc())
-    if sort_by == "size_desc":
-        return query.order_by(Trade.size.desc(), Trade.traded_at.desc())
-    return query.order_by(Trade.traded_at.desc())
-
-
 @router.get("/")
 async def root():
     return RedirectResponse(url="/wallets", status_code=302)
 
 
 @router.get("/wallets")
-async def list_wallets(request: Request, db: Session = Depends(get_db)):
-    wallets = _wallet_order_query(db).all()
-    wallet_stats = _wallet_stats_map(db)
+async def list_wallets(
+    request: Request,
+    wallet_search: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None),
+    include_archived: int = Query(0),
+    db: Session = Depends(get_db),
+):
+    wallets = vh.build_wallet_query(
+        db,
+        wallet_search=wallet_search,
+        status_filter=status_filter,
+        include_archived=bool(include_archived),
+    ).all()
+    wallet_stats = vh.wallet_stats_map(db, [wallet.address for wallet in wallets])
     recent_events = db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).limit(12).all()
-    summary = {
-        "wallet_count": len(wallets),
-        "trade_count": int(db.query(func.count(Trade.id)).scalar() or 0),
-        "refreshed_count": sum(1 for wallet in wallets if wallet.last_checked_at),
-        "error_count": sum(1 for wallet in wallets if wallet.last_refresh_status == "error"),
-    }
+    summary = vh.wallet_summary_counts(
+        db,
+        wallet_search=wallet_search,
+        status_filter=status_filter,
+        include_archived=bool(include_archived),
+    )
     return templates.TemplateResponse(
         request,
         "wallets_v2.html",
@@ -189,7 +93,15 @@ async def list_wallets(request: Request, db: Session = Depends(get_db)):
             "flash_level": request.query_params.get("level", "info"),
             "form_address": request.query_params.get("address", ""),
             "form_label": request.query_params.get("label", ""),
-            "short_address": _short_address,
+            "form_tags": request.query_params.get("tags", ""),
+            "form_notes": request.query_params.get("notes", ""),
+            "wallet_search": wallet_search,
+            "status_filter": status_filter,
+            "include_archived": bool(include_archived),
+            "short_address": vh.short_address,
+            "tag_list": vh.tag_list,
+            "wallet_freshness_label": vh.wallet_freshness_label,
+            "wallet_status_tone": vh.wallet_status_tone,
         },
     )
 
@@ -199,10 +111,14 @@ async def add_wallet(
     db: Session = Depends(get_db),
     address: str = Form(...),
     label: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
 ):
-    err = _validate_wallet_address(address)
+    err = vh.validate_wallet_address(address)
     normalized_address = address.strip().lower()
     normalized_label = (label or "").strip()
+    normalized_tags = vh.normalize_tags(tags)
+    normalized_notes = (notes or "").strip()
 
     if err:
         return _flash_redirect_with_form(
@@ -210,6 +126,8 @@ async def add_wallet(
             level="error",
             address=normalized_address,
             label=normalized_label,
+            tags=normalized_tags,
+            notes=normalized_notes,
         )
 
     if db.query(Wallet).filter(Wallet.address == normalized_address).first():
@@ -218,9 +136,16 @@ async def add_wallet(
             level="error",
             address=normalized_address,
             label=normalized_label,
+            tags=normalized_tags,
+            notes=normalized_notes,
         )
 
-    wallet = Wallet(address=normalized_address, label=normalized_label or None)
+    wallet = Wallet(
+        address=normalized_address,
+        label=normalized_label or None,
+        tags=normalized_tags or None,
+        notes=normalized_notes or None,
+    )
     db.add(wallet)
     db.commit()
     db.refresh(wallet)
@@ -229,7 +154,7 @@ async def add_wallet(
 
 
 @router.post("/wallets/{identifier}/refresh")
-async def refresh_single_wallet(
+def refresh_single_wallet(
     identifier: str,
     db: Session = Depends(get_db),
     limit: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),
@@ -238,15 +163,15 @@ async def refresh_single_wallet(
     result = refresh_wallet(db, wallet, limit=limit)
 
     if result["status"] == "error":
-        return _flash_redirect(f"Refresh failed for {_short_address(wallet.address)}: {result['error']}", "error")
+        return _flash_redirect(f"Refresh failed for {vh.short_address(wallet.address)}: {result['error']}", "error")
     if result["inserted"] == 0:
         return _flash_redirect(
-            f"No new trades for {_short_address(wallet.address)}. Fetched {result['fetched']} records.",
+            f"No new trades for {vh.short_address(wallet.address)}. Fetched {result['fetched']} records.",
             "info",
         )
     return _flash_redirect(
         (
-            f"Refreshed {_short_address(wallet.address)}. "
+            f"Refreshed {vh.short_address(wallet.address)}. "
             f"Added {result['inserted']} new trades from {result['fetched']} fetched records."
         ),
         "success",
@@ -254,13 +179,13 @@ async def refresh_single_wallet(
 
 
 @router.post("/wallets/refresh-all")
-async def refresh_all_wallets(
+def refresh_all_wallets(
     db: Session = Depends(get_db),
     limit: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),
 ):
-    wallets = _wallet_order_query(db).all()
+    wallets = vh.active_wallets(vh.wallet_order_query(db).all())
     if not wallets:
-        return _flash_redirect("No wallets available to refresh.", "info")
+        return _flash_redirect("No active wallets available to refresh.", "info")
 
     total_inserted = 0
     total_fetched = 0
@@ -294,6 +219,66 @@ async def refresh_all_wallets(
     )
 
 
+@router.get("/wallets/{identifier}/edit")
+async def edit_wallet_page(request: Request, identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    trade_count = db.query(Trade).filter(Trade.wallet_address == wallet.address).count()
+    return templates.TemplateResponse(
+        request,
+        "wallet_edit_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "wallet": wallet,
+            "trade_count": trade_count,
+            "short_address": vh.short_address,
+        },
+    )
+
+
+@router.post("/wallets/{identifier}/edit")
+async def edit_wallet(
+    identifier: str,
+    label: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    is_pinned: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    wallet = resolve_wallet(db, identifier)
+    wallet.label = (label or "").strip() or None
+    wallet.tags = vh.normalize_tags(tags) or None
+    wallet.notes = (notes or "").strip() or None
+    wallet.is_pinned = 1 if is_pinned else 0
+    db.commit()
+    return _flash_redirect(f"Updated {vh.short_address(wallet.address)}.", "success")
+
+
+@router.post("/wallets/{identifier}/pin")
+async def toggle_wallet_pin(identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    wallet.is_pinned = 0 if wallet.is_pinned else 1
+    db.commit()
+    state = "Pinned" if wallet.is_pinned else "Unpinned"
+    return _flash_redirect(f"{state} {vh.short_address(wallet.address)}.", "success")
+
+
+@router.post("/wallets/{identifier}/archive")
+async def archive_wallet(identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    wallet.is_archived = 1
+    db.commit()
+    return _flash_redirect(f"Archived {vh.short_address(wallet.address)}. It is now hidden from the default watchlist.", "success")
+
+
+@router.post("/wallets/{identifier}/unarchive")
+async def unarchive_wallet(identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    wallet.is_archived = 0
+    db.commit()
+    return _flash_redirect(f"Restored {vh.short_address(wallet.address)} to the active watchlist.", "success")
+
+
 @router.get("/wallets/{identifier}/delete-confirm")
 async def delete_wallet_confirm(request: Request, identifier: str, db: Session = Depends(get_db)):
     wallet = resolve_wallet(db, identifier)
@@ -301,7 +286,7 @@ async def delete_wallet_confirm(request: Request, identifier: str, db: Session =
     return templates.TemplateResponse(
         request,
         "wallet_delete_confirm_v2.html",
-        {"request": request, "wallet": wallet, "trade_count": trade_count, "short_address": _short_address},
+        {"request": request, "wallet": wallet, "trade_count": trade_count, "short_address": vh.short_address},
     )
 
 
@@ -331,12 +316,17 @@ async def view_trades(
     market_search: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
+    date_preset: Optional[str] = Query(None),
     sort_by: str = Query("time_desc"),
     db: Session = Depends(get_db),
 ):
     wallet = resolve_wallet(db, identifier)
+    if date_preset in {"today", "7d", "30d"} and not date_from and not date_to:
+        preset_range = vh.date_preset_range(date_preset)
+        date_from = preset_range["date_from"]
+        date_to = preset_range["date_to"]
 
-    base_query = _apply_trade_filters(
+    base_query = vh.apply_trade_filters(
         db.query(Trade),
         wallet_address=wallet.address,
         side=side,
@@ -344,14 +334,19 @@ async def view_trades(
         date_from=date_from,
         date_to=date_to,
     )
-    sorted_query = _sorted_trade_query(base_query, sort_by)
+    sorted_query = vh.sorted_trade_query(base_query, sort_by)
 
     total_trades = sorted_query.count()
     total_pages = max(1, (total_trades + page_size - 1) // page_size)
     page = min(page, total_pages)
-    pagination = _pagination_meta(page, page_size, total_trades)
+    pagination = vh.pagination_meta(page, page_size, total_trades)
 
     trades = sorted_query.limit(page_size).offset((page - 1) * page_size).all()
+    summary_row = base_query.with_entities(
+        func.min(Trade.traded_at).label("oldest_trade_at"),
+        func.max(Trade.traded_at).label("newest_trade_at"),
+    ).first()
+    activity_timeline = vh.build_wallet_activity_timeline(db, wallet.address)
 
     return templates.TemplateResponse(
         request,
@@ -370,8 +365,12 @@ async def view_trades(
             "market_search": market_search,
             "date_from": date_from,
             "date_to": date_to,
+            "date_preset": date_preset,
             "sort_by": sort_by,
-            "short_address": _short_address,
+            "summary_row": summary_row,
+            "activity_timeline": activity_timeline,
+            "short_address": vh.short_address,
+            "duration_label": vh.duration_label,
         },
     )
 
@@ -385,11 +384,17 @@ async def all_trades(
     market_search: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
+    date_preset: Optional[str] = Query(None),
     wallet_search: Optional[str] = Query(None),
     sort_by: str = Query("time_desc"),
     db: Session = Depends(get_db),
 ):
-    query = _apply_trade_filters(
+    if date_preset in {"today", "7d", "30d"} and not date_from and not date_to:
+        preset_range = vh.date_preset_range(date_preset)
+        date_from = preset_range["date_from"]
+        date_to = preset_range["date_to"]
+
+    query = vh.apply_trade_filters(
         db.query(Trade),
         side=side,
         market_search=market_search,
@@ -399,13 +404,17 @@ async def all_trades(
     if wallet_search:
         query = query.filter(func.lower(Trade.wallet_address).like(f"%{wallet_search.lower()}%"))
 
-    query = _sorted_trade_query(query, sort_by)
+    query = vh.sorted_trade_query(query, sort_by)
     total_trades = query.count()
     total_pages = max(1, (total_trades + page_size - 1) // page_size)
     page = min(page, total_pages)
-    pagination = _pagination_meta(page, page_size, total_trades)
+    pagination = vh.pagination_meta(page, page_size, total_trades)
 
     trades = query.limit(page_size).offset((page - 1) * page_size).all()
+    summary_row = query.with_entities(
+        func.min(Trade.traded_at).label("oldest_trade_at"),
+        func.max(Trade.traded_at).label("newest_trade_at"),
+    ).first()
     wallet_map = {wallet.address: wallet for wallet in db.query(Wallet).all()}
     return templates.TemplateResponse(
         request,
@@ -423,10 +432,12 @@ async def all_trades(
             "market_search": market_search,
             "date_from": date_from,
             "date_to": date_to,
+            "date_preset": date_preset,
             "wallet_search": wallet_search,
             "sort_by": sort_by,
+            "summary_row": summary_row,
             "wallet_map": wallet_map,
-            "short_address": _short_address,
+            "short_address": vh.short_address,
         },
     )
 
@@ -454,7 +465,7 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
             "trade": trade,
             "related_trades": related_trades,
             "wallet_map": wallet_map,
-            "short_address": _short_address,
+            "short_address": vh.short_address,
         },
     )
 
@@ -466,11 +477,16 @@ async def export_trades(
     market_search: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
+    date_preset: Optional[str] = Query(None),
     sort_by: str = Query("time_desc"),
     db: Session = Depends(get_db),
 ):
     wallet = resolve_wallet(db, identifier)
-    query = _apply_trade_filters(
+    if date_preset in {"today", "7d", "30d"} and not date_from and not date_to:
+        preset_range = vh.date_preset_range(date_preset)
+        date_from = preset_range["date_from"]
+        date_to = preset_range["date_to"]
+    query = vh.apply_trade_filters(
         db.query(Trade),
         wallet_address=wallet.address,
         side=side,
@@ -478,7 +494,7 @@ async def export_trades(
         date_from=date_from,
         date_to=date_to,
     )
-    query = _sorted_trade_query(query, sort_by)
+    query = vh.sorted_trade_query(query, sort_by)
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -497,7 +513,7 @@ async def export_trades(
             ]
         )
 
-    filename = f"trades_{wallet.address[:8]}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"trades_{wallet.address[:8]}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -506,26 +522,48 @@ async def export_trades(
 
 
 @router.get("/admin/sync-status")
-async def sync_status_page(request: Request, db: Session = Depends(get_db)):
+async def sync_status_page(
+    request: Request,
+    wallet_search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    error_only: int = Query(0),
+    db: Session = Depends(get_db),
+):
+    events_query = vh.filter_sync_events(
+        db.query(SyncEvent).order_by(desc(SyncEvent.created_at)),
+        wallet_search=wallet_search,
+        status=status,
+        error_only=bool(error_only),
+    )
+    duplicates = find_duplicate_groups(
+        db,
+        wallet_search.lower() if wallet_search and vh.WALLET_ADDRESS_RE.match(wallet_search.lower()) else None,
+    )
     return templates.TemplateResponse(
         request,
         "sync_status_v2.html",
         {
             "request": request,
             "app_name": APP_NAME,
-            "events": db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).limit(100).all(),
-            "duplicates": find_duplicate_groups(db),
+            "events": events_query.limit(100).all(),
+            "duplicates": duplicates,
+            "wallet_search": wallet_search,
+            "status_filter": status,
+            "error_only": bool(error_only),
+            "sync_status_class": vh.sync_status_class,
+            "duration_label": vh.duration_label,
+            "short_address": vh.short_address,
         },
     )
 
 
 @router.post("/admin/sync-status/cleanup")
-async def cleanup_sync_duplicates(db: Session = Depends(get_db)):
+def cleanup_sync_duplicates(db: Session = Depends(get_db)):
     return JSONResponse({"status": "success", "removed": cleanup_duplicate_trades(db)})
 
 
 @router.post("/admin/refresh")
-async def refresh_trades(
+def refresh_trades(
     address: Optional[str] = Query(None),
     limit_per_wallet: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),
     db: Session = Depends(get_db),
@@ -535,13 +573,13 @@ async def refresh_trades(
         return JSONResponse({"status": "success", **refresh_wallet(db, wallet, limit=limit_per_wallet)})
 
     results: Dict[str, Any] = {}
-    for wallet in _wallet_order_query(db).all():
+    for wallet in vh.active_wallets(vh.wallet_order_query(db).all()):
         results[wallet.address] = refresh_wallet(db, wallet, limit=limit_per_wallet)
     return JSONResponse({"status": "success", "wallets_refreshed": len(results), "results": results})
 
 
 @router.post("/admin/refresh-all")
-async def refresh_all_trades(
+def refresh_all_trades(
     address: Optional[str] = Query(None),
     limit_per_wallet: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),
     db: Session = Depends(get_db),
@@ -557,7 +595,7 @@ async def refresh_all_trades(
         )
 
     results: Dict[str, Any] = {}
-    for wallet in _wallet_order_query(db).all():
+    for wallet in vh.active_wallets(vh.wallet_order_query(db).all()):
         results[wallet.address] = refresh_wallet(db, wallet, fetch_all=True, limit=limit_per_wallet)
     return JSONResponse(
         {

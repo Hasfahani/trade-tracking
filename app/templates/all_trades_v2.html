@@ -17,12 +17,22 @@
 <section class="card">
     <form method="get" class="filter-grid">
         <label>
+            Date preset
+            <select name="date_preset">
+                <option value="">Custom / all</option>
+                <option value="today" {% if date_preset == 'today' %}selected{% endif %}>Today</option>
+                <option value="7d" {% if date_preset == '7d' %}selected{% endif %}>Last 7 days</option>
+                <option value="30d" {% if date_preset == '30d' %}selected{% endif %}>Last 30 days</option>
+                <option value="all" {% if date_preset == 'all' %}selected{% endif %}>All dates</option>
+            </select>
+        </label>
+        <label>
             Wallet search
             <input type="text" name="wallet_search" placeholder="0x..." value="{{ wallet_search or '' }}">
         </label>
         <label>
             Market search
-            <input type="text" name="market_search" placeholder="Market title or condition ID" value="{{ market_search or '' }}">
+            <input type="text" name="market_search" placeholder="Market title, trade ID, or condition ID" value="{{ market_search or '' }}">
         </label>
         <label>
             Side
@@ -58,6 +68,16 @@
         </label>
         <button class="btn btn-primary" type="submit">Apply filters</button>
     </form>
+</section>
+
+<section class="summary-chip-row">
+    <span class="pill">Showing {{ pagination.start }}-{{ pagination.end }} of {{ total_trades }} matches</span>
+    {% if wallet_search %}<span class="pill">Wallet: {{ wallet_search }}</span>{% endif %}
+    {% if side %}<span class="pill">Side: {{ side }}</span>{% endif %}
+    {% if market_search %}<span class="pill">Search: {{ market_search }}</span>{% endif %}
+    {% if date_preset and date_preset != 'all' %}<span class="pill">Preset: {{ date_preset }}</span>{% endif %}
+    {% if summary_row and summary_row.newest_trade_at %}<span class="pill">Newest: {{ summary_row.newest_trade_at.strftime('%Y-%m-%d') }}</span>{% endif %}
+    {% if summary_row and summary_row.oldest_trade_at %}<span class="pill">Oldest: {{ summary_row.oldest_trade_at.strftime('%Y-%m-%d') }}</span>{% endif %}
 </section>
 
 <section class="card">

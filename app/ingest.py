@@ -1,6 +1,8 @@
 import hashlib
 import logging
+import ssl
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -9,10 +11,31 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from app.models import SyncEvent, Trade, Wallet
+from app.settings import (
+    POLYMARKET_CONNECT_TIMEOUT_SECONDS,
+    POLYMARKET_POOL_TIMEOUT_SECONDS,
+    POLYMARKET_READ_TIMEOUT_SECONDS,
+    POLYMARKET_WRITE_TIMEOUT_SECONDS,
+)
 
 logger = logging.getLogger(__name__)
 
 DATA_API_BASE = "https://data-api.polymarket.com"
+
+
+@lru_cache(maxsize=1)
+def _polymarket_ssl_context() -> ssl.SSLContext:
+    # Use the local machine's trust store so Windows-installed CA certs are honored.
+    return ssl.create_default_context()
+
+
+def _polymarket_timeout() -> httpx.Timeout:
+    return httpx.Timeout(
+        connect=POLYMARKET_CONNECT_TIMEOUT_SECONDS,
+        read=POLYMARKET_READ_TIMEOUT_SECONDS,
+        write=POLYMARKET_WRITE_TIMEOUT_SECONDS,
+        pool=POLYMARKET_POOL_TIMEOUT_SECONDS,
+    )
 
 
 def fetch_trades_for_wallet(address: str, limit: int = 1000, fetch_all: bool = False) -> List[Dict[str, Any]]:
@@ -41,7 +64,7 @@ def _fetch_trade_batch(address: str, limit: int, offset: Optional[int] = None) -
     if offset is not None:
         params["offset"] = offset
 
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=_polymarket_timeout(), verify=_polymarket_ssl_context()) as client:
         response = client.get(url, params=params)
         response.raise_for_status()
         payload = response.json()
@@ -208,6 +231,7 @@ def _create_sync_event(
     fetched_count: int = 0,
     inserted_count: int = 0,
     duplicate_count: int = 0,
+    duration_ms: Optional[int] = None,
     error_message: Optional[str] = None,
 ) -> None:
     db.add(
@@ -217,6 +241,7 @@ def _create_sync_event(
             fetched_count=fetched_count,
             inserted_count=inserted_count,
             duplicate_count=duplicate_count,
+            duration_ms=duration_ms,
             error_message=error_message,
         )
     )
@@ -231,6 +256,7 @@ def refresh_wallet(
 ) -> Dict[str, Any]:
     """Refresh a wallet and store sync status in SQLite."""
     now = datetime.now(timezone.utc)
+    started_at = datetime.now(timezone.utc)
     wallet.last_checked_at = now
     wallet.last_error_at = None
     wallet.last_error_message = None
@@ -270,6 +296,7 @@ def refresh_wallet(
             fetched_count=len(raw_trades),
             inserted_count=inserted,
             duplicate_count=duplicate_count,
+            duration_ms=max(int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000), 0),
         )
         db.commit()
 
@@ -297,6 +324,7 @@ def refresh_wallet(
             fetched_count=0,
             inserted_count=0,
             duplicate_count=0,
+            duration_ms=max(int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000), 0),
             error_message=str(exc),
         )
         db.commit()

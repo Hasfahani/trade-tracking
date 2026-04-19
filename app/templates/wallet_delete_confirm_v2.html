@@ -15,7 +15,13 @@
     <h2>{{ wallet.label or 'Unlabeled wallet' }}</h2>
     <p class="mono">{{ wallet.address }} ({{ short_address(wallet.address) }})</p>
     <p>This action will remove <strong>{{ trade_count }}</strong> stored trades from SQLite and remove the wallet from your watchlist.</p>
-    <p class="subtle">This cannot be undone. If you only want fresh data later, keep the wallet and use manual refresh when needed.</p>
+    <p class="subtle">This cannot be undone. If you only want to hide the wallet for now, archive it instead and keep the stored trade history.</p>
+
+    {% if not wallet.is_archived %}
+    <form method="post" action="/wallets/{{ wallet.address }}/archive" class="action-row archive-suggestion">
+        <button type="submit" class="btn">Archive instead</button>
+    </form>
+    {% endif %}
 
     <form method="post" action="/wallets/{{ wallet.address }}/delete" class="grid-form">
         <label>

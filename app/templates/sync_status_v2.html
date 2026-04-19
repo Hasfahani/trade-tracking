@@ -12,6 +12,32 @@
     <button class="btn btn-danger" id="cleanupBtn">Cleanup duplicates</button>
 </section>
 
+<section class="card">
+    <form method="get" class="filter-grid compact-filter-grid">
+        <label>
+            Wallet search
+            <input type="text" name="wallet_search" placeholder="0x..." value="{{ wallet_search or '' }}">
+        </label>
+        <label>
+            Status
+            <select name="status">
+                <option value="">All statuses</option>
+                <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
+                <option value="no_new" {% if status_filter == 'no_new' %}selected{% endif %}>No new trades</option>
+                <option value="error" {% if status_filter == 'error' %}selected{% endif %}>Error</option>
+            </select>
+        </label>
+        <label class="checkbox-row">
+            <span>Error only</span>
+            <input type="checkbox" name="error_only" value="1" {% if error_only %}checked{% endif %}>
+        </label>
+        <div class="action-row">
+            <button class="btn btn-primary" type="submit">Apply</button>
+            <a href="/admin/sync-status" class="btn">Reset</a>
+        </div>
+    </form>
+</section>
+
 <section class="two-col">
     <article class="card">
         <div class="section-head">
@@ -21,8 +47,25 @@
         <div class="stack-list">
             {% for event in events %}
             <div class="alert-item">
-                <strong>{{ event.wallet_address or 'System' }} · {{ event.status or 'unknown' }}</strong>
-                <p>Fetched {{ event.fetched_count or 0 }}, inserted {{ event.inserted_count or 0 }}, duplicates {{ event.duplicate_count or 0 }}</p>
+                <div class="section-head">
+                    <strong>
+                        {% if event.wallet_address %}
+                        <a href="/wallets/{{ event.wallet_address }}/trades">{{ short_address(event.wallet_address) }}</a>
+                        {% else %}
+                        System
+                        {% endif %}
+                    </strong>
+                    <span class="pill {{ sync_status_class(event.status) }}">{{ event.status or 'unknown' }}</span>
+                </div>
+                <p>
+                    Fetched {{ event.fetched_count or 0 }},
+                    inserted {{ event.inserted_count or 0 }},
+                    duplicates {{ event.duplicate_count or 0 }},
+                    duration {{ duration_label(event.duration_ms) }}
+                </p>
+                {% if event.wallet_address %}
+                <p><a href="/admin/sync-status?wallet_search={{ event.wallet_address }}">View wallet sync history</a></p>
+                {% endif %}
                 {% if event.error_message %}<p class="error-text">{{ event.error_message }}</p>{% endif %}
             </div>
             {% else %}
@@ -39,8 +82,8 @@
         <div class="stack-list">
             {% for duplicate in duplicates %}
             <div class="alert-item">
-                <strong>{{ duplicate.wallet_address }}</strong>
-                <p>{{ duplicate.condition_id }} · {{ duplicate.side }} · {{ duplicate.duplicate_count }} copies</p>
+                <strong><a href="/wallets/{{ duplicate.wallet_address }}/trades?market_search={{ duplicate.condition_id }}">{{ short_address(duplicate.wallet_address) }}</a></strong>
+                <p>{{ duplicate.condition_id }} | {{ duplicate.side }} | {{ duplicate.duplicate_count }} copies</p>
             </div>
             {% else %}
             <p>No semantic duplicates found.</p>

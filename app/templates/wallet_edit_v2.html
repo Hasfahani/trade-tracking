@@ -1,0 +1,51 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Edit Wallet{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Wallet settings</p>
+        <h1>{{ wallet.label or 'Unlabeled wallet' }}</h1>
+        <p class="subtle mono">{{ short_address(wallet.address) }}</p>
+        <div class="address-block">
+            <code class="address-code">{{ wallet.address }}</code>
+            <button type="button" class="btn btn-small" data-copy="{{ wallet.address }}" data-copy-label="Copy wallet address">Copy wallet address</button>
+        </div>
+    </div>
+    <div class="hero-actions">
+        <span class="pill">{{ trade_count }} stored trades</span>
+        {% if wallet.is_archived %}<span class="pill">Archived</span>{% endif %}
+    </div>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Edit wallet details</h2>
+        <a class="btn" href="/wallets">Back to wallets</a>
+    </div>
+    <form method="post" action="/wallets/{{ wallet.address }}/edit" class="grid-form">
+        <label>
+            Label
+            <input type="text" name="label" value="{{ wallet.label or '' }}" placeholder="Desk wallet">
+        </label>
+        <label>
+            Tags
+            <input type="text" name="tags" value="{{ wallet.tags or '' }}" placeholder="election, desk, whales">
+        </label>
+        <label class="label-span">
+            Notes
+            <textarea name="notes" rows="4" placeholder="Optional internal note">{{ wallet.notes or '' }}</textarea>
+        </label>
+        <label class="checkbox-row">
+            <span>Pin wallet to the top of the watchlist</span>
+            <input type="checkbox" name="is_pinned" value="1" {% if wallet.is_pinned %}checked{% endif %}>
+        </label>
+        <div class="action-row">
+            <button type="submit" class="btn btn-primary">Save changes</button>
+            <a class="btn" href="/wallets/{{ wallet.address }}/trades">Open trades</a>
+            <a class="btn btn-danger" href="/wallets/{{ wallet.address }}/delete-confirm">Delete wallet</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

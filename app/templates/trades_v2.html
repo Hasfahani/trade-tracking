@@ -18,7 +18,7 @@
         <form method="post" action="/wallets/{{ wallet.address }}/refresh">
             <button type="submit" class="btn">Refresh this wallet</button>
         </form>
-        <a href="/wallets/{{ wallet.address }}/trades/export?side={{ side or '' }}&market_search={{ market_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&sort_by={{ sort_by or 'time_desc' }}" class="btn btn-primary">Export CSV</a>
+        <a href="/wallets/{{ wallet.address }}/trades/export?side={{ side or '' }}&market_search={{ market_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&date_preset={{ date_preset or '' }}&sort_by={{ sort_by or 'time_desc' }}" class="btn btn-primary">Export CSV</a>
     </div>
 </section>
 
@@ -48,8 +48,18 @@
     </div>
     <form method="get" class="filter-grid">
         <label>
+            Date preset
+            <select name="date_preset">
+                <option value="">Custom / all</option>
+                <option value="today" {% if date_preset == 'today' %}selected{% endif %}>Today</option>
+                <option value="7d" {% if date_preset == '7d' %}selected{% endif %}>Last 7 days</option>
+                <option value="30d" {% if date_preset == '30d' %}selected{% endif %}>Last 30 days</option>
+                <option value="all" {% if date_preset == 'all' %}selected{% endif %}>All dates</option>
+            </select>
+        </label>
+        <label>
             Market search
-            <input type="text" name="market_search" placeholder="Market title or condition ID" value="{{ market_search or '' }}">
+            <input type="text" name="market_search" placeholder="Market title, trade ID, or condition ID" value="{{ market_search or '' }}">
         </label>
         <label>
             Side
@@ -88,6 +98,44 @@
             <a class="btn" href="/wallets/{{ wallet.address }}/trades">Reset</a>
         </div>
     </form>
+</section>
+
+<section class="summary-chip-row">
+    <span class="pill">Showing {{ pagination.start }}-{{ pagination.end }} of {{ total_trades }} trades</span>
+    {% if side %}<span class="pill">Side: {{ side }}</span>{% endif %}
+    {% if market_search %}<span class="pill">Search: {{ market_search }}</span>{% endif %}
+    {% if date_preset and date_preset != 'all' %}<span class="pill">Preset: {{ date_preset }}</span>{% endif %}
+    {% if summary_row and summary_row.newest_trade_at %}<span class="pill">Newest: {{ summary_row.newest_trade_at.strftime('%Y-%m-%d') }}</span>{% endif %}
+    {% if summary_row and summary_row.oldest_trade_at %}<span class="pill">Oldest: {{ summary_row.oldest_trade_at.strftime('%Y-%m-%d') }}</span>{% endif %}
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Recent activity</h2>
+        <a href="/admin/sync-status?wallet_search={{ wallet.address }}" class="btn btn-small">Full sync history</a>
+    </div>
+    {% if activity_timeline %}
+    <div class="stack-list">
+        {% for item in activity_timeline %}
+        <article class="alert-item timeline-item">
+            <div class="section-head">
+                <strong><a href="{{ item.href }}">{{ item.title }}</a></strong>
+                <span class="pill {{ item.tone }}">{{ item.kind|title }}</span>
+            </div>
+            <p class="subtle">{{ item.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if item.timestamp else '-' }}</p>
+            <p>{{ item.detail }}</p>
+            {% if item.kind == 'sync' and item.error_message %}
+            <p class="error-text">{{ item.error_message }}</p>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No recent activity</h3>
+        <p>This wallet does not have any stored trade or refresh history yet.</p>
+    </div>
+    {% endif %}
 </section>
 
 <section class="card">

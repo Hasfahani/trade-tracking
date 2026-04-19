@@ -231,6 +231,10 @@ h1 {
     align-items: end;
 }
 
+.compact-filter-grid {
+    margin-top: 14px;
+}
+
 .wallet-metrics {
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     margin: 12px 0;
@@ -286,6 +290,23 @@ label {
     font-size: 0.92rem;
 }
 
+.label-span {
+    grid-column: 1 / -1;
+}
+
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 46px;
+    padding: 0 2px;
+}
+
+.checkbox-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
 .action-row form {
     margin: 0;
 }
@@ -299,6 +320,7 @@ button {
 input[type="text"],
 input[type="date"],
 input[type="number"],
+textarea,
 select {
     width: 100%;
     min-height: 46px;
@@ -310,9 +332,16 @@ select {
 }
 
 input:focus,
+textarea:focus,
 select:focus {
     outline: 2px solid rgba(94, 200, 255, 0.4);
     border-color: var(--accent-strong);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 110px;
+    padding-top: 12px;
 }
 
 .btn {
@@ -329,6 +358,12 @@ select:focus {
 .btn:hover {
     background: #25384f;
     transform: translateY(-1px);
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    transform: none;
 }
 
 .btn-primary {
@@ -472,6 +507,39 @@ select:focus {
 
 .wallet-actions {
     margin-top: 10px;
+}
+
+.tag-row,
+.summary-chip-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.tag-row {
+    margin-top: 12px;
+}
+
+.tag-pill {
+    background: rgba(28, 48, 68, 0.95);
+}
+
+.summary-chip-row {
+    margin: 0 0 18px;
+}
+
+.wallet-note {
+    margin: 12px 0 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.archive-suggestion {
+    margin: 14px 0 18px;
+}
+
+.timeline-item p {
+    margin: 6px 0 0;
 }
 
 .table-wrap {

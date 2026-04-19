@@ -19,7 +19,9 @@ class Wallet(Base):
     address = Column(String(255), unique=True, nullable=False, index=True)
     label = Column(Text, nullable=True)
     tags = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
     is_pinned = Column(Integer, nullable=True, default=0)
+    is_archived = Column(Integer, nullable=True, default=0)
     last_checked_at = Column(DateTime, nullable=True)
     last_refresh_status = Column(String(32), nullable=True)
     last_refresh_count = Column(Integer, nullable=True)
@@ -86,6 +88,7 @@ class SyncEvent(Base):
     inserted_count = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
     duplicate_count = Column(Integer, nullable=True)
+    duration_ms = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
     __table_args__ = (

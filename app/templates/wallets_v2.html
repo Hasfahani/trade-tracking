@@ -27,6 +27,14 @@
                 <span class="metric-label">Errors</span>
                 <strong>{{ summary.error_count }}</strong>
             </div>
+            <div class="stat-chip">
+                <span class="metric-label">Pinned</span>
+                <strong>{{ summary.pinned_count }}</strong>
+            </div>
+            <div class="stat-chip">
+                <span class="metric-label">Archived</span>
+                <strong>{{ summary.archived_count }}</strong>
+            </div>
         </div>
         <form method="post" action="/wallets/refresh-all" class="action-row">
             <button type="submit" class="btn btn-primary">Refresh all wallets</button>
@@ -54,6 +62,14 @@
             Optional label
             <input type="text" name="label" placeholder="Desk wallet" value="{{ form_label or '' }}">
         </label>
+        <label>
+            Tags
+            <input type="text" name="tags" placeholder="election, whales, desk" value="{{ form_tags or '' }}">
+        </label>
+        <label class="label-span">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Short private note about why this wallet matters">{{ form_notes or '' }}</textarea>
+        </label>
         <div class="form-help">
             <p>Wallets are not refreshed automatically. Add the wallet, then refresh it when you want to pull new trades.</p>
         </div>
@@ -64,8 +80,34 @@
 <section class="card">
     <div class="section-head">
         <h2>Wallet list</h2>
-        <span class="pill">{{ wallets|length }} tracked</span>
+        <span class="pill">{{ wallets|length }} shown</span>
     </div>
+    <form method="get" class="filter-grid compact-filter-grid">
+        <label>
+            Search wallets
+            <input type="text" name="wallet_search" placeholder="Label, address, tags, or notes" value="{{ wallet_search or '' }}">
+        </label>
+        <label>
+            Status
+            <select name="status_filter">
+                <option value="">All states</option>
+                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active only</option>
+                <option value="pinned" {% if status_filter == 'pinned' %}selected{% endif %}>Pinned</option>
+                <option value="fresh" {% if status_filter == 'fresh' %}selected{% endif %}>Fresh</option>
+                <option value="stale" {% if status_filter == 'stale' %}selected{% endif %}>Stale</option>
+                <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                <option value="archived" {% if status_filter == 'archived' %}selected{% endif %}>Archived</option>
+            </select>
+        </label>
+        <label class="checkbox-row">
+            <span>Show archived wallets</span>
+            <input type="checkbox" name="include_archived" value="1" {% if include_archived %}checked{% endif %}>
+        </label>
+        <div class="action-row">
+            <button type="submit" class="btn btn-primary">Apply</button>
+            <a href="/wallets" class="btn">Reset</a>
+        </div>
+    </form>
 
     {% if wallets %}
     <div class="wallet-list">
@@ -78,6 +120,8 @@
                         <h3>{{ wallet.label or 'Unlabeled wallet' }}</h3>
                         <div class="status-group">
                             {% if wallet.is_pinned %}<span class="pill pill-soft">Pinned</span>{% endif %}
+                            {% if wallet.is_archived %}<span class="pill">Archived</span>{% endif %}
+                            <span class="pill {{ wallet_status_tone(wallet) }}">{{ wallet_freshness_label(wallet) }}</span>
                             {% if wallet.last_refresh_status == 'success' %}<span class="pill success">Refresh success</span>{% endif %}
                             {% if wallet.last_refresh_status == 'no_new' %}<span class="pill info">No new trades</span>{% endif %}
                             {% if wallet.last_refresh_status == 'error' %}<span class="pill danger">Refresh failed</span>{% endif %}
@@ -89,13 +133,37 @@
                         <code class="address-code">{{ wallet.address }}</code>
                         <button type="button" class="btn btn-small" data-copy="{{ wallet.address }}" data-copy-label="Copy full address">Copy full address</button>
                     </div>
+                    {% if wallet.tags %}
+                    <div class="tag-row">
+                        {% for tag in tag_list(wallet.tags) %}
+                        <span class="pill tag-pill">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if wallet.notes %}
+                    <p class="wallet-note">{{ wallet.notes }}</p>
+                    {% endif %}
                 </div>
 
                 <div class="action-row wallet-actions">
+                    <form method="post" action="/wallets/{{ wallet.address }}/pin">
+                        <button type="submit" class="btn btn-small">{% if wallet.is_pinned %}Unpin{% else %}Pin{% endif %}</button>
+                    </form>
                     <form method="post" action="/wallets/{{ wallet.address }}/refresh">
-                        <button type="submit" class="btn btn-primary btn-small">Refresh this wallet</button>
+                        <button type="submit" class="btn btn-primary btn-small" {% if wallet.is_archived %}disabled{% endif %}>Refresh this wallet</button>
                     </form>
                     <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-small">Open trades</a>
+                    <a href="/wallets/{{ wallet.address }}/edit" class="btn btn-small">Edit</a>
+                    <a href="/admin/sync-status?wallet_search={{ wallet.address }}" class="btn btn-small">Sync history</a>
+                    {% if wallet.is_archived %}
+                    <form method="post" action="/wallets/{{ wallet.address }}/unarchive">
+                        <button type="submit" class="btn btn-small">Restore</button>
+                    </form>
+                    {% else %}
+                    <form method="post" action="/wallets/{{ wallet.address }}/archive">
+                        <button type="submit" class="btn btn-small">Archive</button>
+                    </form>
+                    {% endif %}
                     <a href="/wallets/{{ wallet.address }}/delete-confirm" class="btn btn-danger btn-small">Delete wallet</a>
                 </div>
             </div>
@@ -114,6 +182,10 @@
                     <strong>{% if wallet.last_checked_at %}{{ wallet.last_checked_at.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}Never{% endif %}</strong>
                 </div>
                 <div>
+                    <span class="metric-label">State</span>
+                    <strong>{% if wallet.is_archived %}Archived{% else %}Active{% endif %}</strong>
+                </div>
+                <div>
                     <span class="metric-label">Last result</span>
                     <strong>
                         {% if wallet.last_refresh_status == 'success' %}{{ wallet.last_refresh_count or 0 }} trades added{% elif wallet.last_refresh_status == 'no_new' %}No new trades{% elif wallet.last_refresh_status == 'error' %}Refresh failed{% else %}No refresh yet{% endif %}
@@ -129,8 +201,8 @@
     </div>
     {% else %}
     <div class="empty-state">
-        <h3>No wallets in your watchlist</h3>
-        <p>Add your first wallet above, then use Refresh to ingest trades into SQLite. Nothing refreshes automatically on page load.</p>
+        <h3>{% if wallet_search or status_filter or include_archived %}No wallets match these filters{% else %}No wallets in your watchlist{% endif %}</h3>
+        <p>{% if wallet_search or status_filter or include_archived %}Try broadening the wallet filters or reset them to see the full watchlist.{% else %}Add your first wallet above, then use Refresh to ingest trades into SQLite. Nothing refreshes automatically on page load.{% endif %}</p>
     </div>
     {% endif %}
 </section>
