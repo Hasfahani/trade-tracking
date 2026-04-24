@@ -15,14 +15,21 @@
     </div>
     <div class="action-row">
         <a href="/wallets" class="btn">Back to wallets</a>
-        <form method="post" action="/wallets/{{ wallet.address }}/refresh">
+        <a href="/wallets/{{ wallet.address }}" class="btn">Profile</a>
+        <form method="post" action="/wallets/{{ wallet.address }}/refresh?next=/wallets/{{ wallet.address }}/trades">
             <button type="submit" class="btn">Refresh this wallet</button>
         </form>
         <a href="/wallets/{{ wallet.address }}/trades/export?side={{ side or '' }}&market_search={{ market_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&date_preset={{ date_preset or '' }}&sort_by={{ sort_by or 'time_desc' }}" class="btn btn-primary">Export CSV</a>
     </div>
 </section>
 
-<section class="metrics-grid">
+{% if flash %}
+<section class="flash flash-{{ flash_level }}">
+    <strong>{{ flash }}</strong>
+</section>
+{% endif %}
+
+<section class="metrics-grid" title="Values cover all matching trades, not just this page">
     <article class="metric-card">
         <span class="metric-label">Matching trades</span>
         <strong>{{ total_trades }}</strong>
@@ -40,7 +47,7 @@
         <strong class="text-danger">${{ '%.2f'|format(pnl.no_value) }}</strong>
     </article>
     <article class="metric-card">
-        <span class="metric-label">Avg price</span>
+        <span class="metric-label">Avg price (VWAP)</span>
         <strong>{{ '%.4f'|format(pnl.avg_price) }}</strong>
     </article>
     <article class="metric-card">

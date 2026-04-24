@@ -36,9 +36,13 @@
                 <strong>{{ summary.archived_count }}</strong>
             </div>
         </div>
-        <form method="post" action="/wallets/refresh-all" class="action-row">
-            <button type="submit" class="btn btn-primary">Refresh all wallets</button>
-        </form>
+        <div class="action-row">
+            <form method="post" action="/wallets/refresh-all">
+                <button type="submit" class="btn btn-primary">Refresh all wallets</button>
+            </form>
+            <a href="/wallets/export" class="btn">Export CSV</a>
+            <a href="/wallets/import" class="btn">Import CSV</a>
+        </div>
     </div>
 </section>
 
@@ -145,26 +149,31 @@
                     {% endif %}
                 </div>
 
-                <div class="action-row wallet-actions">
-                    <form method="post" action="/wallets/{{ wallet.address }}/pin">
-                        <button type="submit" class="btn btn-small">{% if wallet.is_pinned %}Unpin{% else %}Pin{% endif %}</button>
-                    </form>
-                    <form method="post" action="/wallets/{{ wallet.address }}/refresh">
-                        <button type="submit" class="btn btn-primary btn-small" {% if wallet.is_archived %}disabled{% endif %}>Refresh this wallet</button>
-                    </form>
-                    <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-small">Open trades</a>
-                    <a href="/wallets/{{ wallet.address }}/edit" class="btn btn-small">Edit</a>
-                    <a href="/admin/sync-status?wallet_search={{ wallet.address }}" class="btn btn-small">Sync history</a>
-                    {% if wallet.is_archived %}
-                    <form method="post" action="/wallets/{{ wallet.address }}/unarchive">
-                        <button type="submit" class="btn btn-small">Restore</button>
-                    </form>
-                    {% else %}
-                    <form method="post" action="/wallets/{{ wallet.address }}/archive">
-                        <button type="submit" class="btn btn-small">Archive</button>
-                    </form>
-                    {% endif %}
-                    <a href="/wallets/{{ wallet.address }}/delete-confirm" class="btn btn-danger btn-small">Delete wallet</a>
+                <div class="wallet-action-groups">
+                    <div class="action-row wallet-actions">
+                        <form method="post" action="/wallets/{{ wallet.address }}/refresh">
+                            <button type="submit" class="btn btn-primary btn-small" {% if wallet.is_archived %}disabled{% endif %}>Refresh</button>
+                        </form>
+                        <a href="/wallets/{{ wallet.address }}" class="btn btn-small">Profile</a>
+                        <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-small">Open trades</a>
+                        <a href="/wallets/{{ wallet.address }}/edit" class="btn btn-small">Edit</a>
+                        <form method="post" action="/wallets/{{ wallet.address }}/pin">
+                            <button type="submit" class="btn btn-small">{% if wallet.is_pinned %}Unpin{% else %}Pin{% endif %}</button>
+                        </form>
+                        {% if wallet.is_archived %}
+                        <form method="post" action="/wallets/{{ wallet.address }}/unarchive">
+                            <button type="submit" class="btn btn-small">Restore</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="/wallets/{{ wallet.address }}/archive">
+                            <button type="submit" class="btn btn-small">Archive</button>
+                        </form>
+                        {% endif %}
+                        <a href="/admin/sync-status?wallet_search={{ wallet.address }}" class="btn btn-small">Sync history</a>
+                    </div>
+                    <div class="wallet-danger-zone">
+                        <a href="/wallets/{{ wallet.address }}/delete-confirm" class="btn btn-danger btn-small">Delete</a>
+                    </div>
                 </div>
             </div>
 

@@ -1,0 +1,137 @@
+{% extends "base_v2.html" %}
+
+{% block title %}{{ wallet.label or short_address(wallet.address) }} — Wallet{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Wallet profile</p>
+        <h1>{{ wallet.label or 'Unlabeled wallet' }}</h1>
+        <p class="subtle mono">{{ short_address(wallet.address) }}</p>
+        <div class="address-block">
+            <code class="address-code">{{ wallet.address }}</code>
+            <button type="button" class="btn btn-small" data-copy="{{ wallet.address }}" data-copy-label="Copy wallet address">Copy wallet address</button>
+        </div>
+    </div>
+    <div class="action-row">
+        <a href="/wallets" class="btn">Back to wallets</a>
+        <a href="/wallets/{{ wallet.address }}/trades" class="btn">View trades</a>
+        <form method="post" action="/wallets/{{ wallet.address }}/refresh?next=/wallets/{{ wallet.address }}">
+            <button type="submit" class="btn">Refresh</button>
+        </form>
+        <a href="/wallets/{{ wallet.address }}/edit" class="btn">Edit</a>
+    </div>
+</section>
+
+<section class="metrics-grid">
+    <article class="metric-card">
+        <span class="metric-label">Total trades</span>
+        <strong>{{ summary_row.total_trades or 0 }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">First trade</span>
+        <strong>{% if summary_row.first_trade_at %}{{ summary_row.first_trade_at.strftime('%Y-%m-%d') }}{% else %}<span class="subtle">None</span>{% endif %}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Latest trade</span>
+        <strong>{% if summary_row.latest_trade_at %}{{ summary_row.latest_trade_at.strftime('%Y-%m-%d') }}{% else %}<span class="subtle">None</span>{% endif %}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">State</span>
+        <strong>{% if wallet.is_archived %}Archived{% elif wallet.is_pinned %}Pinned{% else %}Active{% endif %}</strong>
+    </article>
+</section>
+
+<section class="two-col">
+    <article class="card">
+        <div class="section-head">
+            <h2>Value summary</h2>
+            <span class="pill">All stored trades</span>
+        </div>
+        <div class="detail-grid">
+            <div>
+                <strong>YES value</strong>
+                <span class="text-success">${{ '%.2f'|format(pnl.yes_value) }}</span>
+            </div>
+            <div>
+                <strong>NO value</strong>
+                <span class="text-danger">${{ '%.2f'|format(pnl.no_value) }}</span>
+            </div>
+            <div>
+                <strong>Total value</strong>
+                <span>${{ '%.2f'|format(pnl.total_value) }}</span>
+            </div>
+            <div>
+                <strong>Avg price (VWAP)</strong>
+                <span>{{ '%.4f'|format(pnl.avg_price) }}</span>
+            </div>
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-head">
+            <h2>Refresh status</h2>
+            {% if wallet.last_refresh_status == 'success' %}
+            <span class="pill success">Success</span>
+            {% elif wallet.last_refresh_status == 'error' %}
+            <span class="pill danger">Failed</span>
+            {% elif wallet.last_refresh_status == 'no_new' %}
+            <span class="pill warning">No new trades</span>
+            {% else %}
+            <span class="pill">Not refreshed</span>
+            {% endif %}
+        </div>
+        <div class="detail-grid">
+            <div>
+                <strong>Last checked</strong>
+                <span>{% if wallet.last_checked_at %}{{ wallet.last_checked_at.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}<span class="subtle">Never</span>{% endif %}</span>
+            </div>
+            <div>
+                <strong>Trades added</strong>
+                <span>{% if wallet.last_refresh_status %}{{ wallet.last_refresh_count or 0 }}{% else %}<span class="subtle">—</span>{% endif %}</span>
+            </div>
+            {% if wallet.last_error_at %}
+            <div>
+                <strong>Last error</strong>
+                <span class="text-danger">{{ wallet.last_error_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+            </div>
+            {% endif %}
+        </div>
+        {% if wallet.last_error_message %}
+        <p class="error-text" style="margin-top: 10px; font-size: 0.88rem;">{{ wallet.last_error_message }}</p>
+        {% endif %}
+        <div style="margin-top: 14px;">
+            <a href="/admin/sync-status?wallet_search={{ wallet.address }}" class="btn btn-small">Full sync history</a>
+        </div>
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Activity timeline</h2>
+        <span class="pill">Last 30 events</span>
+    </div>
+    {% if activity_timeline %}
+    <div class="stack-list">
+        {% for item in activity_timeline %}
+        <article class="alert-item timeline-item">
+            <div class="section-head">
+                <strong><a href="{{ item.href }}">{{ item.title }}</a></strong>
+                <span class="pill {{ item.tone }}">{{ item.kind | title }}</span>
+            </div>
+            <p class="subtle">{{ item.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if item.timestamp else '—' }}</p>
+            <p>{{ item.detail }}</p>
+            {% if item.kind == 'sync' and item.error_message %}
+            <p class="error-text">{{ item.error_message }}</p>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No activity yet</h3>
+        <p>Refresh this wallet to start recording trades and sync events.</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

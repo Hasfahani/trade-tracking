@@ -98,7 +98,8 @@ def normalize_trade(raw: Dict[str, Any], wallet_address: str) -> Optional[Dict[s
         elif outcome in {"YES", "NO"}:
             side = outcome
         else:
-            side = "YES"
+            logger.warning("Unknown side/outcome in trade payload: side=%r outcome=%r", side_raw, outcome)
+            return None
 
         ts = raw.get("timestamp")
         if isinstance(ts, (int, float)):
@@ -255,9 +256,8 @@ def refresh_wallet(
     limit: int = 1000,
 ) -> Dict[str, Any]:
     """Refresh a wallet and store sync status in SQLite."""
-    now = datetime.now(timezone.utc)
     started_at = datetime.now(timezone.utc)
-    wallet.last_checked_at = now
+    wallet.last_checked_at = started_at
     wallet.last_error_at = None
     wallet.last_error_message = None
 
@@ -315,7 +315,7 @@ def refresh_wallet(
         logger.exception("Wallet refresh failed for %s", wallet.address)
         wallet.last_refresh_status = "error"
         wallet.last_refresh_count = 0
-        wallet.last_error_at = now
+        wallet.last_error_at = started_at
         wallet.last_error_message = str(exc)
         _create_sync_event(
             db,

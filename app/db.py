@@ -66,6 +66,7 @@ def _ensure_sync_event_columns():
         return
 
     expected_columns = {
+        "duplicate_count": "INTEGER",
         "duration_ms": "INTEGER",
     }
 

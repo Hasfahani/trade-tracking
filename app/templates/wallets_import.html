@@ -1,0 +1,55 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Import Wallets{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Wallet management</p>
+        <h1>Import wallets</h1>
+        <p class="subtle">Upload a CSV file to add wallets in bulk. Existing wallets are skipped.</p>
+    </div>
+    <div class="action-row">
+        <a href="/wallets" class="btn">Back to wallets</a>
+        <a href="/wallets/export" class="btn btn-primary">Export wallets CSV</a>
+    </div>
+</section>
+
+{% if result %}
+<section class="flash flash-{% if result.added > 0 %}success{% else %}info{% endif %}">
+    <strong>Import complete.</strong>
+    {{ result.total }} row{{ 's' if result.total != 1 else '' }} processed —
+    {{ result.added }} added,
+    {{ result.duplicates }} duplicate{{ 's' if result.duplicates != 1 else '' }} skipped,
+    {{ result.invalid }} invalid{{ ' row' if result.invalid == 1 else ' rows' }} skipped.
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="section-head">
+        <h2>Upload CSV</h2>
+        <span class="pill">address, label, tags, notes, is_pinned, is_archived</span>
+    </div>
+    <form method="post" action="/wallets/import" enctype="multipart/form-data" class="grid-form">
+        <label>
+            CSV file
+            <input type="file" name="file" accept=".csv,text/csv" required>
+        </label>
+        <div class="form-help">
+            <p>Required column: <code>address</code>. Optional: <code>label</code>, <code>tags</code> (semicolon-separated), <code>notes</code>, <code>is_pinned</code>, <code>is_archived</code>.</p>
+            <p>Rows with invalid addresses are skipped. Wallets already in your watchlist are skipped.</p>
+        </div>
+        <button type="submit" class="btn btn-primary">Import wallets</button>
+    </form>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Export existing wallets</h2>
+    </div>
+    <p class="subtle">Download all wallets as a CSV. Use this as a backup or as a starting point for a bulk edit.</p>
+    <div style="margin-top: 12px;">
+        <a href="/wallets/export" class="btn btn-primary">Download wallets CSV</a>
+    </div>
+</section>
+{% endblock %}

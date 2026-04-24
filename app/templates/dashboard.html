@@ -1,0 +1,178 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Overview</p>
+        <h1>Dashboard</h1>
+        <p class="subtle">Summary of stored wallets, trades, and recent activity from local SQLite.</p>
+    </div>
+</section>
+
+<section class="metrics-grid">
+    <article class="metric-card">
+        <span class="metric-label">Total wallets</span>
+        <strong>{{ total_wallets }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Active wallets</span>
+        <strong>{{ active_wallets_count }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Archived wallets</span>
+        <strong>{{ archived_wallets_count }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Total trades</span>
+        <strong>{{ total_trades }}</strong>
+    </article>
+</section>
+
+<section class="two-col">
+    <article class="card">
+        <div class="section-head">
+            <h2>Last refresh</h2>
+        </div>
+        <div class="detail-grid" style="grid-template-columns: auto 1fr;">
+            <div>
+                <strong>Last success</strong>
+                <span>{% if last_success_at %}{{ last_success_at.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}<span class="subtle">Never</span>{% endif %}</span>
+            </div>
+            <div>
+                <strong>Last failure</strong>
+                <span>{% if last_error_at %}<span class="text-danger">{{ last_error_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>{% else %}<span class="subtle">None recorded</span>{% endif %}</span>
+            </div>
+        </div>
+        <div style="margin-top: 14px;">
+            <a href="/admin/sync-status" class="btn btn-small">Full sync history</a>
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-head">
+            <h2>Top 5 wallets by trade count</h2>
+        </div>
+        {% if top_wallets %}
+        <div class="table-wrap">
+            <table class="trade-table">
+                <thead>
+                    <tr>
+                        <th>Wallet</th>
+                        <th>Trades</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in top_wallets %}
+                    <tr>
+                        <td data-label="Wallet">
+                            <a href="/wallets/{{ row.address }}/trades">
+                                {% if row.wallet and row.wallet.label %}{{ row.wallet.label }}{% else %}{{ short_address(row.address) }}{% endif %}
+                            </a>
+                        </td>
+                        <td data-label="Trades">{{ row.trade_count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No trades stored yet.</p>
+        </div>
+        {% endif %}
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Interesting activity</h2>
+        <span class="pill">Last 24 hours · top 10</span>
+    </div>
+    {% if interesting_activity %}
+    <div class="stack-list">
+        {% for event in interesting_activity %}
+        <article class="alert-item timeline-item">
+            <div class="section-head">
+                {% if event.type == 'large_trade' %}
+                <strong>
+                    💰
+                    <a href="/wallets/{{ event.wallet }}/trades">{{ event.label }}</a>
+                    placed a large trade (${{ '%.2f'|format(event.value) }}) on
+                    {% if event.trade_id %}<a href="/trades/{{ event.trade_id }}">{{ event.market }}</a>{% else %}{{ event.market }}{% endif %}
+                </strong>
+                <span class="pill warning">Large trade</span>
+                {% elif event.type == 'activity_spike' %}
+                <strong>
+                    🔥
+                    <a href="/wallets/{{ event.wallet }}/trades">{{ event.label }}</a>
+                    made {{ event.count }} trade{{ 's' if event.count != 1 else '' }} in {{ event.time_window }}
+                </strong>
+                <span class="pill danger">Activity spike</span>
+                {% elif event.type == 'new_market' %}
+                <strong>
+                    🆕
+                    <a href="/wallets/{{ event.wallet }}/trades">{{ event.label }}</a>
+                    entered a new market:
+                    {% if event.trade_id %}<a href="/trades/{{ event.trade_id }}">{{ event.market }}</a>{% else %}{{ event.market }}{% endif %}
+                </strong>
+                <span class="pill info">New market</span>
+                {% endif %}
+            </div>
+            <p class="subtle">{{ event.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if event.timestamp else '—' }}</p>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No interesting activity detected in the last 24 hours. Refresh wallets to pull in recent trades.</p>
+    </div>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Recent trades</h2>
+        <span class="pill">Last 20 across all wallets</span>
+    </div>
+    {% if recent_trades %}
+    <div class="table-wrap">
+        <table class="trade-table">
+            <thead>
+                <tr>
+                    <th>Date (UTC)</th>
+                    <th>Wallet</th>
+                    <th>Market</th>
+                    <th>Side</th>
+                    <th>Price</th>
+                    <th>Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trade in recent_trades %}
+                {% set w = wallet_map.get(trade.wallet_address) %}
+                <tr>
+                    <td data-label="Date">{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td data-label="Wallet">
+                        <a href="/wallets/{{ trade.wallet_address }}/trades">
+                            {% if w and w.label %}{{ w.label }}{% else %}{{ short_address(trade.wallet_address) }}{% endif %}
+                        </a>
+                    </td>
+                    <td data-label="Market"><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
+                    <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
+                    <td data-label="Price">${{ '%.4f'|format(trade.price) }}</td>
+                    <td data-label="Size">{{ '%.2f'|format(trade.size) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No trades yet</h3>
+        <p>Add wallets and refresh them to see trade activity here.</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

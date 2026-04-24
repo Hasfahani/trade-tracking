@@ -530,8 +530,22 @@ textarea {
     gap: 8px;
 }
 
-.wallet-actions {
+.wallet-action-groups {
     margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.wallet-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.wallet-danger-zone {
+    flex-shrink: 0;
 }
 
 .tag-row,

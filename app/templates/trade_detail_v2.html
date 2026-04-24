@@ -12,6 +12,8 @@
     <div class="stack-tight hero-actions">
         <span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span>
         <span class="pill">${{ '%.2f'|format(trade.price * trade.size) }}</span>
+        <a href="/wallets/{{ trade.wallet_address }}/trades" class="btn btn-small">Back to wallet trades</a>
+        <a href="/all-trades" class="btn btn-small">All trades</a>
     </div>
 </section>
 
@@ -42,8 +44,9 @@
 <section class="card">
     <div class="section-head">
         <h2>Same market across all wallets</h2>
-        <span class="pill">{{ related_trades|length }} trades</span>
+        <span class="pill">{{ related_trades|length }} trade{% if related_trades|length != 1 %}s{% endif %}</span>
     </div>
+    {% if related_trades %}
     <div class="table-wrap">
         <table>
             <thead>
@@ -69,5 +72,10 @@
             </tbody>
         </table>
     </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No other tracked wallets have trades in this market.</p>
+    </div>
+    {% endif %}
 </section>
 {% endblock %}

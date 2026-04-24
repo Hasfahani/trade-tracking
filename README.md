@@ -12,11 +12,11 @@ Included:
 - Manual refresh per wallet or for all wallets
 - Trade storage in local SQLite
 - Trade filtering, sorting, pagination, date presets, CSV export
+- Trade value summaries (YES/NO/total value, avg price) per active filter set
 - Sync status and refresh event visibility
 - Refresh result visibility per wallet, including last refresh time/status/error
 
 Explicitly excluded:
-- PnL and position analytics
 - Win/loss dashboards
 - Copy trading
 - Strategy analytics
@@ -51,8 +51,8 @@ Explicitly excluded:
 
 Active runtime path:
 - The app currently mounts `routes_v2` from `app/main.py`
-- `_v2` templates and styles are the active UI stack
-- Legacy `routes.py` / `style.css` / non-`_v2` templates remain in-repo but are not mounted by default
+- `_v2` templates and `style_v2.css` are the active UI stack
+- Legacy `routes.py`, `style.css`, and non-`_v2` templates have been removed
 
 Design decisions:
 - Keep ingestion side effects out of page rendering paths
@@ -125,6 +125,10 @@ Environment variables:
 - DEFAULT_PAGE_SIZE: trade page size default
 - MAX_PAGE_SIZE: trade page size cap
 - DEFAULT_REFRESH_LIMIT: per-refresh fetch limit
+- POLYMARKET_CONNECT_TIMEOUT_SECONDS: Polymarket API connect timeout in seconds (default 5.0)
+- POLYMARKET_READ_TIMEOUT_SECONDS: Polymarket API read timeout in seconds (default 15.0)
+- POLYMARKET_WRITE_TIMEOUT_SECONDS: Polymarket API write timeout in seconds (default 15.0)
+- POLYMARKET_POOL_TIMEOUT_SECONDS: Polymarket API connection pool timeout in seconds (default 5.0)
 
 Refresh/API query parameters:
 - `POST /wallets/{identifier}/refresh?limit=<int>` (1-1000)
@@ -158,14 +162,26 @@ $env:PORT = "8010"
 - Archived wallets are excluded from refresh-all flows until restored
 
 3. Review trades
-- Open wallet trades page
+- Open the wallet profile page (/wallets/{identifier}) for a summary: trade count, first/latest trade date, value summary (YES/NO/total, VWAP), refresh status, and activity timeline
+- Open wallet trades page or /all-trades for a unified view across all wallets
 - Filter by side/date/market search
 - Use date presets like today / 7d / 30d when helpful
-- Sort by newest, oldest, or largest size
+- Sort by newest, oldest, largest size, or highest value
 - Use copy buttons for wallet, trade, and condition IDs where helpful
-- Review the wallet activity timeline built from stored trades and sync events
+- Export filtered trades to CSV using the Export CSV button on any trades page
+- Wallet search on /all-trades matches both wallet address and wallet label
 
-4. Organize the watchlist
+4. Review the dashboard
+- Visit /dashboard for a quick overview: wallet counts, total stored trades, last refresh timestamps
+- See the 20 most recent trades across all wallets
+- See the top 5 wallets by trade count
+
+5. Import and export wallets
+- Export all wallets to CSV via /wallets/export (includes address, label, tags, notes, pin/archive state)
+- Import wallets in bulk via /wallets/import — invalid addresses and duplicates are skipped automatically
+- Tags are semicolon-separated in the CSV (e.g. `tag1;tag2`)
+
+6. Organize the watchlist
 - Search wallets by label, address, tags, and notes
 - Pin important wallets to the top
 - Archive wallets to hide them without deleting stored trades
@@ -174,22 +190,33 @@ $env:PORT = "8010"
 ## API Endpoints
 
 Core:
+- GET /dashboard
 - GET /wallets
 - POST /wallets
+- GET /wallets/{identifier}
+- GET /wallets/{identifier}/edit
+- POST /wallets/{identifier}/edit
+- POST /wallets/{identifier}/pin
+- POST /wallets/{identifier}/archive
+- POST /wallets/{identifier}/unarchive
 - POST /wallets/{identifier}/refresh
 - POST /wallets/refresh-all
 - GET /wallets/{identifier}/trades
 - GET /wallets/{identifier}/trades/export
 - GET /all-trades
+- GET /all-trades/export
 - GET /trades/{trade_id}
+- GET /wallets/export
+- GET /wallets/import
+- POST /wallets/import
 - GET /wallets/{identifier}/delete-confirm
 - POST /wallets/{identifier}/delete
 
 Operational:
 - POST /admin/refresh
 - POST /admin/refresh-all
-- GET /admin/sync-status
-- POST /admin/sync-status/cleanup
+- GET /admin/sync-status (paginated; default page_size=50)
+- POST /admin/sync-status/cleanup (redirects to /admin/sync-status with flash confirmation)
 
 Common query params:
 - `limit` on wallet refresh routes controls per-request fetch size
@@ -223,6 +250,16 @@ Indexes added for responsiveness:
 - sync_events(wallet_address, created_at)
 
 No external migration framework is required for this project.
+
+## CLI Utilities
+
+`refresh_now.py` — standalone script to refresh all wallets from the command line without the web server:
+
+```powershell
+python refresh_now.py
+```
+
+Outputs per-wallet trade counts to stdout. Useful for one-off bulk refreshes outside the UI.
 
 ## Troubleshooting
 

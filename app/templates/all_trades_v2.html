@@ -10,7 +10,8 @@
         <p class="subtle">Unified search across all tracked wallets from local SQLite data.</p>
     </div>
     <div class="hero-actions">
-        <div class="stats-strip">
+        <a href="/all-trades/export?side={{ side or '' }}&market_search={{ market_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&date_preset={{ date_preset or '' }}&wallet_search={{ wallet_search or '' }}&sort_by={{ sort_by or 'time_desc' }}" class="btn btn-primary">Export CSV</a>
+        <div class="stats-strip" title="Values cover all matching trades, not just this page">
             <div class="stat-chip">
                 <span class="metric-label">Matching</span>
                 <strong>{{ total_trades }}</strong>

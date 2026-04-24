@@ -9,8 +9,13 @@
         <h1>Sync status</h1>
         <p class="subtle">Review sync outcomes, duplicate groups, and cleanup actions.</p>
     </div>
-    <button class="btn btn-danger" id="cleanupBtn">Cleanup duplicates</button>
 </section>
+
+{% if flash %}
+<section class="flash flash-{{ flash_level }}">
+    <strong>{{ flash }}</strong>
+</section>
+{% endif %}
 
 <section class="card">
     <form method="get" class="filter-grid compact-filter-grid">
@@ -42,7 +47,7 @@
     <article class="card">
         <div class="section-head">
             <h2>Recent sync events</h2>
-            <span class="pill">{{ events|length }} rows</span>
+            <span class="pill">{{ total_events }} total</span>
         </div>
         <div class="stack-list">
             {% for event in events %}
@@ -72,6 +77,15 @@
             <p>No sync events yet.</p>
             {% endfor %}
         </div>
+        <div class="pagination-row">
+            {% if page > 1 %}
+            <a class="btn" href="{{ request.url.include_query_params(page=page - 1) }}">Previous</a>
+            {% endif %}
+            <span class="pagination-meta">Page {{ page }} of {{ total_pages }}</span>
+            {% if page < total_pages %}
+            <a class="btn" href="{{ request.url.include_query_params(page=page + 1) }}">Next</a>
+            {% endif %}
+        </div>
     </article>
 
     <article class="card">
@@ -89,20 +103,15 @@
             <p>No semantic duplicates found.</p>
             {% endfor %}
         </div>
+        {% if duplicates %}
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);">
+            <p class="subtle" style="margin-bottom: 10px;">Cleanup removes extra duplicate rows from SQLite, keeping one trade per unique trade_id. Safe to run at any time.</p>
+            <form method="post" action="/admin/sync-status/cleanup" onsubmit="return confirm('Remove duplicate trade rows from local SQLite? One row per unique trade_id is kept.')">
+                <button type="submit" class="btn btn-danger btn-small">Remove duplicates</button>
+            </form>
+        </div>
+        {% endif %}
     </article>
 </section>
 {% endblock %}
 
-{% block scripts %}
-<script>
-document.getElementById('cleanupBtn').addEventListener('click', async () => {
-    if (!window.confirm('Remove duplicate trade rows from local SQLite?')) {
-        return;
-    }
-    const response = await fetch('/admin/sync-status/cleanup', { method: 'POST' });
-    const payload = await response.json();
-    alert(`Removed ${payload.removed} duplicate trades.`);
-    window.location.reload();
-});
-</script>
-{% endblock %}
