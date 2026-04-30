@@ -617,7 +617,7 @@ async def all_trades(
     pagination = vh.pagination_meta(page, page_size, total_trades)
 
     trades = query.limit(page_size).offset((page - 1) * page_size).all()
-    summary_row = query.with_entities(
+    summary_row = query.order_by(False).with_entities(
         func.min(Trade.traded_at).label("oldest_trade_at"),
         func.max(Trade.traded_at).label("newest_trade_at"),
     ).first()

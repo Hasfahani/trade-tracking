@@ -183,7 +183,7 @@ def sorted_trade_query(query: Query, sort_by: str) -> Query:
 
 
 def trade_pnl_summary(query: Query) -> Dict[str, float]:
-    row = query.with_entities(
+    row = query.order_by(False).with_entities(
         func.sum(case((Trade.side == "YES", Trade.price * Trade.size), else_=0)).label("yes_value"),
         func.sum(case((Trade.side == "NO", Trade.price * Trade.size), else_=0)).label("no_value"),
         func.sum(Trade.price * Trade.size).label("total_value"),
