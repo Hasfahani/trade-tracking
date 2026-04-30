@@ -7,10 +7,11 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from sqlalchemy import func
-from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
 from app.models import SyncEvent, Trade, Wallet
+from app.settings import DATABASE_URL
 from app.settings import (
     POLYMARKET_CONNECT_TIMEOUT_SECONDS,
     POLYMARKET_POOL_TIMEOUT_SECONDS,
@@ -21,6 +22,17 @@ from app.settings import (
 logger = logging.getLogger(__name__)
 
 DATA_API_BASE = "https://data-api.polymarket.com"
+
+_IS_POSTGRES = DATABASE_URL.startswith("postgresql")
+
+
+def _insert_ignore(table):
+    """Return a dialect-appropriate INSERT … ignore-duplicates statement."""
+    if _IS_POSTGRES:
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        return pg_insert(table)
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    return sqlite_insert(table)
 
 
 @lru_cache(maxsize=1)
@@ -267,20 +279,20 @@ def refresh_wallet(
 
         inserted = 0
         for trade in normalized:
-            stmt = (
-                insert(Trade)
-                .values(
-                    trade_id=trade["id"],
-                    wallet_address=trade["wallet_address"],
-                    condition_id=trade["condition_id"],
-                    market_title=trade["market_title"],
-                    side=trade["side"],
-                    price=trade["price"],
-                    size=trade["size"],
-                    traded_at=trade["traded_at"],
-                )
-                .prefix_with("OR IGNORE")
+            stmt = _insert_ignore(Trade).values(
+                trade_id=trade["id"],
+                wallet_address=trade["wallet_address"],
+                condition_id=trade["condition_id"],
+                market_title=trade["market_title"],
+                side=trade["side"],
+                price=trade["price"],
+                size=trade["size"],
+                traded_at=trade["traded_at"],
             )
+            if _IS_POSTGRES:
+                stmt = stmt.on_conflict_do_nothing(index_elements=["trade_id"])
+            else:
+                stmt = stmt.prefix_with("OR IGNORE")
             result = db.execute(stmt)
             if result.rowcount > 0:
                 inserted += 1

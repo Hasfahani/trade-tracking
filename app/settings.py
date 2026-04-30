@@ -36,7 +36,11 @@ def _env_float(name: str, default: float) -> float:
 # Database
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'app.db'}")
+_raw_db_url = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'app.db'}")
+# Railway (and old Heroku) emit postgres:// which SQLAlchemy doesn't recognise
+if _raw_db_url.startswith("postgres://"):
+    _raw_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
+DATABASE_URL = _raw_db_url
 
 # App metadata
 APP_NAME = _env_str("APP_NAME", "PolySignal")
