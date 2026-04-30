@@ -201,6 +201,64 @@ def trade_pnl_summary(query: Query) -> Dict[str, float]:
     }
 
 
+def get_wallet_intelligence_summary(session: Session, wallet_address: str) -> Dict[str, Any]:
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    trade_value = Trade.price * Trade.size
+
+    total_row = session.query(
+        func.count(Trade.id).label("total_trades"),
+        func.avg(trade_value).label("average_trade_size"),
+        func.count(func.distinct(Trade.condition_id)).label("total_markets_traded"),
+    ).filter(Trade.wallet_address == wallet_address).first()
+
+    recent_row = session.query(
+        func.count(Trade.id).label("trades_last_24h"),
+        func.sum(trade_value).label("total_value_last_24h"),
+        func.count(func.distinct(Trade.condition_id)).label("markets_traded_last_24h"),
+    ).filter(
+        Trade.wallet_address == wallet_address,
+        Trade.traded_at >= cutoff,
+    ).first()
+
+    trades_last_24h = int(recent_row.trades_last_24h or 0)
+    total_value_last_24h = float(recent_row.total_value_last_24h or 0)
+    average_trade_size = float(total_row.average_trade_size or 0)
+    total_markets_traded = int(total_row.total_markets_traded or 0)
+    markets_traded_last_24h = int(recent_row.markets_traded_last_24h or 0)
+
+    if trades_last_24h == 0:
+        activity_level = "Inactive"
+        activity_tone = ""
+        intelligence_text = "This wallet is currently inactive."
+    elif trades_last_24h <= 2:
+        activity_level = "Low"
+        activity_tone = "info"
+        intelligence_text = "This wallet has low recent activity with small trade volume."
+    elif trades_last_24h >= 10:
+        activity_level = "High"
+        activity_tone = "success"
+        intelligence_text = "This wallet is highly active in the last 24 hours and may be worth monitoring."
+    else:
+        activity_level = "Medium"
+        activity_tone = "warning"
+        if markets_traded_last_24h > 1 and total_value_last_24h >= 100:
+            intelligence_text = "This wallet recently traded multiple markets with significant volume."
+        else:
+            intelligence_text = "This wallet has moderate recent activity in the last 24 hours."
+
+    return {
+        "activity_level": activity_level,
+        "trades_last_24h": trades_last_24h,
+        "total_value_last_24h": total_value_last_24h,
+        "average_trade_size": average_trade_size,
+        "total_markets_traded": total_markets_traded,
+        "markets_traded_last_24h": markets_traded_last_24h,
+        "intelligence_text": intelligence_text,
+        "activity_tone": activity_tone,
+        "total_trades": int(total_row.total_trades or 0),
+    }
+
+
 def wallet_stats_map(db: Session, wallet_addresses: Optional[List[str]] = None) -> Dict[str, Dict[str, Any]]:
     query = db.query(
         Trade.wallet_address,

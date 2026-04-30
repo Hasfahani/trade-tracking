@@ -42,6 +42,40 @@
     </article>
 </section>
 
+<section class="card">
+    <div class="section-head">
+        <h2>Wallet Intelligence</h2>
+        <span class="pill {{ wallet_intelligence.activity_tone }}">{{ wallet_intelligence.activity_level }}</span>
+    </div>
+    <p class="subtle">{{ wallet_intelligence.intelligence_text }}</p>
+    <div class="metrics-grid embedded-metrics">
+        <article class="metric-card">
+            <span class="metric-label">Activity level</span>
+            <strong>{{ wallet_intelligence.activity_level }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Trades in last 24 hours</span>
+            <strong>{{ wallet_intelligence.trades_last_24h }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Value in last 24 hours</span>
+            <strong>${{ '%.2f'|format(wallet_intelligence.total_value_last_24h) }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Average trade size</span>
+            <strong>${{ '%.2f'|format(wallet_intelligence.average_trade_size) }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Markets traded</span>
+            <strong>{{ wallet_intelligence.total_markets_traded }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Markets in last 24 hours</span>
+            <strong>{{ wallet_intelligence.markets_traded_last_24h }}</strong>
+        </article>
+    </div>
+</section>
+
 <section class="two-col">
     <article class="card">
         <div class="section-head">

@@ -10,6 +10,7 @@ from app.db import get_db
 from app.ingest import _fetch_trade_batch, normalize_trade, refresh_wallet
 from app.models import Base, SyncEvent, Trade, Wallet
 from app.routes_v2 import router
+from app import view_helpers as vh
 from app.watchlist_seed import SeedWallet, seed_watchlist_wallets
 
 
@@ -278,6 +279,77 @@ def test_wallet_and_trade_routes_render():
     assert "Tracked wallets" in wallets_response.text
     assert trades_response.status_code == 200
     assert "Will X happen?" in trades_response.text
+
+
+def test_wallet_detail_renders_inactive_intelligence_for_empty_wallet():
+    client, session_factory = build_client()
+    db = session_factory()
+    wallet = Wallet(address="0x9999999999999999999999999999999999999999", label="Quiet")
+    db.add(wallet)
+    db.commit()
+    wallet_address = wallet.address
+    db.close()
+
+    response = client.get(f"/wallets/{wallet_address}")
+
+    assert response.status_code == 200
+    assert "Wallet Intelligence" in response.text
+    assert "Inactive" in response.text
+    assert "This wallet is currently inactive." in response.text
+
+
+def test_wallet_intelligence_summary_calculates_recent_metrics():
+    _, session_factory = build_client()
+    db = session_factory()
+    wallet_address = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    db.add(Wallet(address=wallet_address, label="Signal"))
+    now = datetime.now(timezone.utc)
+    db.add_all(
+        [
+            Trade(
+                wallet_address=wallet_address,
+                trade_id="intel-recent-1",
+                condition_id="cond-a",
+                market_title="Market A",
+                side="YES",
+                price=0.5,
+                size=10,
+                traded_at=now,
+            ),
+            Trade(
+                wallet_address=wallet_address,
+                trade_id="intel-recent-2",
+                condition_id="cond-b",
+                market_title="Market B",
+                side="NO",
+                price=0.25,
+                size=20,
+                traded_at=now - timedelta(hours=2),
+            ),
+            Trade(
+                wallet_address=wallet_address,
+                trade_id="intel-old",
+                condition_id="cond-c",
+                market_title="Market C",
+                side="YES",
+                price=0.75,
+                size=8,
+                traded_at=now - timedelta(days=2),
+            ),
+        ]
+    )
+    db.commit()
+
+    summary = vh.get_wallet_intelligence_summary(db, wallet_address)
+    db.close()
+
+    assert summary["activity_level"] == "Low"
+    assert summary["activity_tone"] == "info"
+    assert summary["trades_last_24h"] == 2
+    assert summary["total_value_last_24h"] == 10
+    assert summary["average_trade_size"] == 16 / 3
+    assert summary["total_markets_traded"] == 3
+    assert summary["markets_traded_last_24h"] == 2
 
 
 def test_delete_confirm_route_renders_warning():

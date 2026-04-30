@@ -175,6 +175,7 @@ $env:PORT = "8010"
 - Visit /dashboard for a quick overview: wallet counts, total stored trades, last refresh timestamps
 - See the 20 most recent trades across all wallets
 - See the top 5 wallets by trade count
+- Interesting activity section highlights notable events from the last 24 hours: large trades (>$200), activity spikes (3+ trades in 10 minutes), and new market entries (first-ever trade in a market)
 
 5. Import and export wallets
 - Export all wallets to CSV via /wallets/export (includes address, label, tags, notes, pin/archive state)

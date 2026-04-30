@@ -250,6 +250,11 @@ h1 {
     margin-bottom: 18px;
 }
 
+.embedded-metrics {
+    margin-top: 16px;
+    margin-bottom: 0;
+}
+
 .metric-card,
 .stat-chip {
     padding: 16px 18px;

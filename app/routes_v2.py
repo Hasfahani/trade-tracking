@@ -336,6 +336,7 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
     trade_query = db.query(Trade).filter(Trade.wallet_address == wallet.address)
     pnl = vh.trade_pnl_summary(trade_query)
     activity_timeline = vh.build_wallet_activity_timeline(db, wallet.address, limit=30)
+    wallet_intelligence = vh.get_wallet_intelligence_summary(db, wallet.address)
 
     return templates.TemplateResponse(
         request,
@@ -347,6 +348,7 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
             "summary_row": summary_row,
             "pnl": pnl,
             "activity_timeline": activity_timeline,
+            "wallet_intelligence": wallet_intelligence,
             "short_address": vh.short_address,
             "duration_label": vh.duration_label,
             "sync_status_class": vh.sync_status_class,
