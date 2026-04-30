@@ -1,8 +1,8 @@
 @echo off
-REM Polymarket Wallet Watchlist - Server Launcher
+REM PolySignal - Server Launcher
 REM This script starts the FastAPI server persistently
 
-title Polymarket Wallet Watchlist Server
+title PolySignal Server
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
@@ -28,7 +28,7 @@ if errorlevel 1 (
 
 echo.
 echo ========================================
-echo   Polymarket Wallet Watchlist Server
+echo   PolySignal Server
 echo   Manual Refresh Watchlist
 echo ========================================
 echo.

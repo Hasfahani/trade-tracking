@@ -1,4 +1,4 @@
-# Polymarket Wallet Watchlist - Auto-Start Setup
+# PolySignal - Auto-Start Setup
 # This script sets up the server to start automatically with Windows
 
 Write-Host ""
@@ -75,7 +75,7 @@ Register-ScheduledTask `
     -Trigger $taskTrigger `
     -Settings $taskSettings `
     -RunLevel Highest `
-    -Description "Polymarket Wallet Watchlist - Auto-starts the manual refresh watchlist server" `
+    -Description "PolySignal - Auto-starts the manual refresh watchlist server" `
     -Force | Out-Null
 
 Write-Host ""

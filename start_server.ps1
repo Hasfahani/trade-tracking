@@ -1,4 +1,4 @@
-# Polymarket Wallet Watchlist - PowerShell Launcher
+# PolySignal - PowerShell Launcher
 # This script ensures only one server instance runs at a time
 # Usage: powershell -ExecutionPolicy Bypass -File start_server.ps1
 
@@ -27,7 +27,7 @@ Start-Sleep -Seconds 2
 # Start the server
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Polymarket Wallet Watchlist" -ForegroundColor Cyan
+Write-Host "  PolySignal" -ForegroundColor Cyan
 Write-Host "  Manual Refresh Watchlist" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""

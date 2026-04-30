@@ -39,7 +39,7 @@ DATA_DIR.mkdir(exist_ok=True)
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'app.db'}")
 
 # App metadata
-APP_NAME = _env_str("APP_NAME", "Polymarket Wallet Watchlist")
+APP_NAME = _env_str("APP_NAME", "PolySignal")
 LOG_LEVEL = _env_str("LOG_LEVEL", "INFO").upper()
 
 # Server runtime
