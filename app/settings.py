@@ -37,9 +37,13 @@ def _env_float(name: str, default: float) -> float:
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 _raw_db_url = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'app.db'}")
-# Railway (and old Heroku) emit postgres:// which SQLAlchemy doesn't recognise
+# Normalise PostgreSQL URLs:
+# - Railway/Heroku emit postgres:// which SQLAlchemy 2 doesn't recognise
+# - Plain postgresql:// uses psycopg2 by default; explicitly route to psycopg (v3)
 if _raw_db_url.startswith("postgres://"):
-    _raw_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
+    _raw_db_url = _raw_db_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif _raw_db_url.startswith("postgresql://"):
+    _raw_db_url = _raw_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
 DATABASE_URL = _raw_db_url
 
 # App metadata
