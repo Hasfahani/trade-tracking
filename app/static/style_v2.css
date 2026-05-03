@@ -766,3 +766,117 @@ th {
         justify-content: space-between;
     }
 }
+
+/* ── 480px: targets 390px devices ── */
+@media (max-width: 480px) {
+    /* Nav: collapse subtitle, tighten link padding */
+    .brand-subtitle {
+        display: none;
+    }
+
+    .nav-shell {
+        padding: 10px 14px;
+        gap: 8px;
+    }
+
+    .top-nav {
+        width: 100%;
+        gap: 2px;
+    }
+
+    .top-nav a {
+        padding: 6px 8px;
+        font-size: 0.85rem;
+        flex: 1;
+        text-align: center;
+    }
+
+    /* Page shell and footer edges */
+    .page-shell {
+        padding: 14px 12px 28px;
+    }
+
+    .nav-shell,
+    .site-footer {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    /* Cards: reduce internal padding */
+    .hero-card,
+    .card,
+    .flash {
+        padding: 14px;
+        margin-bottom: 14px;
+    }
+
+    /* Section heads: let pill/button drop below heading */
+    .section-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    /* Dashboard metrics: 2 columns instead of auto-fit */
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    /* Wallets hero stat chips: 2 per row */
+    .stat-chip {
+        flex: 1 1 calc(50% - 8px);
+        min-width: 0;
+        padding: 10px 12px;
+    }
+
+    /* Wallet list: tighter gaps */
+    .wallet-list {
+        gap: 10px;
+    }
+
+    /* Wallet metrics: always 2 columns */
+    .wallet-metrics {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    /* Wallet actions: stack primary actions above delete */
+    .wallet-action-groups {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .wallet-danger-zone {
+        display: flex;
+    }
+
+    .wallet-danger-zone .btn {
+        flex: 1;
+        text-align: center;
+    }
+
+    /* Recent refresh event rows: stack vertically */
+    .event-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 10px 12px;
+    }
+
+    /* Filter grids: single column */
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Hero copy heading */
+    h1 {
+        font-size: 1.4rem;
+    }
+
+    /* Metric card: tighter */
+    .metric-card {
+        padding: 12px 14px;
+    }
+}
