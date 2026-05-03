@@ -15,6 +15,7 @@ from app.ingest import cleanup_duplicate_trades, find_duplicate_groups, refresh_
 from app.models import SyncEvent, Trade, Wallet
 from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, DEFAULT_REFRESH_LIMIT, MAX_PAGE_SIZE
 from app import view_helpers as vh
+from app import alerts
 
 _BOM = "\ufeff"
 
@@ -366,12 +367,17 @@ def refresh_single_wallet(
     next_path: Optional[str] = Query(None, alias="next"),
 ):
     wallet = resolve_wallet(db, identifier)
+    refresh_start = datetime.now(timezone.utc).replace(tzinfo=None)
     result = refresh_wallet(db, wallet, limit=limit)
     redirect_to = _safe_next(next_path)
 
     if result["status"] == "error":
         msg = f"Refresh failed for {vh.short_address(wallet.address)}: {result['error']}"
         return _flash_redirect_to(redirect_to, msg, "error") if redirect_to else _flash_redirect(msg, "error")
+
+    if result["inserted"] > 0:
+        alerts.fire_alerts_for_new_trades(db, wallet, refresh_start)
+
     if result["inserted"] == 0:
         msg = f"No new trades for {vh.short_address(wallet.address)}. Fetched {result['fetched']} records."
         return _flash_redirect_to(redirect_to, msg, "info") if redirect_to else _flash_redirect(msg, "info")
@@ -396,6 +402,7 @@ def refresh_all_wallets(
     failures = 0
     no_new = 0
     for wallet in wallets:
+        refresh_start = datetime.now(timezone.utc).replace(tzinfo=None)
         result = refresh_wallet(db, wallet, limit=limit)
         total_inserted += int(result["inserted"])
         total_fetched += int(result["fetched"])
@@ -403,6 +410,8 @@ def refresh_all_wallets(
             failures += 1
         elif result["status"] == "no_new":
             no_new += 1
+        elif result["inserted"] > 0:
+            alerts.fire_alerts_for_new_trades(db, wallet, refresh_start)
 
     if failures:
         return _flash_redirect(
@@ -421,6 +430,56 @@ def refresh_all_wallets(
         ),
         "success",
     )
+
+
+@router.get("/settings")
+async def settings_page(request: Request, db: Session = Depends(get_db)):
+    settings = alerts.get_app_settings(db)
+    return templates.TemplateResponse(
+        request,
+        "settings_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "settings": settings,
+            "flash": request.query_params.get("flash"),
+            "flash_level": request.query_params.get("level", "info"),
+        },
+    )
+
+
+@router.post("/settings")
+async def save_settings(
+    db: Session = Depends(get_db),
+    telegram_bot_token: Optional[str] = Form(None),
+    telegram_chat_id: Optional[str] = Form(None),
+    alert_min_size: Optional[str] = Form(None),
+    alerts_enabled: Optional[str] = Form(None),
+):
+    settings = alerts.get_app_settings(db)
+    settings.telegram_bot_token = (telegram_bot_token or "").strip() or None
+    settings.telegram_chat_id = (telegram_chat_id or "").strip() or None
+    settings.alerts_enabled = 1 if alerts_enabled else 0
+    try:
+        settings.alert_min_size = float(alert_min_size) if alert_min_size else 0.0
+    except ValueError:
+        settings.alert_min_size = 0.0
+    settings.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.commit()
+    return _flash_redirect_to("/settings", "Settings saved.", "success")
+
+
+@router.post("/settings/test-alert")
+async def test_alert(db: Session = Depends(get_db)):
+    settings = alerts.get_app_settings(db)
+    token = (settings.telegram_bot_token or "").strip()
+    chat_id = (settings.telegram_chat_id or "").strip()
+    if not token or not chat_id:
+        return _flash_redirect_to("/settings", "Enter a bot token and chat ID before testing.", "error")
+    ok = alerts.send_telegram_message(token, chat_id, "✅ <b>PolySignal test alert</b>\nYour Telegram alerts are working.")
+    if ok:
+        return _flash_redirect_to("/settings", "Test alert sent successfully.", "success")
+    return _flash_redirect_to("/settings", "Test failed — check your bot token and chat ID.", "error")
 
 
 @router.get("/wallets/{identifier}/edit")

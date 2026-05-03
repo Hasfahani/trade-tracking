@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 from app.settings import DATABASE_URL
 from app.models import Base
@@ -88,11 +88,42 @@ def _ensure_sync_event_columns():
                 )
 
 
+def _ensure_settings_columns():
+    """Add missing app_settings columns for older SQLite databases."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+
+    expected_columns = {
+        "telegram_bot_token": "TEXT",
+        "telegram_chat_id": "TEXT",
+        "alert_min_size": "REAL",
+        "alerts_enabled": "INTEGER",
+        "updated_at": "DATETIME",
+    }
+
+    with engine.begin() as conn:
+        table_exists = conn.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='app_settings'"
+        ).first()
+        if not table_exists:
+            return
+
+        rows = conn.exec_driver_sql("PRAGMA table_info(app_settings)").fetchall()
+        existing_columns = {row[1] for row in rows}
+
+        for column_name, column_type in expected_columns.items():
+            if column_name not in existing_columns:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE app_settings ADD COLUMN {column_name} {column_type}"
+                )
+
+
 def init_db():
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
     _ensure_wallet_columns()
     _ensure_sync_event_columns()
+    _ensure_settings_columns()
     _ensure_sqlite_indexes()
 
 

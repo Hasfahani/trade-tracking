@@ -1,0 +1,98 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Configuration</p>
+        <h1>Settings</h1>
+        <p class="subtle">Configure Telegram alerts for trades that exceed your size threshold.</p>
+    </div>
+</section>
+
+{% if flash %}
+<section class="flash flash-{{ flash_level }}">
+    <strong>{{ flash }}</strong>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="section-head">
+        <h2>Telegram alerts</h2>
+        {% if settings.alerts_enabled %}
+        <span class="pill success">Alerts enabled</span>
+        {% else %}
+        <span class="pill">Alerts disabled</span>
+        {% endif %}
+    </div>
+    <p class="subtle" style="margin-bottom: 18px;">
+        When a wallet refresh finds new trades above the size threshold, a Telegram message is sent to your bot.
+        Get your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>
+        and your chat ID from <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a>.
+    </p>
+
+    <form method="post" action="/settings" class="grid-form">
+        <label>
+            Bot token
+            <input
+                type="text"
+                name="telegram_bot_token"
+                placeholder="123456789:AAExj7..."
+                value="{{ settings.telegram_bot_token or '' }}"
+                autocomplete="off"
+                spellcheck="false"
+            >
+        </label>
+        <label>
+            Chat ID
+            <input
+                type="text"
+                name="telegram_chat_id"
+                placeholder="8708428862"
+                value="{{ settings.telegram_chat_id or '' }}"
+                autocomplete="off"
+                spellcheck="false"
+            >
+        </label>
+        <label>
+            Minimum trade size ($)
+            <input
+                type="number"
+                name="alert_min_size"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                value="{{ '%.2f'|format(settings.alert_min_size or 0) }}"
+            >
+        </label>
+        <label class="checkbox-row">
+            <span>Enable alerts</span>
+            <input type="checkbox" name="alerts_enabled" value="1" {% if settings.alerts_enabled %}checked{% endif %}>
+        </label>
+
+        <div style="grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
+            <button type="submit" class="btn btn-primary">Save settings</button>
+        </div>
+    </form>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Test connection</h2>
+    </div>
+    <p class="subtle" style="margin-bottom: 14px;">
+        Sends a test message to confirm your bot token and chat ID are correct.
+        Save your settings first before testing.
+    </p>
+    <form method="post" action="/settings/test-alert">
+        <button type="submit" class="btn">Send test alert</button>
+    </form>
+</section>
+
+{% if settings.updated_at %}
+<p class="subtle" style="margin-top: 8px; font-size: 0.84rem;">
+    Last saved: {{ settings.updated_at.strftime('%Y-%m-%d %H:%M UTC') }}
+</p>
+{% endif %}
+{% endblock %}

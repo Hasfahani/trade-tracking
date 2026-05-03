@@ -67,3 +67,16 @@ class SyncEvent(Base):
     __table_args__ = (
         Index("ix_sync_events_wallet_created", "wallet_address", "created_at"),
     )
+
+
+class AppSettings(Base):
+    """Singleton settings row (always id=1). Stores Telegram alert config."""
+
+    __tablename__ = "app_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    telegram_bot_token = Column(Text, nullable=True)
+    telegram_chat_id = Column(Text, nullable=True)
+    alert_min_size = Column(Float, nullable=True, default=0.0)
+    alerts_enabled = Column(Integer, nullable=True, default=0)
+    updated_at = Column(DateTime, nullable=True)
