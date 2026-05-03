@@ -1,7 +1,6 @@
 """Telegram alert helpers for trade notifications."""
 
 import logging
-from datetime import datetime
 
 import httpx
 from sqlalchemy.orm import Session
@@ -61,10 +60,11 @@ def send_telegram_message(token: str, chat_id: str, text: str) -> bool:
         return False
 
 
-def fire_alerts_for_new_trades(db: Session, wallet: Wallet, refresh_start: datetime) -> int:
+def fire_alerts_for_new_trades(db: Session, wallet: Wallet, after_id: int) -> int:
     """Send alerts for trades inserted during this refresh that exceed the size threshold.
 
-    Returns the number of alerts successfully sent.
+    after_id: the max Trade.id for this wallet captured before the refresh; only rows
+    with id > after_id are considered new. Returns the number of alerts sent.
     """
     settings = get_app_settings(db)
     if not settings.alerts_enabled:
@@ -80,7 +80,7 @@ def fire_alerts_for_new_trades(db: Session, wallet: Wallet, refresh_start: datet
         db.query(Trade)
         .filter(
             Trade.wallet_address == wallet.address,
-            Trade.inserted_at >= refresh_start,
+            Trade.id > after_id,
             Trade.size >= threshold,
         )
         .all()
