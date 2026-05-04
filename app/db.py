@@ -89,28 +89,29 @@ def _ensure_sync_event_columns():
 
 
 def _ensure_trade_columns():
-    """Add missing trade columns for older SQLite databases."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-
-    expected_columns = {
-        "alert_sent": "INTEGER NOT NULL DEFAULT 0",
-    }
-
+    """Add missing trade columns to an existing database."""
     with engine.begin() as conn:
-        table_exists = conn.exec_driver_sql(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='trades'"
-        ).first()
-        if not table_exists:
-            return
-
-        rows = conn.exec_driver_sql("PRAGMA table_info(trades)").fetchall()
-        existing_columns = {row[1] for row in rows}
-
-        for column_name, column_type in expected_columns.items():
-            if column_name not in existing_columns:
+        if DATABASE_URL.startswith("sqlite"):
+            table_exists = conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='trades'"
+            ).first()
+            if not table_exists:
+                return
+            rows = conn.exec_driver_sql("PRAGMA table_info(trades)").fetchall()
+            existing_columns = {row[1] for row in rows}
+            if "alert_sent" not in existing_columns:
                 conn.exec_driver_sql(
-                    f"ALTER TABLE trades ADD COLUMN {column_name} {column_type}"
+                    "ALTER TABLE trades ADD COLUMN alert_sent INTEGER NOT NULL DEFAULT 0"
+                )
+        else:
+            # PostgreSQL: check information_schema
+            row = conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'trades' AND column_name = 'alert_sent'"
+            ).first()
+            if row is None:
+                conn.exec_driver_sql(
+                    "ALTER TABLE trades ADD COLUMN alert_sent INTEGER NOT NULL DEFAULT 0"
                 )
 
 
