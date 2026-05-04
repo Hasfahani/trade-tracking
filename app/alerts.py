@@ -60,11 +60,11 @@ def send_telegram_message(token: str, chat_id: str, text: str) -> bool:
         return False
 
 
-def fire_alerts_for_new_trades(db: Session, wallet: Wallet, after_id: int) -> int:
-    """Send alerts for trades inserted during this refresh that exceed the size threshold.
+def fire_alerts_for_new_trades(db: Session, wallet: Wallet) -> int:
+    """Send alerts for unsent trades that exceed the size threshold.
 
-    after_id: the max Trade.id for this wallet captured before the refresh; only rows
-    with id > after_id are considered new. Returns the number of alerts sent.
+    Finds all trades with alert_sent=0 for this wallet, sends the alert, then
+    marks them alert_sent=1. Returns the number of alerts sent.
     """
     settings = get_app_settings(db)
     if not settings.alerts_enabled:
@@ -78,30 +78,31 @@ def fire_alerts_for_new_trades(db: Session, wallet: Wallet, after_id: int) -> in
         return 0
 
     threshold = float(settings.alert_min_size or 0.0)
-    new_trades = (
+    pending_trades = (
         db.query(Trade)
         .filter(
             Trade.wallet_address == wallet.address,
-            Trade.id > after_id,
+            Trade.alert_sent == 0,
             Trade.size >= threshold,
         )
         .all()
     )
 
     logger.info(
-        "fire_alerts: wallet=%s after_id=%d threshold=%.2f new_trades=%d",
+        "fire_alerts: wallet=%s threshold=%.2f pending_trades=%d",
         wallet.address,
-        after_id,
         threshold,
-        len(new_trades),
+        len(pending_trades),
     )
 
     sent = 0
-    for trade in new_trades:
+    for trade in pending_trades:
         text = _build_message(trade, wallet)
         if send_telegram_message(token, chat_id, text):
+            trade.alert_sent = 1
             logger.info("fire_alerts: sent alert for trade id=%d size=%.2f", trade.id, trade.size)
             sent += 1
         else:
             logger.warning("fire_alerts: failed to send alert for trade id=%d", trade.id)
+    db.commit()
     return sent

@@ -88,6 +88,32 @@ def _ensure_sync_event_columns():
                 )
 
 
+def _ensure_trade_columns():
+    """Add missing trade columns for older SQLite databases."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+
+    expected_columns = {
+        "alert_sent": "INTEGER NOT NULL DEFAULT 0",
+    }
+
+    with engine.begin() as conn:
+        table_exists = conn.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='trades'"
+        ).first()
+        if not table_exists:
+            return
+
+        rows = conn.exec_driver_sql("PRAGMA table_info(trades)").fetchall()
+        existing_columns = {row[1] for row in rows}
+
+        for column_name, column_type in expected_columns.items():
+            if column_name not in existing_columns:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE trades ADD COLUMN {column_name} {column_type}"
+                )
+
+
 def _ensure_settings_columns():
     """Add missing app_settings columns for older SQLite databases."""
     if not DATABASE_URL.startswith("sqlite"):
@@ -124,6 +150,7 @@ def init_db():
     _ensure_wallet_columns()
     _ensure_sync_event_columns()
     _ensure_settings_columns()
+    _ensure_trade_columns()
     _ensure_sqlite_indexes()
 
 

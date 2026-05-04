@@ -3,7 +3,7 @@
 SQLite compatibility columns are backfilled in app.db._ensure_wallet_columns.
 """
 
-from sqlalchemy import CheckConstraint, Column, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
@@ -41,6 +41,7 @@ class Trade(Base):
     size = Column(Float, nullable=False)
     traded_at = Column(DateTime, nullable=False)
     inserted_at = Column(DateTime, server_default=func.now())
+    alert_sent = Column(Integer, nullable=False, default=0)
 
     __table_args__ = (
         CheckConstraint("side IN ('YES', 'NO')", name="check_side"),

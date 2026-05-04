@@ -367,7 +367,6 @@ def refresh_single_wallet(
     next_path: Optional[str] = Query(None, alias="next"),
 ):
     wallet = resolve_wallet(db, identifier)
-    last_id = db.query(func.max(Trade.id)).filter(Trade.wallet_address == wallet.address).scalar() or 0
     result = refresh_wallet(db, wallet, limit=limit)
     redirect_to = _safe_next(next_path)
 
@@ -375,8 +374,7 @@ def refresh_single_wallet(
         msg = f"Refresh failed for {vh.short_address(wallet.address)}: {result['error']}"
         return _flash_redirect_to(redirect_to, msg, "error") if redirect_to else _flash_redirect(msg, "error")
 
-    if result["inserted"] > 0:
-        alerts.fire_alerts_for_new_trades(db, wallet, last_id)
+    alerts.fire_alerts_for_new_trades(db, wallet)
 
     if result["inserted"] == 0:
         msg = f"No new trades for {vh.short_address(wallet.address)}. Fetched {result['fetched']} records."
@@ -402,7 +400,6 @@ def refresh_all_wallets(
     failures = 0
     no_new = 0
     for wallet in wallets:
-        last_id = db.query(func.max(Trade.id)).filter(Trade.wallet_address == wallet.address).scalar() or 0
         result = refresh_wallet(db, wallet, limit=limit)
         total_inserted += int(result["inserted"])
         total_fetched += int(result["fetched"])
@@ -410,8 +407,7 @@ def refresh_all_wallets(
             failures += 1
         elif result["status"] == "no_new":
             no_new += 1
-        elif result["inserted"] > 0:
-            alerts.fire_alerts_for_new_trades(db, wallet, last_id)
+        alerts.fire_alerts_for_new_trades(db, wallet)
 
     if failures:
         return _flash_redirect(
