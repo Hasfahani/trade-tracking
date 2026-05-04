@@ -68,11 +68,13 @@ def fire_alerts_for_new_trades(db: Session, wallet: Wallet, after_id: int) -> in
     """
     settings = get_app_settings(db)
     if not settings.alerts_enabled:
+        logger.debug("fire_alerts: alerts disabled, skipping wallet %s", wallet.address)
         return 0
 
     token = (settings.telegram_bot_token or "").strip()
     chat_id = (settings.telegram_chat_id or "").strip()
     if not token or not chat_id:
+        logger.warning("fire_alerts: Telegram token or chat_id not configured, skipping alerts")
         return 0
 
     threshold = float(settings.alert_min_size or 0.0)
@@ -86,9 +88,20 @@ def fire_alerts_for_new_trades(db: Session, wallet: Wallet, after_id: int) -> in
         .all()
     )
 
+    logger.info(
+        "fire_alerts: wallet=%s after_id=%d threshold=%.2f new_trades=%d",
+        wallet.address,
+        after_id,
+        threshold,
+        len(new_trades),
+    )
+
     sent = 0
     for trade in new_trades:
         text = _build_message(trade, wallet)
         if send_telegram_message(token, chat_id, text):
+            logger.info("fire_alerts: sent alert for trade id=%d size=%.2f", trade.id, trade.size)
             sent += 1
+        else:
+            logger.warning("fire_alerts: failed to send alert for trade id=%d", trade.id)
     return sent
