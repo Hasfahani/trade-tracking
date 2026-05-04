@@ -696,6 +696,65 @@ th {
     }
 }
 
+/* ── Page loading bar ── */
+#page-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    width: 0;
+    background: linear-gradient(90deg, var(--accent-strong), var(--accent));
+    z-index: 9999;
+    pointer-events: none;
+}
+
+#page-loader.is-loading {
+    animation: loader-advance 2.5s cubic-bezier(0.1, 0.5, 0.2, 1) forwards;
+}
+
+@keyframes loader-advance {
+    from { width: 0; }
+    to { width: 85%; }
+}
+
+/* ── Hamburger toggle button (hidden on desktop) ── */
+.nav-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    background: none;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    padding: 10px 12px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.nav-toggle span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 2px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.nav-toggle[aria-expanded="true"] span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.nav-toggle[aria-expanded="true"] span:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+}
+
+.nav-toggle[aria-expanded="true"] span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
 @media (max-width: 920px) {
     .hero-card,
     .nav-shell {
@@ -769,34 +828,11 @@ th {
 
 /* ── 480px: targets 390px devices ── */
 @media (max-width: 480px) {
-    /* Nav: collapse subtitle, tighten link padding */
-    .brand-subtitle {
-        display: none;
-    }
-
-    .nav-shell {
-        padding: 10px 14px;
-        gap: 8px;
-    }
-
-    .top-nav {
-        width: 100%;
-        gap: 2px;
-    }
-
-    .top-nav a {
-        padding: 6px 8px;
-        font-size: 0.85rem;
-        flex: 1;
-        text-align: center;
-    }
-
     /* Page shell and footer edges */
     .page-shell {
         padding: 14px 12px 28px;
     }
 
-    .nav-shell,
     .site-footer {
         padding-left: 12px;
         padding-right: 12px;
@@ -878,5 +914,76 @@ th {
     /* Metric card: tighter */
     .metric-card {
         padding: 12px 14px;
+    }
+}
+
+/* ── 640px: hamburger menu + mobile tap targets ── */
+@media (max-width: 640px) {
+    /* Show hamburger, reset nav-shell to horizontal row */
+    .nav-toggle {
+        display: flex;
+    }
+
+    .nav-shell {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 10px 14px;
+        gap: 10px;
+    }
+
+    .brand-block {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .brand-subtitle {
+        display: none;
+    }
+
+    /* Nav collapses until toggled open */
+    .top-nav {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        gap: 2px;
+        padding-bottom: 8px;
+    }
+
+    .top-nav.nav-open {
+        display: flex;
+    }
+
+    .top-nav a {
+        padding: 12px 14px;
+        font-size: 1rem;
+        text-align: left;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        flex: unset;
+    }
+
+    /* Minimum 44px tap targets for all buttons */
+    .btn {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-small {
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 0.88rem;
+    }
+
+    /* Prevent iOS auto-zoom on focused inputs (requires ≥16px) */
+    input[type="text"],
+    input[type="date"],
+    input[type="number"],
+    textarea,
+    select {
+        font-size: 16px;
     }
 }

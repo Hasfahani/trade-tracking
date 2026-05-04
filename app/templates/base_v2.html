@@ -7,13 +7,19 @@
     <link rel="stylesheet" href="/static/style_v2.css">
 </head>
 <body>
+    <div id="page-loader" aria-hidden="true"></div>
     <header class="site-header">
         <div class="nav-shell">
             <div class="brand-block">
                 <a href="/wallets" class="brand">{{ app_name or "PolySignal" }}</a>
                 <p class="brand-subtitle">Manual refresh watchlist. Pages read from local SQLite only.</p>
             </div>
-            <nav class="top-nav">
+            <button class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="top-nav">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="top-nav" id="top-nav">
                 <a href="/dashboard">Dashboard</a>
                 <a href="/wallets">Wallets</a>
                 <a href="/all-trades">All Trades</a>
@@ -56,9 +62,26 @@
         }
     });
 
+    // Page loading bar
+    const loader = document.getElementById('page-loader');
+    function startLoader() {
+        if (!loader) return;
+        loader.style.transition = 'none';
+        loader.style.width = '0';
+        void loader.offsetWidth;
+        loader.classList.add('is-loading');
+    }
+    document.querySelectorAll('a[href]').forEach((a) => {
+        const href = a.getAttribute('href');
+        if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !a.target) {
+            a.addEventListener('click', startLoader);
+        }
+    });
+
     // Loading state: disable submit buttons on form submit to prevent double-click
     document.querySelectorAll('form').forEach((form) => {
         form.addEventListener('submit', () => {
+            startLoader();
             const btn = form.querySelector('button[type="submit"]:not([data-no-loading])');
             if (btn && !btn.disabled) {
                 btn.disabled = true;
@@ -67,6 +90,25 @@
             }
         });
     });
+
+    // Hamburger menu toggle
+    const navToggle = document.querySelector('.nav-toggle');
+    const topNav = document.getElementById('top-nav');
+    if (navToggle && topNav) {
+        navToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = topNav.classList.toggle('nav-open');
+            navToggle.setAttribute('aria-expanded', String(open));
+            navToggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+        });
+        document.addEventListener('click', (e) => {
+            if (!navToggle.contains(e.target) && !topNav.contains(e.target)) {
+                topNav.classList.remove('nav-open');
+                navToggle.setAttribute('aria-expanded', 'false');
+                navToggle.setAttribute('aria-label', 'Open menu');
+            }
+        });
+    }
 
     // Flash message: close button + auto-dismiss after 9 seconds
     const flash = document.querySelector('.flash');
