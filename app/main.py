@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
-from app.routes_v2 import router
+from app.routes import router
 from app.settings import APP_NAME, LOG_LEVEL
 
 

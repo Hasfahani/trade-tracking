@@ -1,0 +1,384 @@
+"""Wallet management routes: list, add, edit, pin, archive, delete, import."""
+import csv
+import io
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from sqlalchemy import desc, func
+from sqlalchemy.orm import Session
+
+from app import alerts
+from app import view_helpers as vh
+from app.db import get_db
+from app.ingest import refresh_wallet
+from app.models import SyncEvent, Trade, Wallet
+from app.routes._shared import (
+    _flash_redirect,
+    _flash_redirect_to,
+    _flash_redirect_with_form,
+    _safe_next,
+    resolve_wallet,
+    templates,
+)
+from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT
+
+router = APIRouter()
+
+
+@router.get("/wallets/import")
+async def import_wallets_form(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "wallets_import.html",
+        {"request": request, "app_name": APP_NAME},
+    )
+
+
+@router.post("/wallets/import")
+async def import_wallets(
+    request: Request,
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    total = 0
+    added = 0
+    duplicates = 0
+    invalid = 0
+
+    for row in reader:
+        total += 1
+        raw_address = (row.get("address") or "").strip().lower()
+        if vh.validate_wallet_address(raw_address):
+            invalid += 1
+            continue
+        if db.query(Wallet).filter(Wallet.address == raw_address).first():
+            duplicates += 1
+            continue
+
+        raw_tags = (row.get("tags") or "").strip()
+        tags_normalized = vh.normalize_tags(raw_tags.replace(";", ",")) if raw_tags else None
+
+        def _parse_bool(val: str) -> int:
+            return 1 if val.strip().lower() in ("1", "true") else 0
+
+        wallet = Wallet(
+            address=raw_address,
+            label=(row.get("label") or "").strip() or None,
+            tags=tags_normalized or None,
+            notes=(row.get("notes") or "").strip() or None,
+            is_pinned=_parse_bool(row.get("is_pinned") or "0"),
+            is_archived=_parse_bool(row.get("is_archived") or "0"),
+        )
+        db.add(wallet)
+        added += 1
+
+    db.commit()
+
+    return templates.TemplateResponse(
+        request,
+        "wallets_import.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "result": {
+                "total": total,
+                "added": added,
+                "duplicates": duplicates,
+                "invalid": invalid,
+            },
+        },
+    )
+
+
+@router.get("/wallets")
+async def list_wallets(
+    request: Request,
+    wallet_search: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None),
+    include_archived: int = Query(0),
+    db: Session = Depends(get_db),
+):
+    wallets = vh.build_wallet_query(
+        db,
+        wallet_search=wallet_search,
+        status_filter=status_filter,
+        include_archived=bool(include_archived),
+    ).all()
+    wallet_stats = vh.wallet_stats_map(db, [wallet.address for wallet in wallets])
+    recent_events = db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).limit(12).all()
+    summary = vh.wallet_summary_counts(
+        db,
+        wallet_search=wallet_search,
+        status_filter=status_filter,
+        include_archived=bool(include_archived),
+    )
+    return templates.TemplateResponse(
+        request,
+        "wallets_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "wallets": wallets,
+            "wallet_stats": wallet_stats,
+            "recent_events": recent_events,
+            "summary": summary,
+            "flash": request.query_params.get("flash"),
+            "flash_level": request.query_params.get("level", "info"),
+            "form_address": request.query_params.get("address", ""),
+            "form_label": request.query_params.get("label", ""),
+            "form_tags": request.query_params.get("tags", ""),
+            "form_notes": request.query_params.get("notes", ""),
+            "wallet_search": wallet_search,
+            "status_filter": status_filter,
+            "include_archived": bool(include_archived),
+            "short_address": vh.short_address,
+            "tag_list": vh.tag_list,
+            "wallet_freshness_label": vh.wallet_freshness_label,
+            "wallet_status_tone": vh.wallet_status_tone,
+        },
+    )
+
+
+@router.post("/wallets")
+async def add_wallet(
+    db: Session = Depends(get_db),
+    address: str = Form(...),
+    label: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+):
+    err = vh.validate_wallet_address(address)
+    normalized_address = address.strip().lower()
+    normalized_label = (label or "").strip()
+    normalized_tags = vh.normalize_tags(tags)
+    normalized_notes = (notes or "").strip()
+
+    if err:
+        return _flash_redirect_with_form(
+            err,
+            level="error",
+            address=normalized_address,
+            label=normalized_label,
+            tags=normalized_tags,
+            notes=normalized_notes,
+        )
+
+    if db.query(Wallet).filter(Wallet.address == normalized_address).first():
+        return _flash_redirect_with_form(
+            "Wallet already exists in your watchlist.",
+            level="error",
+            address=normalized_address,
+            label=normalized_label,
+            tags=normalized_tags,
+            notes=normalized_notes,
+        )
+
+    wallet = Wallet(
+        address=normalized_address,
+        label=normalized_label or None,
+        tags=normalized_tags or None,
+        notes=normalized_notes or None,
+    )
+    db.add(wallet)
+    db.commit()
+    db.refresh(wallet)
+
+    return _flash_redirect("Wallet added. Use Refresh to fetch trades.", "success")
+
+
+@router.post("/wallets/refresh-all")
+def refresh_all_wallets(
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),
+):
+    wallets = vh.active_wallets(vh.wallet_order_query(db).all())
+    if not wallets:
+        return _flash_redirect("No active wallets available to refresh.", "info")
+
+    total_inserted = 0
+    total_fetched = 0
+    failures = 0
+    no_new = 0
+    for wallet in wallets:
+        result = refresh_wallet(db, wallet, limit=limit)
+        total_inserted += int(result["inserted"])
+        total_fetched += int(result["fetched"])
+        if result["status"] == "error":
+            failures += 1
+        elif result["status"] == "no_new":
+            no_new += 1
+        alerts.fire_alerts_for_new_trades(db, wallet)
+
+    if failures:
+        return _flash_redirect(
+            f"Refresh all finished with {failures} failures. Fetched {total_fetched} records and added {total_inserted} trades.",
+            "warning",
+        )
+    if total_inserted == 0:
+        return _flash_redirect(
+            f"Refresh all completed. No new trades found across {len(wallets)} wallets after fetching {total_fetched} records.",
+            "info",
+        )
+    return _flash_redirect(
+        (
+            f"Refresh all completed. Added {total_inserted} new trades from {total_fetched} fetched records. "
+            f"{no_new} wallets had no new activity."
+        ),
+        "success",
+    )
+
+
+@router.get("/wallets/{identifier}")
+async def wallet_detail(request: Request, identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+
+    summary_row = db.query(
+        func.count(Trade.id).label("total_trades"),
+        func.min(Trade.traded_at).label("first_trade_at"),
+        func.max(Trade.traded_at).label("latest_trade_at"),
+    ).filter(Trade.wallet_address == wallet.address).first()
+
+    trade_query = db.query(Trade).filter(Trade.wallet_address == wallet.address)
+    pnl = vh.trade_pnl_summary(trade_query)
+    activity_timeline = vh.build_wallet_activity_timeline(db, wallet.address, limit=30)
+    wallet_intelligence = vh.get_wallet_intelligence_summary(db, wallet.address)
+
+    return templates.TemplateResponse(
+        request,
+        "wallet_detail_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "wallet": wallet,
+            "summary_row": summary_row,
+            "pnl": pnl,
+            "activity_timeline": activity_timeline,
+            "wallet_intelligence": wallet_intelligence,
+            "short_address": vh.short_address,
+            "duration_label": vh.duration_label,
+            "sync_status_class": vh.sync_status_class,
+            "wallet_freshness_label": vh.wallet_freshness_label,
+            "wallet_status_tone": vh.wallet_status_tone,
+        },
+    )
+
+
+@router.post("/wallets/{identifier}/refresh")
+def refresh_single_wallet(
+    identifier: str,
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),
+    next_path: Optional[str] = Query(None, alias="next"),
+):
+    wallet = resolve_wallet(db, identifier)
+    result = refresh_wallet(db, wallet, limit=limit)
+    redirect_to = _safe_next(next_path)
+
+    if result["status"] == "error":
+        msg = f"Refresh failed for {vh.short_address(wallet.address)}: {result['error']}"
+        return _flash_redirect_to(redirect_to, msg, "error") if redirect_to else _flash_redirect(msg, "error")
+
+    alerts.fire_alerts_for_new_trades(db, wallet)
+
+    if result["inserted"] == 0:
+        msg = f"No new trades for {vh.short_address(wallet.address)}. Fetched {result['fetched']} records."
+        return _flash_redirect_to(redirect_to, msg, "info") if redirect_to else _flash_redirect(msg, "info")
+    msg = (
+        f"Refreshed {vh.short_address(wallet.address)}. "
+        f"Added {result['inserted']} new trades from {result['fetched']} fetched records."
+    )
+    return _flash_redirect_to(redirect_to, msg, "success") if redirect_to else _flash_redirect(msg, "success")
+
+
+@router.get("/wallets/{identifier}/edit")
+async def edit_wallet_page(request: Request, identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    trade_count = db.query(Trade).filter(Trade.wallet_address == wallet.address).count()
+    return templates.TemplateResponse(
+        request,
+        "wallet_edit_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "wallet": wallet,
+            "trade_count": trade_count,
+            "short_address": vh.short_address,
+        },
+    )
+
+
+@router.post("/wallets/{identifier}/edit")
+async def edit_wallet(
+    identifier: str,
+    label: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    is_pinned: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    wallet = resolve_wallet(db, identifier)
+    wallet.label = (label or "").strip() or None
+    wallet.tags = vh.normalize_tags(tags) or None
+    wallet.notes = (notes or "").strip() or None
+    wallet.is_pinned = 1 if is_pinned else 0
+    db.commit()
+    return _flash_redirect(f"Updated {vh.short_address(wallet.address)}.", "success")
+
+
+@router.post("/wallets/{identifier}/pin")
+async def toggle_wallet_pin(identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    wallet.is_pinned = 0 if wallet.is_pinned else 1
+    db.commit()
+    state = "Pinned" if wallet.is_pinned else "Unpinned"
+    return _flash_redirect(f"{state} {vh.short_address(wallet.address)}.", "success")
+
+
+@router.post("/wallets/{identifier}/archive")
+async def archive_wallet(identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    wallet.is_archived = 1
+    db.commit()
+    return _flash_redirect(f"Archived {vh.short_address(wallet.address)}. It is now hidden from the default watchlist.", "success")
+
+
+@router.post("/wallets/{identifier}/unarchive")
+async def unarchive_wallet(identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    wallet.is_archived = 0
+    db.commit()
+    return _flash_redirect(f"Restored {vh.short_address(wallet.address)} to the active watchlist.", "success")
+
+
+@router.get("/wallets/{identifier}/delete-confirm")
+async def delete_wallet_confirm(request: Request, identifier: str, db: Session = Depends(get_db)):
+    wallet = resolve_wallet(db, identifier)
+    trade_count = db.query(Trade).filter(Trade.wallet_address == wallet.address).count()
+    return templates.TemplateResponse(
+        request,
+        "wallet_delete_confirm_v2.html",
+        {"request": request, "wallet": wallet, "trade_count": trade_count, "short_address": vh.short_address},
+    )
+
+
+@router.post("/wallets/{identifier}/delete")
+async def delete_wallet(
+    identifier: str,
+    confirm_text: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    wallet = resolve_wallet(db, identifier)
+    if confirm_text.strip().upper() != "DELETE":
+        return _flash_redirect("Deletion cancelled. Type DELETE to confirm wallet removal.", "warning")
+
+    db.query(Trade).filter(Trade.wallet_address == wallet.address).delete()
+    db.delete(wallet)
+    db.commit()
+    return _flash_redirect("Wallet and associated trades were deleted.", "success")

@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import case, desc, func, or_
+from sqlalchemy import case, desc, func, or_, select, tuple_
 from sqlalchemy.orm import Query, Session
 
 from app.models import SyncEvent, Trade, Wallet
@@ -393,7 +393,7 @@ def apply_wallet_search_to_trade_query(db: Session, query: Query, wallet_search:
         )
         .subquery()
     )
-    return query.filter(Trade.wallet_address.in_(matching))
+    return query.filter(Trade.wallet_address.in_(select(matching.c.address)))
 
 
 def filter_sync_events(
@@ -474,14 +474,27 @@ def detect_interesting_activity(db: Session) -> List[Dict[str, Any]]:
                     })
                 break
 
-    # C. New market entries — first-ever trade by this wallet in this condition
+    # C. New market entries - first-ever trade by this wallet in this condition
     condition_pairs = {(t.wallet_address, t.condition_id) for t in recent}
-    for address, condition_id in condition_pairs:
-        earliest_in_db = (
-            db.query(func.min(Trade.traded_at))
-            .filter(Trade.wallet_address == address, Trade.condition_id == condition_id)
-            .scalar()
+    earliest_by_pair: Dict[tuple[str, str], datetime] = {}
+    if condition_pairs:
+        earliest_rows = (
+            db.query(
+                Trade.wallet_address,
+                Trade.condition_id,
+                func.min(Trade.traded_at).label("earliest_traded_at"),
+            )
+            .filter(tuple_(Trade.wallet_address, Trade.condition_id).in_(condition_pairs))
+            .group_by(Trade.wallet_address, Trade.condition_id)
+            .all()
         )
+        earliest_by_pair = {
+            (row.wallet_address, row.condition_id): row.earliest_traded_at
+            for row in earliest_rows
+        }
+
+    for address, condition_id in condition_pairs:
+        earliest_in_db = earliest_by_pair.get((address, condition_id))
         if earliest_in_db and earliest_in_db >= cutoff.replace(tzinfo=None):
             trade_for_market = next(
                 (t for t in recent if t.wallet_address == address and t.condition_id == condition_id),

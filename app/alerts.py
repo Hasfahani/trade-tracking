@@ -1,7 +1,7 @@
 """Telegram alert helpers for trade notifications."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy.orm import Session
@@ -87,7 +87,7 @@ def fire_alerts_for_new_trades(db: Session, wallet: Wallet) -> int:
 
     # Treat 0 / None as "use default" so misconfigured rows don't spam everything.
     min_value = float(settings.alert_min_size) if settings.alert_min_size else _DEFAULT_MIN_VALUE
-    cutoff = datetime.utcnow() - timedelta(hours=_LOOKBACK_HOURS)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=_LOOKBACK_HOURS)
 
     # Silently expire stale unsent trades so they never surface again.
     stale_count = (

@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.db import get_db
 from app.ingest import _fetch_trade_batch, normalize_trade, refresh_wallet
 from app.models import Base, SyncEvent, Trade, Wallet
-from app.routes_v2 import router
+from app.routes import router
 from app import view_helpers as vh
 from app.watchlist_seed import SeedWallet, seed_watchlist_wallets
 
@@ -231,7 +231,7 @@ def test_refresh_route_surfaces_fetch_counts(monkeypatch):
     db.close()
 
     monkeypatch.setattr(
-        "app.routes_v2.refresh_wallet",
+        "app.routes.wallets.refresh_wallet",
         lambda *args, **kwargs: {
             "wallet": wallet_address,
             "status": "success",
