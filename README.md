@@ -41,17 +41,24 @@ Explicitly excluded:
 ## Architecture
 
 - app/main.py: App bootstrap and startup initialization
-- app/routes_v2.py: HTTP routes and server-rendered page handlers
+- app/routes/: HTTP routes and server-rendered page handlers split by area
+  - app/routes/core.py: root redirect and dashboard
+  - app/routes/wallets.py: wallet list/detail/edit/archive/delete/import/refresh pages
+  - app/routes/trades.py: wallet trades, all trades, and trade detail pages
+  - app/routes/exports.py: wallet and trade CSV exports
+  - app/routes/alerts.py: settings, sync status, and admin refresh routes
+  - app/routes/_shared.py: shared route helpers
 - app/ingest.py: Polymarket fetch, normalize, and ingest logic
 - app/models.py: SQLAlchemy models
 - app/db.py: Engine/session setup and lightweight schema backfill
-- app/view_helpers.py: Query/filter/date-preset/view helper logic used by routes_v2
+- app/view_helpers.py: Query/filter/date-preset/view helper logic used by routes
 - app/templates/: Jinja templates
 - app/static/style_v2.css: Shared design system and responsive UI
 
 Active runtime path:
-- The app currently mounts `routes_v2` from `app/main.py`
+- The app currently mounts `app.routes.router` from `app/main.py`
 - `_v2` templates and `style_v2.css` are the active UI stack
+- `app/routes_v2.py` is retained as a legacy reference after the route-package split, but is not imported by the running app
 - Legacy `routes.py`, `style.css`, and non-`_v2` templates have been removed
 
 Design decisions:
@@ -314,3 +321,6 @@ Tests cover:
 - Manual refresh route messaging
 - Wallet archive/edit behavior
 - Trade date preset filtering
+- View helper formatting, pagination, and wallet search behavior
+- Interesting activity detection, including empty-data and missing-label edge cases
+- Shared route helper behavior
