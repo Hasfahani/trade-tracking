@@ -86,7 +86,7 @@
             if (btn && !btn.disabled) {
                 btn.disabled = true;
                 btn.dataset.orig = btn.textContent;
-                btn.textContent = 'Loading…';
+                btn.textContent = 'Loading...';
             }
         });
     });
@@ -116,7 +116,7 @@
         const closeBtn = document.createElement('button');
         closeBtn.className = 'flash-close';
         closeBtn.setAttribute('aria-label', 'Dismiss');
-        closeBtn.textContent = '×';
+        closeBtn.textContent = 'x';
         closeBtn.addEventListener('click', () => flash.remove());
         flash.appendChild(closeBtn);
         setTimeout(() => {
