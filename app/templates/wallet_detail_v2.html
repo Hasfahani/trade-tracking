@@ -1,6 +1,6 @@
 {% extends "base_v2.html" %}
 
-{% block title %}{{ wallet.label or short_address(wallet.address) }} — Wallet{% endblock %}
+{% block title %}{{ wallet.label or short_address(wallet.address) }} - Wallet{% endblock %}
 
 {% block content %}
 <section class="hero-card">
@@ -23,7 +23,7 @@
     </div>
 </section>
 
-<section class="metrics-grid">
+<section class="metrics-grid dashboard-metrics">
     <article class="metric-card">
         <span class="metric-label">Total trades</span>
         <strong>{{ summary_row.total_trades or 0 }}</strong>
@@ -37,68 +37,121 @@
         <strong>{% if summary_row.latest_trade_at %}{{ summary_row.latest_trade_at.strftime('%Y-%m-%d') }}{% else %}<span class="subtle">None</span>{% endif %}</strong>
     </article>
     <article class="metric-card">
+        <span class="metric-label">Total value</span>
+        <strong>${{ '{:,.2f}'.format(pnl.total_value) }}</strong>
+    </article>
+    <article class="metric-card">
         <span class="metric-label">State</span>
         <strong>{% if wallet.is_archived %}Archived{% elif wallet.is_pinned %}Pinned{% else %}Active{% endif %}</strong>
     </article>
 </section>
 
-<section class="card">
-    <div class="section-head">
-        <h2>Wallet Intelligence</h2>
-        <span class="pill {{ wallet_intelligence.activity_tone }}">{{ wallet_intelligence.activity_level }}</span>
-    </div>
-    <p class="subtle">{{ wallet_intelligence.intelligence_text }}</p>
-    <div class="metrics-grid embedded-metrics">
-        <article class="metric-card">
-            <span class="metric-label">Activity level</span>
-            <strong>{{ wallet_intelligence.activity_level }}</strong>
-        </article>
-        <article class="metric-card">
-            <span class="metric-label">Trades in last 24 hours</span>
-            <strong>{{ wallet_intelligence.trades_last_24h }}</strong>
-        </article>
-        <article class="metric-card">
-            <span class="metric-label">Value in last 24 hours</span>
-            <strong>${{ '%.2f'|format(wallet_intelligence.total_value_last_24h) }}</strong>
-        </article>
-        <article class="metric-card">
-            <span class="metric-label">Average trade size</span>
-            <strong>${{ '%.2f'|format(wallet_intelligence.average_trade_size) }}</strong>
-        </article>
-        <article class="metric-card">
-            <span class="metric-label">Markets traded</span>
-            <strong>{{ wallet_intelligence.total_markets_traded }}</strong>
-        </article>
-        <article class="metric-card">
-            <span class="metric-label">Markets in last 24 hours</span>
-            <strong>{{ wallet_intelligence.markets_traded_last_24h }}</strong>
-        </article>
-    </div>
+<section class="dashboard-grid">
+    <article class="card dashboard-panel insight-panel">
+        <div class="section-head">
+            <h2>Wallet insights</h2>
+            <span class="pill {{ wallet_intelligence.activity_tone }}">{{ wallet_intelligence.activity_level }}</span>
+        </div>
+        <p class="subtle">{{ wallet_intelligence.intelligence_text }}</p>
+        <div class="insight-grid">
+            {% for item in wallet_insights %}
+            <div class="insight-card {{ item.tone }}">
+                <span class="metric-label">{{ item.label }}</span>
+                <strong title="{{ item.value }}">{{ item.value }}</strong>
+                <p>{{ item.detail }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>YES / NO value mix</h2>
+            <span class="pill">All stored trades</span>
+        </div>
+        {% if pnl.total_value %}
+        <div class="split-meter" aria-label="YES and NO value mix">
+            <span class="split-yes" style="width: {{ yes_value_pct }}%;"></span>
+            <span class="split-no" style="width: {{ no_value_pct }}%;"></span>
+        </div>
+        <div class="legend-row">
+            <span><i class="legend-dot yes-dot"></i>YES ${{ '{:,.2f}'.format(pnl.yes_value) }} - {{ yes_value_pct }}%</span>
+            <span><i class="legend-dot no-dot"></i>NO ${{ '{:,.2f}'.format(pnl.no_value) }} - {{ no_value_pct }}%</span>
+        </div>
+        {% else %}
+        <div class="empty-state compact-empty">
+            <p>No trade value stored yet.</p>
+        </div>
+        {% endif %}
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>7-day activity</h2>
+            <span class="pill">Trades per day</span>
+        </div>
+        <div class="bar-chart daily-chart" aria-label="Wallet trades over the last 7 days">
+            {% for day in wallet_activity_days %}
+            <div class="bar-column" title="{{ day.date }}: {{ day.count }} trade{{ 's' if day.count != 1 else '' }}">
+                <div class="bar-track">
+                    <span style="height: {{ day.bar_pct }}%;"></span>
+                </div>
+                <strong>{{ day.count }}</strong>
+                <em>{{ day.label }}</em>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>Top markets by value</h2>
+            <span class="pill">This wallet</span>
+        </div>
+        {% if wallet_top_markets %}
+        <div class="ranked-bars value-bars">
+            {% for row in wallet_top_markets %}
+            <a class="ranked-bar" href="/wallets/{{ wallet.address }}/trades?market_search={{ row.condition_id }}">
+                <span>
+                    <em>{{ row.market }}</em>
+                    <strong>${{ '{:,.2f}'.format(row.total_value) }}</strong>
+                </span>
+                <small>{{ row.trade_count }} trade{{ 's' if row.trade_count != 1 else '' }}</small>
+                <i><b style="width: {{ row.bar_pct }}%;"></b></i>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state compact-empty">
+            <p>No market value stored yet.</p>
+        </div>
+        {% endif %}
+    </article>
 </section>
 
 <section class="two-col">
     <article class="card">
         <div class="section-head">
-            <h2>Value summary</h2>
-            <span class="pill">All stored trades</span>
+            <h2>Wallet intelligence details</h2>
+            <span class="pill {{ wallet_intelligence.activity_tone }}">{{ wallet_intelligence.activity_level }}</span>
         </div>
-        <div class="detail-grid">
-            <div>
-                <strong>YES value</strong>
-                <span class="text-success">${{ '%.2f'|format(pnl.yes_value) }}</span>
-            </div>
-            <div>
-                <strong>NO value</strong>
-                <span class="text-danger">${{ '%.2f'|format(pnl.no_value) }}</span>
-            </div>
-            <div>
-                <strong>Total value</strong>
-                <span>${{ '%.2f'|format(pnl.total_value) }}</span>
-            </div>
-            <div>
-                <strong>Avg price (VWAP)</strong>
-                <span>{{ '%.4f'|format(pnl.avg_price) }}</span>
-            </div>
+        <div class="metrics-grid embedded-metrics">
+            <article class="metric-card">
+                <span class="metric-label">Trades in last 24 hours</span>
+                <strong>{{ wallet_intelligence.trades_last_24h }}</strong>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">Value in last 24 hours</span>
+                <strong>${{ '%.2f'|format(wallet_intelligence.total_value_last_24h) }}</strong>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">Average trade size</span>
+                <strong>${{ '%.2f'|format(wallet_intelligence.average_trade_size) }}</strong>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">Markets traded</span>
+                <strong>{{ wallet_intelligence.total_markets_traded }}</strong>
+            </article>
         </div>
     </article>
 
@@ -122,7 +175,7 @@
             </div>
             <div>
                 <strong>Trades added</strong>
-                <span>{% if wallet.last_refresh_status %}{{ wallet.last_refresh_count or 0 }}{% else %}<span class="subtle">—</span>{% endif %}</span>
+                <span>{% if wallet.last_refresh_status %}{{ wallet.last_refresh_count or 0 }}{% else %}<span class="subtle">-</span>{% endif %}</span>
             </div>
             {% if wallet.last_error_at %}
             <div>
@@ -134,7 +187,7 @@
         {% if wallet.last_error_message %}
         <p class="error-text" style="margin-top: 10px; font-size: 0.88rem;">{{ wallet.last_error_message }}</p>
         {% endif %}
-        <div style="margin-top: 14px;">
+        <div class="panel-actions">
             <a href="/admin/sync-status?wallet_search={{ wallet.address }}" class="btn btn-small">Full sync history</a>
         </div>
     </article>
@@ -153,7 +206,7 @@
                 <strong><a href="{{ item.href }}">{{ item.title }}</a></strong>
                 <span class="pill {{ item.tone }}">{{ item.kind | title }}</span>
             </div>
-            <p class="subtle">{{ item.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if item.timestamp else '—' }}</p>
+            <p class="subtle">{{ item.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if item.timestamp else '-' }}</p>
             <p>{{ item.detail }}</p>
             {% if item.kind == 'sync' and item.error_message %}
             <p class="error-text">{{ item.error_message }}</p>

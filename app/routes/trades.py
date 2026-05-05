@@ -111,6 +111,80 @@ async def all_trades(
     ).first()
     pnl = vh.trade_pnl_summary(query)
     wallet_map = {wallet.address: wallet for wallet in db.query(Wallet).all()}
+    total_value = float(pnl["total_value"] or 0)
+    yes_value = float(pnl["yes_value"] or 0)
+    no_value = float(pnl["no_value"] or 0)
+    yes_value_pct = round((yes_value / total_value) * 100) if total_value else 0
+    no_value_pct = 100 - yes_value_pct if total_value else 0
+    filtered_base = query.order_by(False)
+    unique_wallets = int(filtered_base.with_entities(func.count(func.distinct(Trade.wallet_address))).scalar() or 0)
+    unique_markets = int(filtered_base.with_entities(func.count(func.distinct(Trade.condition_id))).scalar() or 0)
+    largest_trade = filtered_base.order_by((Trade.price * Trade.size).desc()).first()
+    top_wallet_rows = (
+        filtered_base.with_entities(
+            Trade.wallet_address,
+            func.count(Trade.id).label("trade_count"),
+            func.sum(Trade.price * Trade.size).label("total_value"),
+        )
+        .group_by(Trade.wallet_address)
+        .order_by(func.sum(Trade.price * Trade.size).desc())
+        .limit(5)
+        .all()
+    )
+    top_wallet_value = float(top_wallet_rows[0].total_value or 0) if top_wallet_rows else 0
+    filtered_top_wallets = [
+        {
+            "address": row.wallet_address,
+            "wallet": wallet_map.get(row.wallet_address),
+            "trade_count": int(row.trade_count or 0),
+            "total_value": float(row.total_value or 0),
+            "bar_pct": round((float(row.total_value or 0) / top_wallet_value) * 100) if top_wallet_value else 0,
+        }
+        for row in top_wallet_rows
+    ]
+    top_market_rows = (
+        filtered_base.with_entities(
+            Trade.condition_id,
+            func.max(Trade.market_title).label("market_title"),
+            func.count(Trade.id).label("trade_count"),
+            func.sum(Trade.price * Trade.size).label("total_value"),
+        )
+        .group_by(Trade.condition_id)
+        .order_by(func.sum(Trade.price * Trade.size).desc())
+        .limit(5)
+        .all()
+    )
+    top_market_value = float(top_market_rows[0].total_value or 0) if top_market_rows else 0
+    filtered_top_markets = [
+        {
+            "condition_id": row.condition_id,
+            "market": row.market_title or row.condition_id,
+            "trade_count": int(row.trade_count or 0),
+            "total_value": float(row.total_value or 0),
+            "bar_pct": round((float(row.total_value or 0) / top_market_value) * 100) if top_market_value else 0,
+        }
+        for row in top_market_rows
+    ]
+    filter_insights = [
+        {
+            "label": "Wallets",
+            "value": str(unique_wallets),
+            "detail": "Wallets matching the active filters",
+            "tone": "info",
+        },
+        {
+            "label": "Markets",
+            "value": str(unique_markets),
+            "detail": "Markets matching the active filters",
+            "tone": "info",
+        },
+        {
+            "label": "Largest trade",
+            "value": f"${(largest_trade.price * largest_trade.size):,.2f}" if largest_trade else "$0.00",
+            "detail": largest_trade.market_title or largest_trade.condition_id if largest_trade else "No matching trades",
+            "tone": "success" if largest_trade else "info",
+        },
+    ]
     return templates.TemplateResponse(
         request,
         "all_trades_v2.html",
@@ -132,6 +206,11 @@ async def all_trades(
             "sort_by": sort_by,
             "summary_row": summary_row,
             "pnl": pnl,
+            "yes_value_pct": yes_value_pct,
+            "no_value_pct": no_value_pct,
+            "filter_insights": filter_insights,
+            "filtered_top_wallets": filtered_top_wallets,
+            "filtered_top_markets": filtered_top_markets,
             "wallet_map": wallet_map,
             "short_address": vh.short_address,
         },

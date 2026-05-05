@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db import get_db
 from app.ingest import _fetch_trade_batch, normalize_trade, refresh_wallet
+from app.main import create_app, unhandled_exception_handler
 from app.models import Base, SyncEvent, Trade, Wallet
 from app.routes import router
 from app.routes_v2 import router as legacy_router
@@ -24,8 +25,7 @@ def build_client():
     testing_session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
 
-    app = FastAPI()
-    app.include_router(router)
+    app = create_app(lifespan_context=None)
 
     def override_get_db():
         db = testing_session()
@@ -40,6 +40,59 @@ def build_client():
 
 def test_legacy_routes_v2_router_points_to_active_router():
     assert legacy_router is router
+
+
+def test_create_app_wires_static_routes_router_and_exception_handler():
+    app = create_app(lifespan_context=None, title="Test App")
+    route_paths = {getattr(route, "path", None) for route in app.routes}
+
+    assert app.title == "Test App"
+    assert "/static" in route_paths
+    assert "/" in route_paths
+    assert "/wallets" in route_paths
+    assert app.exception_handlers[Exception] is unhandled_exception_handler
+
+
+def test_active_router_exposes_expected_routes_once_and_in_safe_order():
+    routes = [route for route in router.routes if isinstance(route, APIRoute)]
+    route_keys = [(route.path, tuple(sorted(route.methods or []))) for route in routes]
+    expected_paths = {
+        "/",
+        "/dashboard",
+        "/wallets",
+        "/wallets/export",
+        "/wallets/import",
+        "/wallets/refresh-all",
+        "/wallets/{identifier}",
+        "/wallets/{identifier}/refresh",
+        "/wallets/{identifier}/edit",
+        "/wallets/{identifier}/pin",
+        "/wallets/{identifier}/archive",
+        "/wallets/{identifier}/unarchive",
+        "/wallets/{identifier}/delete-confirm",
+        "/wallets/{identifier}/delete",
+        "/wallets/{identifier}/trades",
+        "/wallets/{identifier}/trades/export",
+        "/all-trades",
+        "/all-trades/export",
+        "/trades/{trade_id}",
+        "/settings",
+        "/settings/test-alert",
+        "/admin/sync-status",
+        "/admin/sync-status/cleanup",
+        "/admin/refresh",
+        "/admin/refresh-all",
+    }
+    actual_paths = {route.path for route in routes}
+
+    assert expected_paths <= actual_paths
+    assert len(route_keys) == len(set(route_keys))
+
+    route_order = [route.path for route in routes]
+    assert route_order.index("/wallets/export") < route_order.index("/wallets/{identifier}")
+    assert route_order.index("/wallets/import") < route_order.index("/wallets/{identifier}")
+    assert route_order.index("/wallets/refresh-all") < route_order.index("/wallets/{identifier}")
+    assert route_order.index("/all-trades/export") < route_order.index("/trades/{trade_id}")
 
 
 def test_add_wallet_rejects_invalid_address():
@@ -286,6 +339,60 @@ def test_wallet_and_trade_routes_render():
     assert "Will X happen?" in trades_response.text
 
 
+def test_dashboard_renders_visible_summary_charts():
+    client, session_factory = build_client()
+    db = session_factory()
+    wallet = Wallet(address="0xabababababababababababababababababababab", label="Chart Desk")
+    db.add(wallet)
+    db.flush()
+    db.add_all(
+        [
+            Trade(
+                wallet_address=wallet.address,
+                trade_id="dashboard-yes",
+                condition_id="dashboard-cond-1",
+                market_title="Dashboard YES Market",
+                side="YES",
+                price=0.5,
+                size=10,
+                traded_at=datetime.now(timezone.utc),
+            ),
+            Trade(
+                wallet_address=wallet.address,
+                trade_id="dashboard-no",
+                condition_id="dashboard-cond-2",
+                market_title="Dashboard NO Market",
+                side="NO",
+                price=0.25,
+                size=20,
+                traded_at=datetime.now(timezone.utc) - timedelta(days=1),
+            ),
+        ]
+    )
+    db.add(SyncEvent(wallet_address=wallet.address, status="success"))
+    db.commit()
+    db.close()
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "Quick insights" in response.text
+    assert "24h value" in response.text
+    assert "Interesting events" in response.text
+    assert "Stored value" in response.text
+    assert "$10.00" in response.text
+    assert "Refresh health" in response.text
+    assert "YES / NO value mix" in response.text
+    assert "YES $5.00 - 50%" in response.text
+    assert "NO $5.00 - 50%" in response.text
+    assert "7-day activity" in response.text
+    assert "Top 5 wallets by trade count" in response.text
+    assert "Top markets by value" in response.text
+    assert "Dashboard YES Market" in response.text
+    assert "Dashboard NO Market" in response.text
+    assert "Chart Desk" in response.text
+
+
 def test_wallet_detail_renders_inactive_intelligence_for_empty_wallet():
     client, session_factory = build_client()
     db = session_factory()
@@ -298,7 +405,7 @@ def test_wallet_detail_renders_inactive_intelligence_for_empty_wallet():
     response = client.get(f"/wallets/{wallet_address}")
 
     assert response.status_code == 200
-    assert "Wallet Intelligence" in response.text
+    assert "Wallet insights" in response.text
     assert "Inactive" in response.text
     assert "This wallet is currently inactive." in response.text
 
@@ -355,6 +462,54 @@ def test_wallet_intelligence_summary_calculates_recent_metrics():
     assert summary["average_trade_size"] == 16 / 3
     assert summary["total_markets_traded"] == 3
     assert summary["markets_traded_last_24h"] == 2
+
+
+def test_wallet_detail_renders_visual_insights_and_top_markets():
+    client, session_factory = build_client()
+    db = session_factory()
+    wallet = Wallet(address="0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", label="Insight Wallet")
+    db.add(wallet)
+    db.flush()
+    db.add_all(
+        [
+            Trade(
+                wallet_address=wallet.address,
+                trade_id="wallet-insight-yes",
+                condition_id="wallet-cond-a",
+                market_title="Wallet Market A",
+                side="YES",
+                price=0.5,
+                size=10,
+                traded_at=datetime.now(timezone.utc),
+            ),
+            Trade(
+                wallet_address=wallet.address,
+                trade_id="wallet-insight-no",
+                condition_id="wallet-cond-b",
+                market_title="Wallet Market B",
+                side="NO",
+                price=0.25,
+                size=20,
+                traded_at=datetime.now(timezone.utc) - timedelta(days=1),
+            ),
+        ]
+    )
+    db.commit()
+    wallet_address = wallet.address
+    db.close()
+
+    response = client.get(f"/wallets/{wallet_address}")
+
+    assert response.status_code == 200
+    assert "Wallet insights" in response.text
+    assert "24h value" in response.text
+    assert "YES / NO trades" in response.text
+    assert "YES $5.00 - 50%" in response.text
+    assert "NO $5.00 - 50%" in response.text
+    assert "7-day activity" in response.text
+    assert "Top markets by value" in response.text
+    assert "Wallet Market A" in response.text
+    assert "Wallet Market B" in response.text
 
 
 def test_delete_confirm_route_renders_warning():
@@ -705,3 +860,51 @@ def test_csv_exports_include_filtered_wallet_and_trade_data():
     assert "csv-no" in wallet_trades_export.text
     assert "Other Market" in wallet_trades_export.text
     assert "csv-yes" not in wallet_trades_export.text
+
+
+def test_all_trades_renders_filter_insights_and_ranked_bars():
+    client, session_factory = build_client()
+    db = session_factory()
+    wallet_one = Wallet(address="0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", label="Alpha Value")
+    wallet_two = Wallet(address="0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2", label="Beta Value")
+    db.add_all([wallet_one, wallet_two])
+    db.flush()
+    db.add_all(
+        [
+            Trade(
+                wallet_address=wallet_one.address,
+                trade_id="all-insight-yes",
+                condition_id="all-cond-a",
+                market_title="All Trades Market A",
+                side="YES",
+                price=0.5,
+                size=20,
+                traded_at=datetime.now(timezone.utc),
+            ),
+            Trade(
+                wallet_address=wallet_two.address,
+                trade_id="all-insight-no",
+                condition_id="all-cond-b",
+                market_title="All Trades Market B",
+                side="NO",
+                price=0.25,
+                size=20,
+                traded_at=datetime.now(timezone.utc),
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/all-trades")
+
+    assert response.status_code == 200
+    assert "Filter insights" in response.text
+    assert "Largest trade" in response.text
+    assert "YES / NO value mix" in response.text
+    assert "YES $10.00 - 67%" in response.text
+    assert "NO $5.00 - 33%" in response.text
+    assert "Top wallets by value" in response.text
+    assert "Top markets by value" in response.text
+    assert "Alpha Value" in response.text
+    assert "All Trades Market A" in response.text

@@ -1,158 +1,194 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
-from app.settings import DATABASE_URL
+from typing import Callable, Dict, Iterable, Optional, Set, Tuple
+
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import sessionmaker
+
 from app.models import Base
+from app.settings import DATABASE_URL
 
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+ColumnSpec = Dict[str, str]
+Migration = Tuple[str, Callable[[object], None]]
 
-def _ensure_wallet_columns():
-    """Add missing wallet columns for older SQLite databases."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
 
-    expected_columns = {
-        "tags": "TEXT",
-        "notes": "TEXT",
-        "is_pinned": "INTEGER",
-        "is_archived": "INTEGER",
-        "last_checked_at": "DATETIME",
-        "last_refresh_status": "VARCHAR(32)",
-        "last_refresh_count": "INTEGER",
-        "last_error_at": "DATETIME",
-        "last_error_message": "TEXT",
-    }
+def _is_sqlite(database_url: str) -> bool:
+    return database_url.startswith("sqlite")
 
-    with engine.begin() as conn:
-        table_exists = conn.exec_driver_sql(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='wallets'"
+
+def _table_exists(conn, table_name: str) -> bool:
+    return bool(
+        conn.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,),
         ).first()
-        if not table_exists:
-            return
-
-        rows = conn.exec_driver_sql("PRAGMA table_info(wallets)").fetchall()
-        existing_columns = {row[1] for row in rows}
-
-        for column_name, column_type in expected_columns.items():
-            if column_name not in existing_columns:
-                conn.exec_driver_sql(
-                    f"ALTER TABLE wallets ADD COLUMN {column_name} {column_type}"
-                )
+    )
 
 
-def _ensure_sqlite_indexes():
-    """Create lightweight indexes for older SQLite databases."""
-    if not DATABASE_URL.startswith("sqlite"):
+def _column_names(conn, table_name: str) -> Set[str]:
+    rows = conn.exec_driver_sql(f"PRAGMA table_info({table_name})").fetchall()
+    return {row[1] for row in rows}
+
+
+def _add_missing_columns(conn, table_name: str, expected_columns: ColumnSpec) -> None:
+    if not _table_exists(conn, table_name):
         return
 
+    existing_columns = _column_names(conn, table_name)
+    for column_name, column_type in expected_columns.items():
+        if column_name not in existing_columns:
+            conn.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+
+
+def _create_schema_migrations_table(conn) -> None:
+    conn.exec_driver_sql(
+        """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version TEXT PRIMARY KEY,
+            applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+
+def _applied_migration_versions(conn) -> Set[str]:
+    return {row[0] for row in conn.exec_driver_sql("SELECT version FROM schema_migrations").fetchall()}
+
+
+def _record_migration(conn, version: str) -> None:
+    conn.exec_driver_sql("INSERT INTO schema_migrations (version) VALUES (?)", (version,))
+
+
+def _migrate_wallet_columns(conn) -> None:
+    _add_missing_columns(
+        conn,
+        "wallets",
+        {
+            "tags": "TEXT",
+            "notes": "TEXT",
+            "is_pinned": "INTEGER",
+            "is_archived": "INTEGER",
+            "last_checked_at": "DATETIME",
+            "last_refresh_status": "VARCHAR(32)",
+            "last_refresh_count": "INTEGER",
+            "last_error_at": "DATETIME",
+            "last_error_message": "TEXT",
+        },
+    )
+
+
+def _migrate_sync_event_columns(conn) -> None:
+    _add_missing_columns(
+        conn,
+        "sync_events",
+        {
+            "duplicate_count": "INTEGER",
+            "duration_ms": "INTEGER",
+        },
+    )
+
+
+def _migrate_settings_columns(conn) -> None:
+    _add_missing_columns(
+        conn,
+        "app_settings",
+        {
+            "telegram_bot_token": "TEXT",
+            "telegram_chat_id": "TEXT",
+            "alert_min_size": "REAL",
+            "alerts_enabled": "INTEGER",
+            "updated_at": "DATETIME",
+        },
+    )
+
+
+def _migrate_trade_alert_sent(conn) -> None:
+    _add_missing_columns(
+        conn,
+        "trades",
+        {
+            "alert_sent": "INTEGER NOT NULL DEFAULT 0",
+        },
+    )
+
+
+def _migrate_sqlite_indexes(conn) -> None:
     index_statements = [
-        "CREATE INDEX IF NOT EXISTS ix_trades_wallet_traded_at ON trades (wallet_address, traded_at)",
-        "CREATE INDEX IF NOT EXISTS ix_trades_wallet_side_traded_at ON trades (wallet_address, side, traded_at)",
-        "CREATE INDEX IF NOT EXISTS ix_trades_wallet_market_title ON trades (wallet_address, market_title)",
-        "CREATE INDEX IF NOT EXISTS ix_sync_events_wallet_created ON sync_events (wallet_address, created_at)",
-        "CREATE INDEX IF NOT EXISTS ix_wallets_archived_pinned_created ON wallets (is_archived, is_pinned, created_at)",
+        (
+            "trades",
+            "CREATE INDEX IF NOT EXISTS ix_trades_wallet_traded_at ON trades (wallet_address, traded_at)",
+        ),
+        (
+            "trades",
+            "CREATE INDEX IF NOT EXISTS ix_trades_wallet_side_traded_at ON trades (wallet_address, side, traded_at)",
+        ),
+        (
+            "trades",
+            "CREATE INDEX IF NOT EXISTS ix_trades_wallet_market_title ON trades (wallet_address, market_title)",
+        ),
+        (
+            "sync_events",
+            "CREATE INDEX IF NOT EXISTS ix_sync_events_wallet_created ON sync_events (wallet_address, created_at)",
+        ),
+        (
+            "wallets",
+            "CREATE INDEX IF NOT EXISTS ix_wallets_archived_pinned_created ON wallets (is_archived, is_pinned, created_at)",
+        ),
     ]
 
-    with engine.begin() as conn:
-        for statement in index_statements:
+    for table_name, statement in index_statements:
+        if _table_exists(conn, table_name):
             conn.exec_driver_sql(statement)
 
 
-def _ensure_sync_event_columns():
-    """Add missing sync event columns for older SQLite databases."""
-    if not DATABASE_URL.startswith("sqlite"):
+SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
+    ("001_wallet_compat_columns", _migrate_wallet_columns),
+    ("002_sync_event_columns", _migrate_sync_event_columns),
+    ("003_app_settings_columns", _migrate_settings_columns),
+    ("004_trade_alert_sent", _migrate_trade_alert_sent),
+    ("005_sqlite_indexes", _migrate_sqlite_indexes),
+)
+
+
+def _ensure_postgres_trade_columns(target_engine: Engine) -> None:
+    with target_engine.begin() as conn:
+        row = conn.exec_driver_sql(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'trades' AND column_name = 'alert_sent'"
+        ).first()
+        if row is None:
+            conn.exec_driver_sql("ALTER TABLE trades ADD COLUMN alert_sent INTEGER NOT NULL DEFAULT 0")
+
+
+def run_schema_migrations(
+    target_engine: Optional[Engine] = None,
+    *,
+    database_url: str = DATABASE_URL,
+    migrations: Iterable[Migration] = SCHEMA_MIGRATIONS,
+) -> None:
+    """Run lightweight, tracked compatibility migrations for local SQLite databases."""
+    target_engine = target_engine or engine
+    if not _is_sqlite(database_url):
+        _ensure_postgres_trade_columns(target_engine)
         return
 
-    expected_columns = {
-        "duplicate_count": "INTEGER",
-        "duration_ms": "INTEGER",
-    }
-
-    with engine.begin() as conn:
-        table_exists = conn.exec_driver_sql(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='sync_events'"
-        ).first()
-        if not table_exists:
-            return
-
-        rows = conn.exec_driver_sql("PRAGMA table_info(sync_events)").fetchall()
-        existing_columns = {row[1] for row in rows}
-
-        for column_name, column_type in expected_columns.items():
-            if column_name not in existing_columns:
-                conn.exec_driver_sql(
-                    f"ALTER TABLE sync_events ADD COLUMN {column_name} {column_type}"
-                )
+    with target_engine.begin() as conn:
+        _create_schema_migrations_table(conn)
+        applied = _applied_migration_versions(conn)
+        for version, migration in migrations:
+            if version in applied:
+                continue
+            migration(conn)
+            _record_migration(conn, version)
 
 
-def _ensure_trade_columns():
-    """Add missing trade columns to an existing database."""
-    with engine.begin() as conn:
-        if DATABASE_URL.startswith("sqlite"):
-            table_exists = conn.exec_driver_sql(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='trades'"
-            ).first()
-            if not table_exists:
-                return
-            rows = conn.exec_driver_sql("PRAGMA table_info(trades)").fetchall()
-            existing_columns = {row[1] for row in rows}
-            if "alert_sent" not in existing_columns:
-                conn.exec_driver_sql(
-                    "ALTER TABLE trades ADD COLUMN alert_sent INTEGER NOT NULL DEFAULT 0"
-                )
-        else:
-            # PostgreSQL: check information_schema
-            row = conn.exec_driver_sql(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'trades' AND column_name = 'alert_sent'"
-            ).first()
-            if row is None:
-                conn.exec_driver_sql(
-                    "ALTER TABLE trades ADD COLUMN alert_sent INTEGER NOT NULL DEFAULT 0"
-                )
-
-
-def _ensure_settings_columns():
-    """Add missing app_settings columns for older SQLite databases."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-
-    expected_columns = {
-        "telegram_bot_token": "TEXT",
-        "telegram_chat_id": "TEXT",
-        "alert_min_size": "REAL",
-        "alerts_enabled": "INTEGER",
-        "updated_at": "DATETIME",
-    }
-
-    with engine.begin() as conn:
-        table_exists = conn.exec_driver_sql(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='app_settings'"
-        ).first()
-        if not table_exists:
-            return
-
-        rows = conn.exec_driver_sql("PRAGMA table_info(app_settings)").fetchall()
-        existing_columns = {row[1] for row in rows}
-
-        for column_name, column_type in expected_columns.items():
-            if column_name not in existing_columns:
-                conn.exec_driver_sql(
-                    f"ALTER TABLE app_settings ADD COLUMN {column_name} {column_type}"
-                )
-
-
-def init_db():
-    """Initialize database tables."""
+def init_db() -> None:
+    """Initialize database tables and apply tracked compatibility migrations."""
     Base.metadata.create_all(bind=engine)
-    _ensure_wallet_columns()
-    _ensure_sync_event_columns()
-    _ensure_settings_columns()
-    _ensure_trade_columns()
-    _ensure_sqlite_indexes()
+    run_schema_migrations()
 
 
 @contextmanager

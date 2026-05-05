@@ -1,5 +1,5 @@
 """Shared helpers used across all route modules."""
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 from urllib.parse import quote
 
 from fastapi import HTTPException
@@ -11,6 +11,7 @@ from app import view_helpers as vh
 from app.models import Wallet
 
 templates = Jinja2Templates(directory="app/templates")
+DATE_PRESETS = frozenset({"today", "7d", "30d"})
 
 
 def _flash_redirect(message: str, level: str = "info") -> RedirectResponse:
@@ -39,13 +40,13 @@ def normalized_date_filters(
     date_from: Optional[str],
     date_to: Optional[str],
 ) -> Tuple[Optional[str], Optional[str]]:
-    if date_preset in {"today", "7d", "30d"} and not date_from and not date_to:
+    if date_preset in DATE_PRESETS and not date_from and not date_to:
         preset_range = vh.date_preset_range(date_preset)
         return preset_range["date_from"], preset_range["date_to"]
     return date_from, date_to
 
 
-def paginated_query(query: Query, page: int, page_size: int) -> Tuple[int, int, int, Dict[str, int], Any]:
+def paginated_query(query: Query, page: int, page_size: int) -> Tuple[int, int, int, Dict[str, int], Sequence[Any]]:
     total_items = query.count()
     total_pages = max(1, (total_items + page_size - 1) // page_size)
     current_page = min(page, total_pages)

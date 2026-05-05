@@ -1,6 +1,6 @@
 """SQLAlchemy models for the watchlist app.
 
-SQLite compatibility columns are backfilled in app.db._ensure_wallet_columns.
+SQLite compatibility changes are applied by app.db.run_schema_migrations.
 """
 
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, Index, Integer, String, Text

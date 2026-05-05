@@ -11,7 +11,7 @@
     </div>
 </section>
 
-<section class="metrics-grid">
+<section class="metrics-grid dashboard-metrics">
     <article class="metric-card">
         <span class="metric-label">Total wallets</span>
         <strong>{{ total_wallets }}</strong>
@@ -28,58 +28,132 @@
         <span class="metric-label">Total trades</span>
         <strong>{{ total_trades }}</strong>
     </article>
+    <article class="metric-card">
+        <span class="metric-label">Stored value</span>
+        <strong>${{ '{:,.2f}'.format(total_trade_value) }}</strong>
+    </article>
 </section>
 
-<section class="two-col">
-    <article class="card">
+<section class="dashboard-grid">
+    <article class="card dashboard-panel insight-panel">
         <div class="section-head">
-            <h2>Last refresh</h2>
+            <h2>Quick insights</h2>
+            <span class="pill">Local data</span>
         </div>
-        <div class="detail-grid" style="grid-template-columns: auto 1fr;">
+        <div class="insight-grid">
+            {% for item in insight_cards %}
+            <div class="insight-card {{ item.tone }}">
+                <span class="metric-label">{{ item.label }}</span>
+                <strong title="{{ item.value }}">{{ item.value }}</strong>
+                <p>{{ item.detail }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>Refresh health</h2>
+            <span class="pill {{ refresh_health.tone }}">{{ refresh_health.tone|title }}</span>
+        </div>
+        <div class="detail-grid dashboard-detail">
             <div>
                 <strong>Last success</strong>
-                <span>{% if last_success_at %}{{ last_success_at.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}<span class="subtle">Never</span>{% endif %}</span>
+                <span>{% if last_success_at %}{{ refresh_health.last_success_label }}{% else %}<span class="subtle">Never</span>{% endif %}</span>
             </div>
             <div>
                 <strong>Last failure</strong>
-                <span>{% if last_error_at %}<span class="text-danger">{{ last_error_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>{% else %}<span class="subtle">None recorded</span>{% endif %}</span>
+                <span>{% if last_error_at %}<span class="text-danger">{{ refresh_health.last_error_label }}</span>{% else %}<span class="subtle">None recorded</span>{% endif %}</span>
             </div>
         </div>
-        <div style="margin-top: 14px;">
+        <div class="panel-actions">
             <a href="/admin/sync-status" class="btn btn-small">Full sync history</a>
         </div>
     </article>
 
-    <article class="card">
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>YES / NO value mix</h2>
+            <span class="pill">${{ '{:,.2f}'.format(total_trade_value) }}</span>
+        </div>
+        {% if total_trade_value %}
+        <div class="split-meter" aria-label="YES and NO value mix">
+            <span class="split-yes" style="width: {{ yes_value_pct }}%;"></span>
+            <span class="split-no" style="width: {{ no_value_pct }}%;"></span>
+        </div>
+        <div class="legend-row">
+            <span><i class="legend-dot yes-dot"></i>YES ${{ '{:,.2f}'.format(yes_value) }} - {{ yes_value_pct }}%</span>
+            <span><i class="legend-dot no-dot"></i>NO ${{ '{:,.2f}'.format(no_value) }} - {{ no_value_pct }}%</span>
+        </div>
+        {% else %}
+        <div class="empty-state compact-empty">
+            <p>No trade value stored yet.</p>
+        </div>
+        {% endif %}
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>7-day activity</h2>
+            <span class="pill">Trades per day</span>
+        </div>
+        <div class="bar-chart daily-chart" aria-label="Trades over the last 7 days">
+            {% for day in activity_days %}
+            <div class="bar-column" title="{{ day.date }}: {{ day.count }} trade{{ 's' if day.count != 1 else '' }}">
+                <div class="bar-track">
+                    <span style="height: {{ day.bar_pct }}%;"></span>
+                </div>
+                <strong>{{ day.count }}</strong>
+                <em>{{ day.label }}</em>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card dashboard-panel">
         <div class="section-head">
             <h2>Top 5 wallets by trade count</h2>
         </div>
         {% if top_wallets %}
-        <div class="table-wrap">
-            <table class="trade-table">
-                <thead>
-                    <tr>
-                        <th>Wallet</th>
-                        <th>Trades</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in top_wallets %}
-                    <tr>
-                        <td data-label="Wallet">
-                            <a href="/wallets/{{ row.address }}/trades">
-                                {% if row.wallet and row.wallet.label %}{{ row.wallet.label }}{% else %}{{ short_address(row.address) }}{% endif %}
-                            </a>
-                        </td>
-                        <td data-label="Trades">{{ row.trade_count }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="ranked-bars">
+            {% for row in top_wallets %}
+            <a class="ranked-bar" href="/wallets/{{ row.address }}/trades">
+                <span>
+                    {% if row.wallet and row.wallet.label %}{{ row.wallet.label }}{% else %}{{ short_address(row.address) }}{% endif %}
+                    <strong>{{ row.trade_count }}</strong>
+                </span>
+                <i><b style="width: {{ row.bar_pct }}%;"></b></i>
+            </a>
+            {% endfor %}
         </div>
         {% else %}
-        <div class="empty-state">
+        <div class="empty-state compact-empty">
             <p>No trades stored yet.</p>
+        </div>
+        {% endif %}
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>Top markets by value</h2>
+            <span class="pill">Stored trades</span>
+        </div>
+        {% if top_markets %}
+        <div class="ranked-bars value-bars">
+            {% for row in top_markets %}
+            <a class="ranked-bar" href="/all-trades?market_search={{ row.condition_id }}">
+                <span>
+                    <em>{{ row.market }}</em>
+                    <strong>${{ '{:,.2f}'.format(row.total_value) }}</strong>
+                </span>
+                <small>{{ row.trade_count }} trade{{ 's' if row.trade_count != 1 else '' }}</small>
+                <i><b style="width: {{ row.bar_pct }}%;"></b></i>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state compact-empty">
+            <p>No market value stored yet.</p>
         </div>
         {% endif %}
     </article>
@@ -88,7 +162,7 @@
 <section class="card">
     <div class="section-head">
         <h2>Interesting activity</h2>
-        <span class="pill">Last 24 hours · top 10</span>
+        <span class="pill">Last 24 hours - top 10</span>
     </div>
     {% if interesting_activity %}
     <div class="stack-list">
@@ -97,7 +171,6 @@
             <div class="section-head">
                 {% if event.type == 'large_trade' %}
                 <strong>
-                    💰
                     <a href="/wallets/{{ event.wallet }}/trades">{{ event.label }}</a>
                     placed a large trade (${{ '%.2f'|format(event.value) }}) on
                     {% if event.trade_id %}<a href="/trades/{{ event.trade_id }}">{{ event.market }}</a>{% else %}{{ event.market }}{% endif %}
@@ -105,14 +178,12 @@
                 <span class="pill warning">Large trade</span>
                 {% elif event.type == 'activity_spike' %}
                 <strong>
-                    🔥
                     <a href="/wallets/{{ event.wallet }}/trades">{{ event.label }}</a>
                     made {{ event.count }} trade{{ 's' if event.count != 1 else '' }} in {{ event.time_window }}
                 </strong>
                 <span class="pill danger">Activity spike</span>
                 {% elif event.type == 'new_market' %}
                 <strong>
-                    🆕
                     <a href="/wallets/{{ event.wallet }}/trades">{{ event.label }}</a>
                     entered a new market:
                     {% if event.trade_id %}<a href="/trades/{{ event.trade_id }}">{{ event.market }}</a>{% else %}{{ event.market }}{% endif %}
@@ -120,7 +191,7 @@
                 <span class="pill info">New market</span>
                 {% endif %}
             </div>
-            <p class="subtle">{{ event.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if event.timestamp else '—' }}</p>
+            <p class="subtle">{{ event.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if event.timestamp else '-' }}</p>
         </article>
         {% endfor %}
     </div>

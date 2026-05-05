@@ -1,8 +1,8 @@
-﻿from fastapi import FastAPI
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -31,12 +31,18 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title=APP_NAME, lifespan=lifespan)
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-app.include_router(router)
-
-
-@app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled application error on %s", request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+def create_app(*, lifespan_context=lifespan, title: Optional[str] = None) -> FastAPI:
+    """Create and configure the FastAPI application."""
+    app = FastAPI(title=title or APP_NAME, lifespan=lifespan_context)
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    app.include_router(router)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
+    return app
+
+
+app = create_app()

@@ -40,7 +40,7 @@ Explicitly excluded:
 
 ## Architecture
 
-- app/main.py: App bootstrap and startup initialization
+- app/main.py: App factory, production app instance, static mount, exception handler, and startup initialization
 - app/routes/: HTTP routes and server-rendered page handlers split by area
   - app/routes/core.py: root redirect and dashboard
   - app/routes/wallets.py: wallet list/detail/edit/archive/delete/import/refresh pages
@@ -50,13 +50,14 @@ Explicitly excluded:
   - app/routes/_shared.py: shared route helpers
 - app/ingest.py: Polymarket fetch, normalize, and ingest logic
 - app/models.py: SQLAlchemy models
-- app/db.py: Engine/session setup and lightweight schema backfill
+- app/db.py: Engine/session setup and tracked lightweight schema migrations
 - app/view_helpers.py: Query/filter/date-preset/view helper logic used by routes
 - app/templates/: Jinja templates
 - app/static/style_v2.css: Shared design system and responsive UI
 
 Active runtime path:
-- The app currently mounts `app.routes.router` from `app/main.py`
+- `app.main.create_app()` builds the FastAPI app and mounts `app.routes.router`
+- The production ASGI object is `app.main.app`
 - `_v2` templates and `style_v2.css` are the active UI stack
 - `app/routes_v2.py` is a small compatibility shim for older imports of `app.routes_v2.router`
 - Legacy `routes.py`, `style.css`, and non-`_v2` templates have been removed
@@ -233,7 +234,7 @@ Common query params:
 
 ## Schema Notes
 
-The app performs lightweight SQLite compatibility backfills at startup for missing wallet columns, including refresh metadata columns.
+The app performs tracked, lightweight SQLite compatibility migrations at startup. Applied migrations are recorded in `schema_migrations`, keeping the local-first setup simple while avoiding untracked schema drift.
 
 Newer schema fields used by refresh status:
 - wallets.last_checked_at
@@ -257,7 +258,7 @@ Indexes added for responsiveness:
 - trades(wallet_address, market_title)
 - sync_events(wallet_address, created_at)
 
-No external migration framework is required for this project.
+No external migration framework is required for this project. New schema compatibility changes should be added to `SCHEMA_MIGRATIONS` in `app/db.py` and covered by migration tests.
 
 ## CLI Utilities
 
@@ -313,6 +314,7 @@ pytest -q
 ```
 
 Tests cover:
+- Production app factory wiring for static files, routes, and exception handler
 - Wallet address validation behavior
 - Wallet creation with tags/notes
 - Trade dedup logic
@@ -325,3 +327,4 @@ Tests cover:
 - Interesting activity detection, including empty-data and missing-label edge cases
 - Shared route helper behavior
 - Guardrail that page renders do not call refresh/ingestion or Telegram side effects
+- SQLite schema migration runner behavior and idempotency
