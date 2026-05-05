@@ -58,7 +58,7 @@ Explicitly excluded:
 Active runtime path:
 - The app currently mounts `app.routes.router` from `app/main.py`
 - `_v2` templates and `style_v2.css` are the active UI stack
-- `app/routes_v2.py` is retained as a legacy reference after the route-package split, but is not imported by the running app
+- `app/routes_v2.py` is a small compatibility shim for older imports of `app.routes_v2.router`
 - Legacy `routes.py`, `style.css`, and non-`_v2` templates have been removed
 
 Design decisions:
@@ -324,3 +324,4 @@ Tests cover:
 - View helper formatting, pagination, and wallet search behavior
 - Interesting activity detection, including empty-data and missing-label edge cases
 - Shared route helper behavior
+- Guardrail that page renders do not call refresh/ingestion or Telegram side effects

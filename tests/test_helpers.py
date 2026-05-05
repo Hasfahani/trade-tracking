@@ -111,6 +111,36 @@ def test_pagination_meta_handles_empty_middle_and_last_pages():
     assert vh.pagination_meta(2, 25, 26) == {"start": 26, "end": 26}
 
 
+def test_shared_date_and_query_pagination_helpers(db):
+    wallet = _wallet("0x4444444444444444444444444444444444444444")
+    db.add(wallet)
+    db.add_all(
+        [
+            _trade(wallet.address, "page-1", "cond-page", traded_at=datetime(2026, 1, 1, 12, 0)),
+            _trade(wallet.address, "page-2", "cond-page", traded_at=datetime(2026, 1, 2, 12, 0)),
+            _trade(wallet.address, "page-3", "cond-page", traded_at=datetime(2026, 1, 3, 12, 0)),
+        ]
+    )
+    db.commit()
+
+    date_from, date_to = _shared.normalized_date_filters("7d", None, None)
+    explicit_from, explicit_to = _shared.normalized_date_filters("7d", "2026-01-01", None)
+    page, total_items, total_pages, pagination, items = _shared.paginated_query(
+        db.query(Trade).order_by(Trade.traded_at.asc()),
+        page=99,
+        page_size=2,
+    )
+
+    assert date_from is not None
+    assert date_to is not None
+    assert (explicit_from, explicit_to) == ("2026-01-01", None)
+    assert page == 2
+    assert total_items == 3
+    assert total_pages == 2
+    assert pagination == {"start": 3, "end": 3}
+    assert [item.trade_id for item in items] == ["page-3"]
+
+
 def test_shared_route_helpers_resolve_wallet_and_guard_next(db):
     wallet = _wallet("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", label="Edge")
     db.add(wallet)

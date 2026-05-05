@@ -10,6 +10,7 @@ from app.db import get_db
 from app.ingest import _fetch_trade_batch, normalize_trade, refresh_wallet
 from app.models import Base, SyncEvent, Trade, Wallet
 from app.routes import router
+from app.routes_v2 import router as legacy_router
 from app import view_helpers as vh
 from app.watchlist_seed import SeedWallet, seed_watchlist_wallets
 
@@ -35,6 +36,10 @@ def build_client():
 
     app.dependency_overrides[get_db] = override_get_db
     return TestClient(app), testing_session
+
+
+def test_legacy_routes_v2_router_points_to_active_router():
+    assert legacy_router is router
 
 
 def test_add_wallet_rejects_invalid_address():
@@ -596,3 +601,107 @@ def test_core_routes_smoke_render_and_actions():
     sync_response = client.get("/admin/sync-status")
     assert "YES | $0.6100 | 14.00" in trades_response.text
     assert "No semantic duplicates found." in sync_response.text
+
+
+def test_page_renders_do_not_call_external_side_effects(monkeypatch):
+    client, session_factory = build_client()
+    db = session_factory()
+    wallet = Wallet(address="0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", label="Local Only")
+    db.add(wallet)
+    db.flush()
+    db.add(
+        Trade(
+            wallet_address=wallet.address,
+            trade_id="local-render-trade",
+            condition_id="local-render-condition",
+            market_title="Local render market",
+            side="YES",
+            price=0.42,
+            size=12,
+            traded_at=datetime.now(timezone.utc),
+        )
+    )
+    db.commit()
+    wallet_address = wallet.address
+    db.close()
+
+    def fail_external_call(*args, **kwargs):
+        raise AssertionError("Page render attempted an external side effect")
+
+    monkeypatch.setattr("app.routes.wallets.refresh_wallet", fail_external_call)
+    monkeypatch.setattr("app.routes.alerts.refresh_wallet", fail_external_call)
+    monkeypatch.setattr("app.routes.alerts.alerts.send_telegram_message", fail_external_call)
+    monkeypatch.setattr("app.ingest.fetch_trades_for_wallet", fail_external_call)
+
+    for path in [
+        "/dashboard",
+        "/wallets",
+        f"/wallets/{wallet_address}",
+        f"/wallets/{wallet_address}/trades",
+        "/all-trades",
+        "/trades/local-render-trade",
+        "/admin/sync-status",
+        "/settings",
+    ]:
+        response = client.get(path)
+        assert response.status_code == 200
+
+
+def test_csv_exports_include_filtered_wallet_and_trade_data():
+    client, session_factory = build_client()
+    db = session_factory()
+    wallet = Wallet(
+        address="0x1212121212121212121212121212121212121212",
+        label="CSV Desk",
+        tags="alpha, beta",
+        notes="export note",
+        is_pinned=1,
+    )
+    db.add(wallet)
+    db.flush()
+    db.add_all(
+        [
+            Trade(
+                wallet_address=wallet.address,
+                trade_id="csv-yes",
+                condition_id="csv-cond",
+                market_title="CSV Market",
+                side="YES",
+                price=0.5,
+                size=10,
+                traded_at=datetime(2026, 1, 1, 12, 0),
+            ),
+            Trade(
+                wallet_address=wallet.address,
+                trade_id="csv-no",
+                condition_id="csv-cond",
+                market_title="Other Market",
+                side="NO",
+                price=0.25,
+                size=20,
+                traded_at=datetime(2026, 1, 2, 12, 0),
+            ),
+        ]
+    )
+    db.commit()
+    wallet_address = wallet.address
+    db.close()
+
+    wallets_export = client.get("/wallets/export")
+    all_trades_export = client.get("/all-trades/export?side=YES&wallet_search=CSV")
+    wallet_trades_export = client.get(f"/wallets/{wallet_address}/trades/export?market_search=Other")
+
+    assert wallets_export.status_code == 200
+    assert "CSV Desk" in wallets_export.text
+    assert "alpha;beta" in wallets_export.text
+    assert "export note" in wallets_export.text
+
+    assert all_trades_export.status_code == 200
+    assert "csv-yes" in all_trades_export.text
+    assert "CSV Desk" in all_trades_export.text
+    assert "csv-no" not in all_trades_export.text
+
+    assert wallet_trades_export.status_code == 200
+    assert "csv-no" in wallet_trades_export.text
+    assert "Other Market" in wallet_trades_export.text
+    assert "csv-yes" not in wallet_trades_export.text

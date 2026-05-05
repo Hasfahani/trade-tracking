@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app import view_helpers as vh
 from app.db import get_db
 from app.models import Trade, Wallet
-from app.routes._shared import resolve_wallet, templates
+from app.routes._shared import normalized_date_filters, paginated_query, resolve_wallet, templates
 from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 router = APIRouter()
@@ -29,10 +29,7 @@ async def view_trades(
     db: Session = Depends(get_db),
 ):
     wallet = resolve_wallet(db, identifier)
-    if date_preset in {"today", "7d", "30d"} and not date_from and not date_to:
-        preset_range = vh.date_preset_range(date_preset)
-        date_from = preset_range["date_from"]
-        date_to = preset_range["date_to"]
+    date_from, date_to = normalized_date_filters(date_preset, date_from, date_to)
 
     base_query = vh.apply_trade_filters(
         db.query(Trade),
@@ -44,12 +41,7 @@ async def view_trades(
     )
     sorted_query = vh.sorted_trade_query(base_query, sort_by)
 
-    total_trades = sorted_query.count()
-    total_pages = max(1, (total_trades + page_size - 1) // page_size)
-    page = min(page, total_pages)
-    pagination = vh.pagination_meta(page, page_size, total_trades)
-
-    trades = sorted_query.limit(page_size).offset((page - 1) * page_size).all()
+    page, total_trades, total_pages, pagination, trades = paginated_query(sorted_query, page, page_size)
     summary_row = base_query.with_entities(
         func.min(Trade.traded_at).label("oldest_trade_at"),
         func.max(Trade.traded_at).label("newest_trade_at"),
@@ -101,10 +93,7 @@ async def all_trades(
     sort_by: str = Query("time_desc"),
     db: Session = Depends(get_db),
 ):
-    if date_preset in {"today", "7d", "30d"} and not date_from and not date_to:
-        preset_range = vh.date_preset_range(date_preset)
-        date_from = preset_range["date_from"]
-        date_to = preset_range["date_to"]
+    date_from, date_to = normalized_date_filters(date_preset, date_from, date_to)
 
     query = vh.apply_trade_filters(
         db.query(Trade),
@@ -115,12 +104,7 @@ async def all_trades(
     )
     query = vh.apply_wallet_search_to_trade_query(db, query, wallet_search)
     query = vh.sorted_trade_query(query, sort_by)
-    total_trades = query.count()
-    total_pages = max(1, (total_trades + page_size - 1) // page_size)
-    page = min(page, total_pages)
-    pagination = vh.pagination_meta(page, page_size, total_trades)
-
-    trades = query.limit(page_size).offset((page - 1) * page_size).all()
+    page, total_trades, total_pages, pagination, trades = paginated_query(query, page, page_size)
     summary_row = query.order_by(False).with_entities(
         func.min(Trade.traded_at).label("oldest_trade_at"),
         func.max(Trade.traded_at).label("newest_trade_at"),

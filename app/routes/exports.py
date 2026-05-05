@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app import view_helpers as vh
 from app.db import get_db
 from app.models import Trade, Wallet
-from app.routes._shared import resolve_wallet
+from app.routes._shared import normalized_date_filters, resolve_wallet
 
 _BOM = "\ufeff"
 router = APIRouter()
@@ -62,10 +62,7 @@ async def export_all_trades(
     sort_by: str = Query("time_desc"),
     db: Session = Depends(get_db),
 ):
-    if date_preset in {"today", "7d", "30d"} and not date_from and not date_to:
-        preset_range = vh.date_preset_range(date_preset)
-        date_from = preset_range["date_from"]
-        date_to = preset_range["date_to"]
+    date_from, date_to = normalized_date_filters(date_preset, date_from, date_to)
 
     query = vh.apply_trade_filters(
         db.query(Trade),
@@ -118,10 +115,7 @@ async def export_trades(
     db: Session = Depends(get_db),
 ):
     wallet = resolve_wallet(db, identifier)
-    if date_preset in {"today", "7d", "30d"} and not date_from and not date_to:
-        preset_range = vh.date_preset_range(date_preset)
-        date_from = preset_range["date_from"]
-        date_to = preset_range["date_to"]
+    date_from, date_to = normalized_date_filters(date_preset, date_from, date_to)
     query = vh.apply_trade_filters(
         db.query(Trade),
         wallet_address=wallet.address,
