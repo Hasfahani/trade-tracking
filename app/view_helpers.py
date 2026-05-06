@@ -1,6 +1,8 @@
 """Re-exports for backwards compatibility. Import from the focused sub-modules directly."""
 from app.analytics import (  # noqa: F401
     build_activity_heatmap,
+    build_filtered_top_markets,
+    build_filtered_top_wallets,
     build_top_markets,
     build_wallet_activity_timeline,
     detect_interesting_activity,

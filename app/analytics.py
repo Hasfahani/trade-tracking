@@ -2,21 +2,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, tuple_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
-from app.formatting import sync_status_class
+from app.formatting import short_address as _short_address, sync_status_class
 from app.models import SyncEvent, Trade, Wallet
 
 _LARGE_TRADE_THRESHOLD = 200.0
 _SPIKE_COUNT = 3
 _SPIKE_WINDOW_MINUTES = 10
-
-
-def _short_address(address: str) -> str:
-    # Local import avoided by duplicating the tiny helper inline.
-    if len(address) <= 14:
-        return address
-    return f"{address[:8]}...{address[-6:]}"
 
 
 def detect_interesting_activity(db: Session) -> List[Dict[str, Any]]:
@@ -253,6 +246,62 @@ def build_activity_heatmap(db: Session, wallet_address: Optional[str] = None, da
             ),
         }
         for offset in range(days - 1, -1, -1)
+    ]
+
+
+def build_filtered_top_markets(query: Query, limit: int = 5) -> List[Dict[str, Any]]:
+    """Top markets by trade value from a pre-filtered Trade query."""
+    trade_value = Trade.price * Trade.size
+    rows = (
+        query.order_by(False)
+        .with_entities(
+            Trade.condition_id,
+            func.max(Trade.market_title).label("market_title"),
+            func.count(Trade.id).label("trade_count"),
+            func.sum(trade_value).label("total_value"),
+        )
+        .group_by(Trade.condition_id)
+        .order_by(func.sum(trade_value).desc())
+        .limit(limit)
+        .all()
+    )
+    top_value = float(rows[0].total_value or 0) if rows else 0
+    return [
+        {
+            "condition_id": row.condition_id,
+            "market": row.market_title or row.condition_id,
+            "trade_count": int(row.trade_count or 0),
+            "total_value": float(row.total_value or 0),
+            "bar_pct": round((float(row.total_value or 0) / top_value) * 100) if top_value else 0,
+        }
+        for row in rows
+    ]
+
+
+def build_filtered_top_wallets(query: Query, limit: int = 5) -> List[Dict[str, Any]]:
+    """Top wallets by trade value from a pre-filtered Trade query. Returns address + stats (no wallet ORM objects)."""
+    trade_value = Trade.price * Trade.size
+    rows = (
+        query.order_by(False)
+        .with_entities(
+            Trade.wallet_address,
+            func.count(Trade.id).label("trade_count"),
+            func.sum(trade_value).label("total_value"),
+        )
+        .group_by(Trade.wallet_address)
+        .order_by(func.sum(trade_value).desc())
+        .limit(limit)
+        .all()
+    )
+    top_value = float(rows[0].total_value or 0) if rows else 0
+    return [
+        {
+            "address": row.wallet_address,
+            "trade_count": int(row.trade_count or 0),
+            "total_value": float(row.total_value or 0),
+            "bar_pct": round((float(row.total_value or 0) / top_value) * 100) if top_value else 0,
+        }
+        for row in rows
     ]
 
 

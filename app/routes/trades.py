@@ -104,67 +104,31 @@ async def all_trades(
     )
     query = vh.apply_wallet_search_to_trade_query(db, query, wallet_search)
     query = vh.sorted_trade_query(query, sort_by)
+    filtered_base = query.order_by(False)
+
     page, total_trades, total_pages, pagination, trades = paginated_query(query, page, page_size)
-    summary_row = query.order_by(False).with_entities(
+    summary_row = filtered_base.with_entities(
         func.min(Trade.traded_at).label("oldest_trade_at"),
         func.max(Trade.traded_at).label("newest_trade_at"),
     ).first()
-    pnl = vh.trade_pnl_summary(query)
-    wallet_map = {wallet.address: wallet for wallet in db.query(Wallet).all()}
+    pnl = vh.trade_pnl_summary(filtered_base)
     total_value = float(pnl["total_value"] or 0)
     yes_value = float(pnl["yes_value"] or 0)
     no_value = float(pnl["no_value"] or 0)
     yes_value_pct = round((yes_value / total_value) * 100) if total_value else 0
     no_value_pct = 100 - yes_value_pct if total_value else 0
-    filtered_base = query.order_by(False)
+
     unique_wallets = int(filtered_base.with_entities(func.count(func.distinct(Trade.wallet_address))).scalar() or 0)
     unique_markets = int(filtered_base.with_entities(func.count(func.distinct(Trade.condition_id))).scalar() or 0)
     largest_trade = filtered_base.order_by((Trade.price * Trade.size).desc()).first()
-    top_wallet_rows = (
-        filtered_base.with_entities(
-            Trade.wallet_address,
-            func.count(Trade.id).label("trade_count"),
-            func.sum(Trade.price * Trade.size).label("total_value"),
-        )
-        .group_by(Trade.wallet_address)
-        .order_by(func.sum(Trade.price * Trade.size).desc())
-        .limit(5)
-        .all()
-    )
-    top_wallet_value = float(top_wallet_rows[0].total_value or 0) if top_wallet_rows else 0
-    filtered_top_wallets = [
-        {
-            "address": row.wallet_address,
-            "wallet": wallet_map.get(row.wallet_address),
-            "trade_count": int(row.trade_count or 0),
-            "total_value": float(row.total_value or 0),
-            "bar_pct": round((float(row.total_value or 0) / top_wallet_value) * 100) if top_wallet_value else 0,
-        }
-        for row in top_wallet_rows
-    ]
-    top_market_rows = (
-        filtered_base.with_entities(
-            Trade.condition_id,
-            func.max(Trade.market_title).label("market_title"),
-            func.count(Trade.id).label("trade_count"),
-            func.sum(Trade.price * Trade.size).label("total_value"),
-        )
-        .group_by(Trade.condition_id)
-        .order_by(func.sum(Trade.price * Trade.size).desc())
-        .limit(5)
-        .all()
-    )
-    top_market_value = float(top_market_rows[0].total_value or 0) if top_market_rows else 0
-    filtered_top_markets = [
-        {
-            "condition_id": row.condition_id,
-            "market": row.market_title or row.condition_id,
-            "trade_count": int(row.trade_count or 0),
-            "total_value": float(row.total_value or 0),
-            "bar_pct": round((float(row.total_value or 0) / top_market_value) * 100) if top_market_value else 0,
-        }
-        for row in top_market_rows
-    ]
+    filtered_top_wallets_raw = vh.build_filtered_top_wallets(filtered_base)
+    filtered_top_markets = vh.build_filtered_top_markets(filtered_base)
+
+    # Load only wallets needed for this page and the top-wallets panel
+    needed_addresses = {t.wallet_address for t in trades} | {w["address"] for w in filtered_top_wallets_raw}
+    wallet_map = {w.address: w for w in db.query(Wallet).filter(Wallet.address.in_(needed_addresses)).all()}
+    filtered_top_wallets = [{"wallet": wallet_map.get(w["address"]), **w} for w in filtered_top_wallets_raw]
+
     filter_insights = [
         {
             "label": "Wallets",
@@ -230,7 +194,8 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
         .limit(200)
         .all()
     )
-    wallet_map = {wallet.address: wallet for wallet in db.query(Wallet).all()}
+    related_addresses = {t.wallet_address for t in related_trades}
+    wallet_map = {w.address: w for w in db.query(Wallet).filter(Wallet.address.in_(related_addresses)).all()}
     return templates.TemplateResponse(
         request,
         "trade_detail_v2.html",

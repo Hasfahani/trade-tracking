@@ -22,21 +22,23 @@ async def root():
 
 @router.get("/dashboard")
 async def dashboard(request: Request, db: Session = Depends(get_db)):
-    total_wallets = db.query(func.count(Wallet.id)).scalar() or 0
-    active_wallets_count = (
-        db.query(func.count(Wallet.id)).filter(func.coalesce(Wallet.is_archived, 0) == 0).scalar() or 0
-    )
-    archived_wallets_count = (
-        db.query(func.count(Wallet.id)).filter(func.coalesce(Wallet.is_archived, 0) == 1).scalar() or 0
-    )
-    total_trades = db.query(func.count(Trade.id)).scalar() or 0
+    wallet_counts = db.query(
+        func.count(Wallet.id).label("total"),
+        func.sum(case((func.coalesce(Wallet.is_archived, 0) == 0, 1), else_=0)).label("active"),
+        func.sum(case((func.coalesce(Wallet.is_archived, 0) == 1, 1), else_=0)).label("archived"),
+    ).first()
+    total_wallets = int(wallet_counts.total or 0)
+    active_wallets_count = int(wallet_counts.active or 0)
+    archived_wallets_count = int(wallet_counts.archived or 0)
 
     trade_value = Trade.price * Trade.size
     value_row = db.query(
+        func.count(Trade.id).label("total_trades"),
         func.sum(trade_value).label("total_value"),
         func.sum(case((Trade.side == "YES", trade_value), else_=0)).label("yes_value"),
         func.sum(case((Trade.side == "NO", trade_value), else_=0)).label("no_value"),
     ).first()
+    total_trades = int(value_row.total_trades or 0)
     total_trade_value = float(value_row.total_value or 0)
     yes_value = float(value_row.yes_value or 0)
     no_value = float(value_row.no_value or 0)
@@ -48,8 +50,12 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         db.query(func.sum(trade_value)).filter(Trade.traded_at >= recent_cutoff).scalar() or 0
     )
 
-    last_success_at = db.query(func.max(SyncEvent.created_at)).filter(SyncEvent.status == "success").scalar()
-    last_error_at = db.query(func.max(SyncEvent.created_at)).filter(SyncEvent.status == "error").scalar()
+    sync_row = db.query(
+        func.max(case((SyncEvent.status == "success", SyncEvent.created_at))).label("last_success_at"),
+        func.max(case((SyncEvent.status == "error", SyncEvent.created_at))).label("last_error_at"),
+    ).first()
+    last_success_at = sync_row.last_success_at
+    last_error_at = sync_row.last_error_at
     recent_trades = db.query(Trade).order_by(Trade.traded_at.desc()).limit(20).all()
 
     top_wallets_rows = (
@@ -59,7 +65,8 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         .limit(5)
         .all()
     )
-    wallet_map = {w.address: w for w in db.query(Wallet).all()}
+    needed_addresses = {row.wallet_address for row in top_wallets_rows} | {t.wallet_address for t in recent_trades}
+    wallet_map = {w.address: w for w in db.query(Wallet).filter(Wallet.address.in_(needed_addresses)).all()}
     top_wallets = [
         {
             "wallet": wallet_map.get(row.wallet_address),

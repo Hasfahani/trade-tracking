@@ -6,12 +6,10 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import httpx
-from sqlalchemy import func
-from sqlalchemy import insert
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import SyncEvent, Trade, Wallet
-from app.settings import DATABASE_URL
 from app.settings import (
     POLYMARKET_CONNECT_TIMEOUT_SECONDS,
     POLYMARKET_POOL_TIMEOUT_SECONDS,
@@ -22,17 +20,6 @@ from app.settings import (
 logger = logging.getLogger(__name__)
 
 DATA_API_BASE = "https://data-api.polymarket.com"
-
-_IS_POSTGRES = DATABASE_URL.startswith("postgresql")
-
-
-def _insert_ignore(table):
-    """Return a dialect-appropriate INSERT … ignore-duplicates statement."""
-    if _IS_POSTGRES:
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-        return pg_insert(table)
-    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-    return sqlite_insert(table)
 
 
 @lru_cache(maxsize=1)
@@ -278,26 +265,33 @@ def refresh_wallet(
         normalized = [trade for trade in (normalize_trade(raw, wallet.address) for raw in raw_trades) if trade]
 
         inserted = 0
-        for trade in normalized:
-            stmt = _insert_ignore(Trade).values(
-                trade_id=trade["id"],
-                wallet_address=trade["wallet_address"],
-                condition_id=trade["condition_id"],
-                market_title=trade["market_title"],
-                side=trade["side"],
-                price=trade["price"],
-                size=trade["size"],
-                traded_at=trade["traded_at"],
-            )
-            if _IS_POSTGRES:
-                stmt = stmt.on_conflict_do_nothing(index_elements=["trade_id"])
-            else:
-                stmt = stmt.prefix_with("OR IGNORE")
-            result = db.execute(stmt)
-            if result.rowcount > 0:
-                inserted += 1
+        if normalized:
+            all_ids = [t["id"] for t in normalized]
+            existing_ids = {
+                row[0]
+                for row in db.execute(select(Trade.trade_id).where(Trade.trade_id.in_(all_ids)))
+            }
+            new_trades = [t for t in normalized if t["id"] not in existing_ids]
+            if new_trades:
+                db.execute(
+                    Trade.__table__.insert(),
+                    [
+                        {
+                            "trade_id": t["id"],
+                            "wallet_address": t["wallet_address"],
+                            "condition_id": t["condition_id"],
+                            "market_title": t["market_title"],
+                            "side": t["side"],
+                            "price": t["price"],
+                            "size": t["size"],
+                            "traded_at": t["traded_at"],
+                        }
+                        for t in new_trades
+                    ],
+                )
+            inserted = len(new_trades)
 
-        duplicate_count = max(len(normalized) - inserted, 0)
+        duplicate_count = len(normalized) - inserted
         status = "no_new" if inserted == 0 else "success"
         wallet.last_refresh_status = status
         wallet.last_refresh_count = inserted
