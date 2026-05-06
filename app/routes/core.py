@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import case, desc, func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -30,6 +30,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         db.query(func.count(Wallet.id)).filter(func.coalesce(Wallet.is_archived, 0) == 1).scalar() or 0
     )
     total_trades = db.query(func.count(Trade.id)).scalar() or 0
+
     trade_value = Trade.price * Trade.size
     value_row = db.query(
         func.sum(trade_value).label("total_value"),
@@ -41,17 +42,16 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     no_value = float(value_row.no_value or 0)
     yes_value_pct = round((yes_value / total_trade_value) * 100) if total_trade_value else 0
     no_value_pct = 100 - yes_value_pct if total_trade_value else 0
+
     recent_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
     recent_value_24h = float(
         db.query(func.sum(trade_value)).filter(Trade.traded_at >= recent_cutoff).scalar() or 0
     )
-    last_success_at = (
-        db.query(func.max(SyncEvent.created_at)).filter(SyncEvent.status == "success").scalar()
-    )
-    last_error_at = (
-        db.query(func.max(SyncEvent.created_at)).filter(SyncEvent.status == "error").scalar()
-    )
+
+    last_success_at = db.query(func.max(SyncEvent.created_at)).filter(SyncEvent.status == "success").scalar()
+    last_error_at = db.query(func.max(SyncEvent.created_at)).filter(SyncEvent.status == "error").scalar()
     recent_trades = db.query(Trade).order_by(Trade.traded_at.desc()).limit(20).all()
+
     top_wallets_rows = (
         db.query(Trade.wallet_address, func.count(Trade.id).label("trade_count"))
         .group_by(Trade.wallet_address)
@@ -69,53 +69,9 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         }
         for row in top_wallets_rows
     ]
-    top_markets_rows = (
-        db.query(
-            Trade.condition_id,
-            func.max(Trade.market_title).label("market_title"),
-            func.count(Trade.id).label("trade_count"),
-            func.sum(trade_value).label("total_value"),
-        )
-        .group_by(Trade.condition_id)
-        .order_by(func.sum(trade_value).desc())
-        .limit(5)
-        .all()
-    )
-    top_market_value = float(top_markets_rows[0].total_value or 0) if top_markets_rows else 0
-    top_markets = [
-        {
-            "condition_id": row.condition_id,
-            "market": row.market_title or row.condition_id,
-            "trade_count": int(row.trade_count or 0),
-            "total_value": float(row.total_value or 0),
-            "bar_pct": round((float(row.total_value or 0) / top_market_value) * 100) if top_market_value else 0,
-        }
-        for row in top_markets_rows
-    ]
-    today = datetime.now(timezone.utc).date()
-    cutoff_day = today - timedelta(days=6)
-    cutoff_7d = datetime(cutoff_day.year, cutoff_day.month, cutoff_day.day)
-    daily_rows = (
-        db.query(func.date(Trade.traded_at).label("trade_day"), func.count(Trade.id).label("trade_count"))
-        .filter(Trade.traded_at >= cutoff_7d)
-        .group_by(func.date(Trade.traded_at))
-        .order_by(func.date(Trade.traded_at).asc())
-        .all()
-    )
-    daily_map = {str(row.trade_day): int(row.trade_count or 0) for row in daily_rows}
-    activity_days = []
-    max_daily_count = max(daily_map.values(), default=0)
-    for offset in range(6, -1, -1):
-        day = today - timedelta(days=offset)
-        count = daily_map.get(day.isoformat(), 0)
-        activity_days.append(
-            {
-                "label": day.strftime("%a"),
-                "date": day.isoformat(),
-                "count": count,
-                "bar_pct": round((count / max_daily_count) * 100) if max_daily_count else 0,
-            }
-        )
+
+    top_markets = vh.build_top_markets(db)
+    activity_days = vh.build_activity_heatmap(db)
 
     refresh_health = {
         "last_success_label": last_success_at.strftime("%Y-%m-%d %H:%M UTC") if last_success_at else "Never",

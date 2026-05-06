@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from sqlalchemy import case, desc, func
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app import alerts
@@ -250,11 +250,15 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
     pnl = vh.trade_pnl_summary(trade_query)
     activity_timeline = vh.build_wallet_activity_timeline(db, wallet.address, limit=30)
     wallet_intelligence = vh.get_wallet_intelligence_summary(db, wallet.address)
+    wallet_top_markets = vh.build_top_markets(db, wallet_address=wallet.address)
+    wallet_activity_days = vh.build_activity_heatmap(db, wallet_address=wallet.address)
+
     total_value = float(pnl["total_value"] or 0)
     yes_value = float(pnl["yes_value"] or 0)
     no_value = float(pnl["no_value"] or 0)
     yes_value_pct = round((yes_value / total_value) * 100) if total_value else 0
     no_value_pct = 100 - yes_value_pct if total_value else 0
+
     recent_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
     recent_value_24h = float(
         db.query(func.sum(Trade.price * Trade.size))
@@ -262,58 +266,7 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
         .scalar()
         or 0
     )
-    side_counts_row = db.query(
-        func.sum(case((Trade.side == "YES", 1), else_=0)).label("yes_count"),
-        func.sum(case((Trade.side == "NO", 1), else_=0)).label("no_count"),
-    ).filter(Trade.wallet_address == wallet.address).first()
-    top_markets_rows = (
-        db.query(
-            Trade.condition_id,
-            func.max(Trade.market_title).label("market_title"),
-            func.count(Trade.id).label("trade_count"),
-            func.sum(Trade.price * Trade.size).label("total_value"),
-        )
-        .filter(Trade.wallet_address == wallet.address)
-        .group_by(Trade.condition_id)
-        .order_by(func.sum(Trade.price * Trade.size).desc())
-        .limit(5)
-        .all()
-    )
-    top_market_value = float(top_markets_rows[0].total_value or 0) if top_markets_rows else 0
-    wallet_top_markets = [
-        {
-            "condition_id": row.condition_id,
-            "market": row.market_title or row.condition_id,
-            "trade_count": int(row.trade_count or 0),
-            "total_value": float(row.total_value or 0),
-            "bar_pct": round((float(row.total_value or 0) / top_market_value) * 100) if top_market_value else 0,
-        }
-        for row in top_markets_rows
-    ]
-    today = datetime.now(timezone.utc).date()
-    cutoff_day = today - timedelta(days=6)
-    cutoff_7d = datetime(cutoff_day.year, cutoff_day.month, cutoff_day.day)
-    daily_rows = (
-        db.query(func.date(Trade.traded_at).label("trade_day"), func.count(Trade.id).label("trade_count"))
-        .filter(Trade.wallet_address == wallet.address, Trade.traded_at >= cutoff_7d)
-        .group_by(func.date(Trade.traded_at))
-        .order_by(func.date(Trade.traded_at).asc())
-        .all()
-    )
-    daily_map = {str(row.trade_day): int(row.trade_count or 0) for row in daily_rows}
-    max_daily_count = max(daily_map.values(), default=0)
-    wallet_activity_days = []
-    for offset in range(6, -1, -1):
-        day = today - timedelta(days=offset)
-        count = daily_map.get(day.isoformat(), 0)
-        wallet_activity_days.append(
-            {
-                "label": day.strftime("%a"),
-                "date": day.isoformat(),
-                "count": count,
-                "bar_pct": round((count / max_daily_count) * 100) if max_daily_count else 0,
-            }
-        )
+
     wallet_insights = [
         {
             "label": "24h value",
@@ -323,7 +276,7 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
         },
         {
             "label": "YES / NO trades",
-            "value": f"{int(side_counts_row.yes_count or 0)} / {int(side_counts_row.no_count or 0)}",
+            "value": f"{pnl['yes_count']} / {pnl['no_count']}",
             "detail": "Trade count split across stored history",
             "tone": "info",
         },
