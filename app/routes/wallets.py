@@ -19,6 +19,7 @@ from app.routes._shared import (
     _flash_redirect_with_form,
     _safe_next,
     resolve_wallet,
+    sanitize_search,
     templates,
 )
 from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT
@@ -51,13 +52,17 @@ async def import_wallets(
     total = 0
     added = 0
     duplicates = 0
-    invalid = 0
+    skipped_reasons: list = []
+
+    def _parse_bool(val: str) -> int:
+        return 1 if val.strip().lower() in ("1", "true") else 0
 
     for row in reader:
         total += 1
         raw_address = (row.get("address") or "").strip().lower()
-        if vh.validate_wallet_address(raw_address):
-            invalid += 1
+        validation_error = vh.validate_wallet_address(raw_address)
+        if validation_error:
+            skipped_reasons.append(f"Row {total}: {validation_error} (value: {raw_address!r})")
             continue
         if db.query(Wallet).filter(Wallet.address == raw_address).first():
             duplicates += 1
@@ -65,9 +70,6 @@ async def import_wallets(
 
         raw_tags = (row.get("tags") or "").strip()
         tags_normalized = vh.normalize_tags(raw_tags.replace(";", ",")) if raw_tags else None
-
-        def _parse_bool(val: str) -> int:
-            return 1 if val.strip().lower() in ("1", "true") else 0
 
         wallet = Wallet(
             address=raw_address,
@@ -92,7 +94,8 @@ async def import_wallets(
                 "total": total,
                 "added": added,
                 "duplicates": duplicates,
-                "invalid": invalid,
+                "invalid": len(skipped_reasons),
+                "skipped_reasons": skipped_reasons,
             },
         },
     )
@@ -106,6 +109,7 @@ async def list_wallets(
     include_archived: int = Query(0),
     db: Session = Depends(get_db),
 ):
+    wallet_search = sanitize_search(wallet_search)
     wallets = vh.build_wallet_query(
         db,
         wallet_search=wallet_search,

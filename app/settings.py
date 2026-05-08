@@ -64,3 +64,9 @@ POLYMARKET_CONNECT_TIMEOUT_SECONDS = _env_float("POLYMARKET_CONNECT_TIMEOUT_SECO
 POLYMARKET_READ_TIMEOUT_SECONDS = _env_float("POLYMARKET_READ_TIMEOUT_SECONDS", 15.0)
 POLYMARKET_WRITE_TIMEOUT_SECONDS = _env_float("POLYMARKET_WRITE_TIMEOUT_SECONDS", 15.0)
 POLYMARKET_POOL_TIMEOUT_SECONDS = _env_float("POLYMARKET_POOL_TIMEOUT_SECONDS", 5.0)
+
+# Authentication — if set, all routes require a session login
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip() or None
+
+# Session secret key for itsdangerous / Starlette sessions
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "change-me-in-production-use-a-long-random-secret")

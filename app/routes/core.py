@@ -1,13 +1,11 @@
 """Root redirect and dashboard routes."""
-from datetime import datetime, timedelta, timezone
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import SyncEvent, Trade, Wallet
+from app.models import Trade, Wallet
+from app.queries import get_dashboard_stats
 from app.settings import APP_NAME
 from app import view_helpers as vh
 from app.routes._shared import templates
@@ -22,42 +20,11 @@ async def root():
 
 @router.get("/dashboard")
 async def dashboard(request: Request, db: Session = Depends(get_db)):
-    wallet_counts = db.query(
-        func.count(Wallet.id).label("total"),
-        func.sum(case((func.coalesce(Wallet.is_archived, 0) == 0, 1), else_=0)).label("active"),
-        func.sum(case((func.coalesce(Wallet.is_archived, 0) == 1, 1), else_=0)).label("archived"),
-    ).first()
-    total_wallets = int(wallet_counts.total or 0)
-    active_wallets_count = int(wallet_counts.active or 0)
-    archived_wallets_count = int(wallet_counts.archived or 0)
+    stats = get_dashboard_stats(db)
 
-    trade_value = Trade.price * Trade.size
-    value_row = db.query(
-        func.count(Trade.id).label("total_trades"),
-        func.sum(trade_value).label("total_value"),
-        func.sum(case((Trade.side == "YES", trade_value), else_=0)).label("yes_value"),
-        func.sum(case((Trade.side == "NO", trade_value), else_=0)).label("no_value"),
-    ).first()
-    total_trades = int(value_row.total_trades or 0)
-    total_trade_value = float(value_row.total_value or 0)
-    yes_value = float(value_row.yes_value or 0)
-    no_value = float(value_row.no_value or 0)
-    yes_value_pct = round((yes_value / total_trade_value) * 100) if total_trade_value else 0
-    no_value_pct = 100 - yes_value_pct if total_trade_value else 0
-
-    recent_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
-    recent_value_24h = float(
-        db.query(func.sum(trade_value)).filter(Trade.traded_at >= recent_cutoff).scalar() or 0
-    )
-
-    sync_row = db.query(
-        func.max(case((SyncEvent.status == "success", SyncEvent.created_at))).label("last_success_at"),
-        func.max(case((SyncEvent.status == "error", SyncEvent.created_at))).label("last_error_at"),
-    ).first()
-    last_success_at = sync_row.last_success_at
-    last_error_at = sync_row.last_error_at
     recent_trades = db.query(Trade).order_by(Trade.traded_at.desc()).limit(20).all()
 
+    from sqlalchemy import func
     top_wallets_rows = (
         db.query(Trade.wallet_address, func.count(Trade.id).label("trade_count"))
         .group_by(Trade.wallet_address)
@@ -80,6 +47,8 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     top_markets = vh.build_top_markets(db)
     activity_days = vh.build_activity_heatmap(db)
 
+    last_success_at = stats["last_success_at"]
+    last_error_at = stats["last_error_at"]
     refresh_health = {
         "last_success_label": last_success_at.strftime("%Y-%m-%d %H:%M UTC") if last_success_at else "Never",
         "last_error_label": last_error_at.strftime("%Y-%m-%d %H:%M UTC") if last_error_at else "None recorded",
@@ -89,9 +58,9 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     insight_cards = [
         {
             "label": "24h value",
-            "value": f"${recent_value_24h:,.2f}",
+            "value": f"${stats['recent_value_24h']:,.2f}",
             "detail": "Stored trade value in the last day",
-            "tone": "success" if recent_value_24h else "info",
+            "tone": "success" if stats["recent_value_24h"] else "info",
         },
         {
             "label": "Interesting events",
@@ -113,18 +82,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         {
             "request": request,
             "app_name": APP_NAME,
-            "total_wallets": total_wallets,
-            "active_wallets_count": active_wallets_count,
-            "archived_wallets_count": archived_wallets_count,
-            "total_trades": total_trades,
-            "total_trade_value": total_trade_value,
-            "yes_value": yes_value,
-            "no_value": no_value,
-            "yes_value_pct": yes_value_pct,
-            "no_value_pct": no_value_pct,
-            "recent_value_24h": recent_value_24h,
-            "last_success_at": last_success_at,
-            "last_error_at": last_error_at,
+            **stats,
             "refresh_health": refresh_health,
             "insight_cards": insight_cards,
             "recent_trades": recent_trades,

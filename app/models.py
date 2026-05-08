@@ -3,8 +3,8 @@
 SQLite compatibility changes are applied by app.db.run_schema_migrations.
 """
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, Index, Integer, String, Text
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
 Base = declarative_base()
@@ -26,13 +26,17 @@ class Wallet(Base):
     last_error_at = Column(DateTime, nullable=True)
     last_error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    trades = relationship("Trade", back_populates="wallet", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class Trade(Base):
     __tablename__ = "trades"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    wallet_address = Column(String(255), nullable=False, index=True)
+    wallet_address = Column(String(255), ForeignKey("wallets.address", ondelete="CASCADE"), nullable=False, index=True)
+    wallet = relationship("Wallet", back_populates="trades")
     trade_id = Column(String(255), unique=True, nullable=False, index=True)
     condition_id = Column(String(255), nullable=False, index=True)
     market_title = Column(Text, nullable=True)
@@ -41,6 +45,7 @@ class Trade(Base):
     size = Column(Float, nullable=False)
     traded_at = Column(DateTime, nullable=False)
     inserted_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     alert_sent = Column(Integer, nullable=False, default=0)
 
     __table_args__ = (

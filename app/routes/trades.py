@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app import view_helpers as vh
 from app.db import get_db
 from app.models import Trade, Wallet
-from app.routes._shared import normalized_date_filters, paginated_query, resolve_wallet, templates
+from app.routes._shared import normalized_date_filters, paginated_query, resolve_wallet, sanitize_search, validated_date_preset, templates
 from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 router = APIRouter()
@@ -29,6 +29,8 @@ async def view_trades(
     db: Session = Depends(get_db),
 ):
     wallet = resolve_wallet(db, identifier)
+    market_search = sanitize_search(market_search)
+    date_preset = validated_date_preset(date_preset)
     date_from, date_to = normalized_date_filters(date_preset, date_from, date_to)
 
     base_query = vh.apply_trade_filters(
@@ -93,6 +95,9 @@ async def all_trades(
     sort_by: str = Query("time_desc"),
     db: Session = Depends(get_db),
 ):
+    wallet_search = sanitize_search(wallet_search)
+    market_search = sanitize_search(market_search)
+    date_preset = validated_date_preset(date_preset)
     date_from, date_to = normalized_date_filters(date_preset, date_from, date_to)
 
     query = vh.apply_trade_filters(

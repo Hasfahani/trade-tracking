@@ -1,4 +1,5 @@
 """Settings and refresh/status routes."""
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -12,8 +13,10 @@ from app import view_helpers as vh
 from app.db import get_db
 from app.ingest import cleanup_duplicate_trades, find_duplicate_groups, refresh_wallet
 from app.models import SyncEvent
-from app.routes._shared import _flash_redirect_to, resolve_wallet, templates
+from app.routes._shared import _flash_redirect_to, resolve_wallet, sanitize_search, templates
 from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -42,17 +45,23 @@ async def save_settings(
     alert_min_size: Optional[str] = Form(None),
     alerts_enabled: Optional[str] = Form(None),
 ):
-    settings = alerts.get_app_settings(db)
-    settings.telegram_bot_token = (telegram_bot_token or "").strip() or None
-    settings.telegram_chat_id = (telegram_chat_id or "").strip() or None
-    settings.alerts_enabled = 1 if alerts_enabled else 0
     try:
-        settings.alert_min_size = float(alert_min_size) if alert_min_size else 0.0
-    except ValueError:
-        settings.alert_min_size = 0.0
-    settings.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    db.commit()
-    return _flash_redirect_to("/settings", "Settings saved.", "success")
+        settings = alerts.get_app_settings(db)
+        new_token = (telegram_bot_token or "").strip()
+        if new_token:
+            settings.telegram_bot_token = new_token
+        settings.telegram_chat_id = (telegram_chat_id or "").strip() or None
+        settings.alerts_enabled = 1 if alerts_enabled else 0
+        try:
+            settings.alert_min_size = float(alert_min_size) if alert_min_size else 0.0
+        except ValueError:
+            settings.alert_min_size = 0.0
+        settings.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.commit()
+        return _flash_redirect_to("/settings", "Settings saved.", "success")
+    except Exception:
+        logger.exception("Failed to save settings")
+        return _flash_redirect_to("/settings", "Failed to save settings — please try again.", "error")
 
 
 @router.post("/settings/test-alert")
@@ -78,6 +87,7 @@ async def sync_status_page(
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
+    wallet_search = sanitize_search(wallet_search)
     events_query = vh.filter_sync_events(
         db.query(SyncEvent).order_by(desc(SyncEvent.created_at)),
         wallet_search=wallet_search,
@@ -118,7 +128,12 @@ async def sync_status_page(
     )
 
 
-@router.post("/admin/sync-status/cleanup")
+@router.post(
+    "/admin/sync-status/cleanup",
+    summary="Remove duplicate trades",
+    description="Find and delete semantically-duplicate trade rows, keeping the earliest insertion.",
+    tags=["admin"],
+)
 def cleanup_sync_duplicates(db: Session = Depends(get_db)):
     removed = cleanup_duplicate_trades(db)
     msg = f"Removed {removed} duplicate trade{'s' if removed != 1 else ''}." if removed else "No duplicate trades found."
@@ -126,7 +141,12 @@ def cleanup_sync_duplicates(db: Session = Depends(get_db)):
     return _flash_redirect_to("/admin/sync-status", msg, level)
 
 
-@router.post("/admin/refresh")
+@router.post(
+    "/admin/refresh",
+    summary="Refresh wallet trades",
+    description="Fetch new trades for one wallet (address=) or all active wallets. Returns inserted/fetched counts per wallet.",
+    tags=["admin"],
+)
 def refresh_trades(
     address: Optional[str] = Query(None),
     limit_per_wallet: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),
@@ -142,7 +162,12 @@ def refresh_trades(
     return JSONResponse({"status": "success", "wallets_refreshed": len(results), "results": results})
 
 
-@router.post("/admin/refresh-all")
+@router.post(
+    "/admin/refresh-all",
+    summary="Full-history refresh for all wallets",
+    description="Paginate through the complete Polymarket history for one or all active wallets. Can be slow.",
+    tags=["admin"],
+)
 def refresh_all_trades(
     address: Optional[str] = Query(None),
     limit_per_wallet: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),

@@ -97,17 +97,7 @@
             <h2>7-day activity</h2>
             <span class="pill">Trades per day</span>
         </div>
-        <div class="bar-chart daily-chart" aria-label="Trades over the last 7 days">
-            {% for day in activity_days %}
-            <div class="bar-column" title="{{ day.date }}: {{ day.count }} trade{{ 's' if day.count != 1 else '' }}">
-                <div class="bar-track">
-                    <span style="height: {{ day.bar_pct }}%;"></span>
-                </div>
-                <strong>{{ day.count }}</strong>
-                <em>{{ day.label }}</em>
-            </div>
-            {% endfor %}
-        </div>
+        <canvas id="activity-chart" style="max-height: 160px; width: 100%;" aria-label="Trades over the last 7 days" role="img"></canvas>
     </article>
 
     <article class="card dashboard-panel">
@@ -246,4 +236,62 @@
     </div>
     {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var ctx = document.getElementById('activity-chart');
+    if (!ctx) return;
+    var labels = [{% for d in activity_days %}"{{ d.label }}"{% if not loop.last %},{% endif %}{% endfor %}];
+    var counts = [{% for d in activity_days %}{{ d.count }}{% if not loop.last %},{% endif %}{% endfor %}];
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: counts,
+                backgroundColor: 'rgba(118, 228, 214, 0.55)',
+                borderColor: 'rgba(118, 228, 214, 0.9)',
+                borderWidth: 1,
+                borderRadius: 5,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(11, 16, 26, 0.95)',
+                    borderColor: 'rgba(118, 228, 214, 0.28)',
+                    borderWidth: 1,
+                    titleColor: '#98a4b5',
+                    bodyColor: '#f5f7fb',
+                    callbacks: {
+                        label: function (c) {
+                            return c.parsed.y + ' trade' + (c.parsed.y !== 1 ? 's' : '');
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#98a4b5', font: { family: 'Inter, sans-serif', size: 12 } },
+                    border: { color: 'rgba(255,255,255,0.08)' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#98a4b5', precision: 0, font: { family: 'Inter, sans-serif', size: 12 } },
+                    border: { color: 'rgba(255,255,255,0.08)' }
+                }
+            }
+        }
+    });
+}());
+</script>
 {% endblock %}

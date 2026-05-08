@@ -146,6 +146,15 @@ def normalize_trade(raw: Dict[str, Any], wallet_address: str) -> Optional[Dict[s
 
 
 def calculate_wallet_stats_snapshot(db: Session, wallet_address: str) -> Dict[str, Any]:
+    """Return a lightweight stats snapshot for a wallet after a refresh.
+
+    Args:
+        db: Active SQLAlchemy session.
+        wallet_address: The 0x-prefixed wallet address.
+
+    Returns:
+        Dict with keys ``total_trades`` and ``last_trade_date`` (ISO string or ``None``).
+    """
     row = (
         db.query(
             func.count(Trade.id).label("total_trades"),
@@ -163,6 +172,18 @@ def calculate_wallet_stats_snapshot(db: Session, wallet_address: str) -> Dict[st
 
 
 def find_duplicate_groups(db: Session, wallet_address: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Identify groups of semantically-duplicate trades in the database.
+
+    Two trades are considered duplicates when they share the same wallet,
+    condition ID, side, price, size, and traded_at timestamp.
+
+    Args:
+        db: Active SQLAlchemy session.
+        wallet_address: If provided, restrict the scan to this wallet.
+
+    Returns:
+        List of dicts describing each duplicate group with a ``duplicate_count`` key.
+    """
     query = (
         db.query(
             Trade.wallet_address,
@@ -202,6 +223,14 @@ def find_duplicate_groups(db: Session, wallet_address: Optional[str] = None) -> 
 
 
 def cleanup_duplicate_trades(db: Session) -> int:
+    """Remove duplicate trades, keeping the lowest-ID record in each group.
+
+    Args:
+        db: Active SQLAlchemy session.
+
+    Returns:
+        Number of trade rows deleted.
+    """
     removed = 0
     for group in find_duplicate_groups(db):
         duplicates = (
@@ -317,33 +346,53 @@ def refresh_wallet(
             "last_checked_at": wallet.last_checked_at.isoformat() if wallet.last_checked_at else None,
             "error": None,
         }
+    except httpx.TimeoutException as exc:
+        error_msg = "API unreachable — connection timed out"
+        logger.warning("Wallet refresh timeout for %s: %s", wallet.address, exc)
+        return _handle_refresh_error(db, wallet, started_at, error_msg)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 429:
+            error_msg = "Rate limited — try again later"
+        else:
+            error_msg = f"API error {exc.response.status_code}"
+        logger.warning("Wallet refresh HTTP error for %s: %s", wallet.address, exc)
+        return _handle_refresh_error(db, wallet, started_at, error_msg)
+    except (ValueError, KeyError, TypeError) as exc:
+        error_msg = "Unexpected API response format"
+        logger.exception("Wallet refresh parse error for %s", wallet.address)
+        return _handle_refresh_error(db, wallet, started_at, error_msg)
     except Exception as exc:
         logger.exception("Wallet refresh failed for %s", wallet.address)
-        wallet.last_refresh_status = "error"
-        wallet.last_refresh_count = 0
-        wallet.last_error_at = started_at
-        wallet.last_error_message = str(exc)
-        _create_sync_event(
-            db,
-            wallet.address,
-            status="error",
-            fetched_count=0,
-            inserted_count=0,
-            duplicate_count=0,
-            duration_ms=max(int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000), 0),
-            error_message=str(exc),
-        )
-        db.commit()
-        return {
-            "wallet": wallet.address,
-            "status": "error",
-            "fetched": 0,
-            "inserted": 0,
-            "duplicates": 0,
-            "stats": calculate_wallet_stats_snapshot(db, wallet.address),
-            "last_checked_at": wallet.last_checked_at.isoformat() if wallet.last_checked_at else None,
-            "error": str(exc),
-        }
+        return _handle_refresh_error(db, wallet, started_at, str(exc))
+
+
+def _handle_refresh_error(db, wallet, started_at, error_msg: str) -> dict:
+    """Record a refresh error and return the standard error result dict."""
+    wallet.last_refresh_status = "error"
+    wallet.last_refresh_count = 0
+    wallet.last_error_at = started_at
+    wallet.last_error_message = error_msg
+    _create_sync_event(
+        db,
+        wallet.address,
+        status="error",
+        fetched_count=0,
+        inserted_count=0,
+        duplicate_count=0,
+        duration_ms=max(int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000), 0),
+        error_message=error_msg,
+    )
+    db.commit()
+    return {
+        "wallet": wallet.address,
+        "status": "error",
+        "fetched": 0,
+        "inserted": 0,
+        "duplicates": 0,
+        "stats": calculate_wallet_stats_snapshot(db, wallet.address),
+        "last_checked_at": wallet.last_checked_at.isoformat() if wallet.last_checked_at else None,
+        "error": error_msg,
+    }
 
 
 def ingest_trades(db: Session, wallet_address: str) -> int:

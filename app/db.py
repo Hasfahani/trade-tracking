@@ -1,10 +1,11 @@
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, Iterable, Optional, Set, Tuple
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models import Base
+from app.models import Base, SyncEvent
 from app.settings import DATABASE_URL
 
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
@@ -115,6 +116,11 @@ def _migrate_trade_alert_sent(conn) -> None:
     )
 
 
+def _migrate_updated_at_columns(conn) -> None:
+    _add_missing_columns(conn, "wallets", {"updated_at": "DATETIME"})
+    _add_missing_columns(conn, "trades", {"updated_at": "DATETIME"})
+
+
 def _migrate_sqlite_indexes(conn) -> None:
     index_statements = [
         (
@@ -150,6 +156,7 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("003_app_settings_columns", _migrate_settings_columns),
     ("004_trade_alert_sent", _migrate_trade_alert_sent),
     ("005_sqlite_indexes", _migrate_sqlite_indexes),
+    ("006_updated_at_columns", _migrate_updated_at_columns),
 )
 
 
@@ -212,3 +219,20 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def prune_old_sync_events(db, keep_days: int = 90) -> int:
+    """Delete sync events older than ``keep_days`` days.
+
+    Args:
+        db: An active SQLAlchemy session.
+        keep_days: Events older than this many days are removed.
+
+    Returns:
+        Number of rows deleted.
+    """
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=keep_days)
+    deleted = db.query(SyncEvent).filter(SyncEvent.created_at < cutoff).delete(synchronize_session=False)
+    if deleted:
+        db.commit()
+    return int(deleted)

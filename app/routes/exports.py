@@ -18,7 +18,7 @@ _BOM = "\ufeff"
 router = APIRouter()
 
 
-@router.get("/wallets/export")
+@router.get("/wallets/export", summary="Export wallets as CSV", tags=["exports"])
 async def export_wallets(db: Session = Depends(get_db)):
     wallets = db.query(Wallet).order_by(Wallet.created_at).all()
 
@@ -51,7 +51,7 @@ async def export_wallets(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/all-trades/export")
+@router.get("/all-trades/export", summary="Export all trades as CSV (filterable)", tags=["exports"])
 async def export_all_trades(
     side: Optional[str] = Query(None),
     market_search: Optional[str] = Query(None),
@@ -103,7 +103,7 @@ async def export_all_trades(
     )
 
 
-@router.get("/wallets/{identifier}/trades/export")
+@router.get("/wallets/{identifier}/trades/export", summary="Export single-wallet trades as CSV", tags=["exports"])
 async def export_trades(
     identifier: str,
     side: Optional[str] = Query(None),

@@ -25,7 +25,7 @@ def build_client():
     testing_session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
 
-    app = create_app(lifespan_context=None)
+    app = create_app(lifespan_context=None, csrf_enabled=False)
 
     def override_get_db():
         db = testing_session()

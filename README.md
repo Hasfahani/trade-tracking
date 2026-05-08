@@ -124,19 +124,52 @@ Open:
 
 ## Runtime Configuration
 
-Environment variables:
-- APP_NAME: app title shown in the UI
-- LOG_LEVEL: application log level
-- PORT: server port (default 8000)
-- HOST: server host (default 0.0.0.0)
-- DATABASE_URL: SQLAlchemy database URL
-- DEFAULT_PAGE_SIZE: trade page size default
-- MAX_PAGE_SIZE: trade page size cap
-- DEFAULT_REFRESH_LIMIT: per-refresh fetch limit
-- POLYMARKET_CONNECT_TIMEOUT_SECONDS: Polymarket API connect timeout in seconds (default 5.0)
-- POLYMARKET_READ_TIMEOUT_SECONDS: Polymarket API read timeout in seconds (default 15.0)
-- POLYMARKET_WRITE_TIMEOUT_SECONDS: Polymarket API write timeout in seconds (default 15.0)
-- POLYMARKET_POOL_TIMEOUT_SECONDS: Polymarket API connection pool timeout in seconds (default 5.0)
+All settings are read from environment variables at startup. None are required; defaults are listed below.
+
+### Application
+
+| Variable | Default | Description |
+|---|---|---|
+| `APP_NAME` | `PolySignal` | Title displayed in the browser tab and nav header. |
+| `LOG_LEVEL` | `INFO` | Python logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
+| `HOST` | `0.0.0.0` | Bind address for the uvicorn server. |
+| `PORT` | `8000` | TCP port the server listens on. |
+| `DATABASE_URL` | `sqlite:///./data/trades.db` | SQLAlchemy database URL. SQLite and PostgreSQL are both supported. For PostgreSQL use `postgresql+psycopg2://user:pass@host/db`. |
+
+### Authentication
+
+| Variable | Default | Description |
+|---|---|---|
+| `DASHBOARD_PASSWORD` | *(unset)* | When set, enables single-user password authentication. All pages redirect to `/login` until the correct password is entered. Leave unset to disable auth entirely (suitable for local-only deployments). |
+| `SESSION_SECRET_KEY` | `change-me-in-production-use-a-long-random-secret` | Secret used to sign the session cookie via `itsdangerous`. **Change this in any non-local deployment.** Generate with `python -c "import secrets; print(secrets.token_hex(32))"`. |
+
+### Pagination and Refresh
+
+| Variable | Default | Description |
+|---|---|---|
+| `DEFAULT_PAGE_SIZE` | `50` | Number of trades shown per page on trade list views. |
+| `MAX_PAGE_SIZE` | `200` | Maximum value a caller may request via the `page_size` query param. |
+| `DEFAULT_REFRESH_LIMIT` | `500` | Number of trades fetched per wallet per refresh call. Applies to both UI-triggered and admin refreshes. |
+
+### Polymarket API Timeouts
+
+| Variable | Default | Description |
+|---|---|---|
+| `POLYMARKET_CONNECT_TIMEOUT_SECONDS` | `5.0` | TCP connection timeout when reaching `data-api.polymarket.com`. |
+| `POLYMARKET_READ_TIMEOUT_SECONDS` | `15.0` | Time allowed to receive the response body after connecting. |
+| `POLYMARKET_WRITE_TIMEOUT_SECONDS` | `15.0` | Time allowed to send the request body. |
+| `POLYMARKET_POOL_TIMEOUT_SECONDS` | `5.0` | Time to wait for a connection from the httpx connection pool. |
+
+### Telegram Alerts
+
+Telegram credentials are stored in the database (via the `/settings` page) and are not read from environment variables at startup. Configure them in the UI after launch:
+
+| Setting | Description |
+|---|---|
+| **Bot Token** | Token from [@BotFather](https://t.me/BotFather). Stored encrypted-at-rest in the `app_settings` table. Submitting a blank value on the settings page preserves the existing token. |
+| **Chat ID** | Telegram chat or channel ID to send alerts to. |
+| **Alert minimum size** | Trades smaller than this USDC value are silently skipped. |
+| **Alerts enabled** | Master on/off switch for all Telegram notifications. |
 
 Refresh/API query parameters:
 - `POST /wallets/{identifier}/refresh?limit=<int>` (1-1000)

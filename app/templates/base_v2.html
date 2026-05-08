@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ app_name or "PolySignal" }}{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="/static/style_v2.css">
 </head>
 <body>
@@ -109,6 +113,26 @@
             }
         });
     }
+
+    // CSRF: inject token into every POST form from the cookie set by the server
+    (function() {
+        function getCookie(name) {
+            const m = document.cookie.match('(?:^|;)\\s*' + name + '=([^;]*)');
+            return m ? decodeURIComponent(m[1]) : null;
+        }
+        const token = getCookie('csrftoken');
+        if (token) {
+            document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = token;
+                    form.appendChild(input);
+                }
+            });
+        }
+    })();
 
     // Flash message: close button + auto-dismiss after 9 seconds
     const flash = document.querySelector('.flash');

@@ -1,6 +1,10 @@
 """Shared helpers used across all route modules."""
+import logging
+import re
 from typing import Any, Dict, Optional, Sequence, Tuple
 from urllib.parse import quote
+
+logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
@@ -12,6 +16,24 @@ from app.models import Wallet
 
 templates = Jinja2Templates(directory="app/templates")
 DATE_PRESETS = frozenset({"today", "7d", "30d"})
+
+_MAX_SEARCH_LEN = 255
+_DANGEROUS_CHARS_RE = re.compile(r"[<>\"'`;]")
+
+
+def sanitize_search(value: Optional[str]) -> Optional[str]:
+    """Strip dangerous characters and enforce max length on free-text search params."""
+    if value is None:
+        return None
+    cleaned = _DANGEROUS_CHARS_RE.sub("", value).strip()
+    return cleaned[:_MAX_SEARCH_LEN] or None
+
+
+def validated_date_preset(value: Optional[str]) -> Optional[str]:
+    """Return value only if it is an allowed date preset, else None."""
+    if value in DATE_PRESETS:
+        return value
+    return None
 
 
 def _flash_redirect(message: str, level: str = "info") -> RedirectResponse:
