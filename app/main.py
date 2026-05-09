@@ -173,6 +173,10 @@ async def security_headers_middleware(request: Request, call_next):
         "base-uri 'self'; "
         "frame-ancestors 'none';"
     )
+    content_type = (response.headers.get("content-type") or "").lower()
+    if "text/html" in content_type:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 
