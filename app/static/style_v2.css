@@ -955,6 +955,31 @@ th {
     background: #111d2d;
 }
 
+.sync-page .compact-filter-grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.sync-page .alert-item p {
+    margin: 8px 0 0;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.sync-page .sync-duplicate-meta {
+    font-family: "Consolas", monospace;
+    font-size: 0.84rem;
+}
+
+.sync-page .sync-cleanup {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.sync-page .sync-cleanup .subtle {
+    margin-bottom: 10px;
+}
+
 .stat-chip {
     min-width: 120px;
     border: 1px solid rgba(51, 80, 109, 0.45);
@@ -1077,6 +1102,37 @@ th {
 @media (max-width: 760px) {
     .page-shell {
         padding: 22px 14px 36px;
+    }
+
+    .sync-page .two-col {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .sync-page .action-row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .sync-page .action-row .btn {
+        width: 100%;
+    }
+
+    .sync-page .pagination-row {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .sync-page .pagination-row .btn {
+        flex: 1 1 auto;
+        text-align: center;
+    }
+
+    .sync-page .pagination-meta {
+        width: 100%;
+        text-align: center;
     }
 
     .trade-table thead {
@@ -1221,6 +1277,23 @@ th {
     /* Metric card: tighter */
     .metric-card {
         padding: 12px 14px;
+    }
+
+    .sync-page .hero-card h1 {
+        font-size: 1.28rem;
+    }
+
+    .sync-page .hero-card,
+    .sync-page .card {
+        padding: 12px;
+    }
+
+    .sync-page .action-row {
+        grid-template-columns: 1fr;
+    }
+
+    .sync-page .checkbox-row {
+        min-height: 40px;
     }
 }
 

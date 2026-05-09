@@ -3,6 +3,7 @@
 {% block title %}Sync Status{% endblock %}
 
 {% block content %}
+<div class="sync-page">
 <section class="hero-card">
     <div class="hero-copy">
         <p class="eyebrow">Data quality</p>
@@ -101,15 +102,15 @@
             {% for duplicate in duplicates %}
             <div class="alert-item">
                 <strong><a href="/wallets/{{ duplicate.wallet_address }}/trades?market_search={{ duplicate.condition_id }}">{{ short_address(duplicate.wallet_address) }}</a></strong>
-                <p>{{ duplicate.condition_id }} | {{ duplicate.side }} | {{ duplicate.duplicate_count }} copies</p>
+                <p class="sync-duplicate-meta">{{ duplicate.condition_id }} | {{ duplicate.side }} | {{ duplicate.duplicate_count }} copies</p>
             </div>
             {% else %}
             <p>No semantic duplicates found.</p>
             {% endfor %}
         </div>
         {% if duplicates %}
-        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);">
-            <p class="subtle" style="margin-bottom: 10px;">Cleanup removes extra duplicate rows from SQLite, keeping one trade per unique trade_id. Safe to run at any time.</p>
+        <div class="sync-cleanup">
+            <p class="subtle">Cleanup removes extra duplicate rows from SQLite, keeping one trade per unique trade_id. Safe to run at any time.</p>
             <form method="post" action="/admin/sync-status/cleanup" onsubmit="return confirm('Remove duplicate trade rows from local SQLite? One row per unique trade_id is kept.')">
                 <button type="submit" class="btn btn-danger btn-small">Remove duplicates</button>
             </form>
@@ -117,4 +118,5 @@
         {% endif %}
     </article>
 </section>
+</div>
 {% endblock %}
