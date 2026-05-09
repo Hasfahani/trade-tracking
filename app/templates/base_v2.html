@@ -48,6 +48,7 @@
                 <a href="/wallets">Wallets</a>
                 <a href="/all-trades">All Trades</a>
                 <a href="/admin/sync-status">Sync</a>
+                <a href="/admin/ops-ui">Ops</a>
                 <a href="/settings">Settings</a>
             </nav>
         </div>
@@ -58,118 +59,10 @@
     </main>
 
     <footer class="site-footer">
-        <p>Manual refresh only. Page loads read from SQLite, and refresh actions call Polymarket only when you trigger them.</p>
+        <p>Manual refresh only &mdash; reads from SQLite. Last sync: <span id="staleness-ts" class="staleness-ts">&mdash;</span></p>
     </footer>
 
-    <script>
-    // Copy-to-clipboard buttons
-    document.querySelectorAll('[data-copy]').forEach((button) => {
-        button.addEventListener('click', async () => {
-            const text = button.getAttribute('data-copy');
-            const original = button.dataset.copyLabel || button.textContent;
-            try {
-                await navigator.clipboard.writeText(text);
-                button.textContent = 'Copied';
-            } catch (_) {
-                button.textContent = 'Copy failed';
-            }
-            window.setTimeout(() => { button.textContent = original; }, 1200);
-        });
-    });
-
-    // Active nav highlighting
-    const currentPath = window.location.pathname;
-    document.querySelectorAll('.top-nav a').forEach((a) => {
-        const href = a.getAttribute('href');
-        if (href === currentPath || (href !== '/' && currentPath.startsWith(href))) {
-            a.classList.add('active');
-        }
-    });
-
-    // Page loading bar
-    const loader = document.getElementById('page-loader');
-    function startLoader() {
-        if (!loader) return;
-        loader.style.transition = 'none';
-        loader.style.width = '0';
-        void loader.offsetWidth;
-        loader.classList.add('is-loading');
-    }
-    document.querySelectorAll('a[href]').forEach((a) => {
-        const href = a.getAttribute('href');
-        if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !a.target) {
-            a.addEventListener('click', startLoader);
-        }
-    });
-
-    // Loading state: disable submit buttons on form submit to prevent double-click
-    document.querySelectorAll('form').forEach((form) => {
-        form.addEventListener('submit', () => {
-            startLoader();
-            const btn = form.querySelector('button[type="submit"]:not([data-no-loading])');
-            if (btn && !btn.disabled) {
-                btn.disabled = true;
-                btn.dataset.orig = btn.textContent;
-                btn.textContent = 'Loading...';
-            }
-        });
-    });
-
-    // Hamburger menu toggle
-    const navToggle = document.querySelector('.nav-toggle');
-    const topNav = document.getElementById('top-nav');
-    if (navToggle && topNav) {
-        navToggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const open = topNav.classList.toggle('nav-open');
-            navToggle.setAttribute('aria-expanded', String(open));
-            navToggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
-        });
-        document.addEventListener('click', (e) => {
-            if (!navToggle.contains(e.target) && !topNav.contains(e.target)) {
-                topNav.classList.remove('nav-open');
-                navToggle.setAttribute('aria-expanded', 'false');
-                navToggle.setAttribute('aria-label', 'Open menu');
-            }
-        });
-    }
-
-    // CSRF: inject token into every POST form from the cookie set by the server
-    (function() {
-        function getCookie(name) {
-            const m = document.cookie.match('(?:^|;)\\s*' + name + '=([^;]*)');
-            return m ? decodeURIComponent(m[1]) : null;
-        }
-        const token = getCookie('csrftoken');
-        if (token) {
-            document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
-                if (!form.querySelector('input[name="csrf_token"]')) {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'csrf_token';
-                    input.value = token;
-                    form.appendChild(input);
-                }
-            });
-        }
-    })();
-
-    // Flash message: close button + auto-dismiss after 9 seconds
-    const flash = document.querySelector('.flash');
-    if (flash) {
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'flash-close';
-        closeBtn.setAttribute('aria-label', 'Dismiss');
-        closeBtn.textContent = 'x';
-        closeBtn.addEventListener('click', () => flash.remove());
-        flash.appendChild(closeBtn);
-        setTimeout(() => {
-            flash.style.transition = 'opacity 0.6s ease';
-            flash.style.opacity = '0';
-            setTimeout(() => flash.remove(), 650);
-        }, 9000);
-    }
-    </script>
+    <script src="/static/base.js"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

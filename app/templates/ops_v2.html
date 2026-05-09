@@ -1,0 +1,154 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Ops Dashboard{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Internal</p>
+        <h1>Ops Dashboard</h1>
+        <p class="subtle">Live operational diagnostics: database status, migrations, last sync event, build info, and error counters.</p>
+    </div>
+    <div class="hero-actions">
+        <div class="hero-actions-row">
+            <a href="/admin/sync-status" class="btn btn-small">Sync history</a>
+            <a href="/admin/ops" class="btn btn-small">Raw JSON</a>
+            <a href="/readyz" class="btn btn-small">Health check</a>
+        </div>
+        <div class="hero-status-row">
+            <span class="pill {% if db_ok %}success{% else %}danger{% endif %}">
+                DB {% if db_ok %}OK{% else %}Error{% endif %}
+            </span>
+            <span class="pill {% if ready %}success{% else %}danger{% endif %}">
+                App {% if ready %}Ready{% else %}Not ready{% endif %}
+            </span>
+            {% if pending_migrations %}
+            <span class="pill warning">{{ pending_migrations|length }} migration{{ 's' if pending_migrations|length != 1 else '' }} pending</span>
+            {% else %}
+            <span class="pill success">Migrations current</span>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<div class="dashboard-grid ops-grid">
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>Build info</h2>
+            <span class="pill {% if ready %}success{% else %}danger{% endif %}">{% if ready %}Ready{% else %}Not ready{% endif %}</span>
+        </div>
+        <div class="detail-grid dashboard-detail">
+            <div>
+                <strong>Version</strong>
+                <span class="mono">{{ build_version }}</span>
+            </div>
+            <div>
+                <strong>Commit</strong>
+                <span class="mono">{{ build_commit }}</span>
+            </div>
+            <div>
+                <strong>Environment</strong>
+                <span>{{ build_env }}</span>
+            </div>
+            <div>
+                <strong>App ready</strong>
+                <span class="pill {% if ready %}success{% else %}danger{% endif %}">{{ 'Yes' if ready else 'No' }}</span>
+            </div>
+        </div>
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>Database</h2>
+            <span class="pill {% if db_ok %}success{% else %}danger{% endif %}">{% if db_ok %}Connected{% else %}Error{% endif %}</span>
+        </div>
+        <div class="detail-grid dashboard-detail">
+            <div>
+                <strong>Status</strong>
+                <span class="pill {% if db_ok %}success{% else %}danger{% endif %}">{% if db_ok %}OK{% else %}Unavailable{% endif %}</span>
+            </div>
+            <div>
+                <strong>Migrations applied</strong>
+                <span>{{ applied_migrations|length }}</span>
+            </div>
+        </div>
+        {% if db_error %}
+        <p class="error-text refresh-error">{{ db_error }}</p>
+        {% endif %}
+        {% if pending_migrations %}
+        <div style="margin-top:14px;">
+            <strong style="display:block;margin-bottom:8px;font-size:0.88rem;">Pending migrations</strong>
+            {% for v in pending_migrations %}
+            <span class="pill warning" style="margin:2px 4px 2px 0;">{{ v }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>Last sync event</h2>
+            {% if last_sync %}
+            <span class="pill {% if last_sync.status == 'success' %}success{% elif last_sync.status == 'error' %}danger{% else %}info{% endif %}">
+                {{ last_sync.status or 'unknown' }}
+            </span>
+            {% else %}
+            <span class="pill">No events</span>
+            {% endif %}
+        </div>
+        {% if last_sync %}
+        <div class="detail-grid dashboard-detail">
+            <div>
+                <strong>Wallet</strong>
+                <span class="mono">{{ last_sync.wallet or '—' }}</span>
+            </div>
+            <div>
+                <strong>Timestamp</strong>
+                <span>{{ last_sync.at or '—' }}</span>
+            </div>
+            <div>
+                <strong>Fetched</strong>
+                <span>{{ last_sync.fetched or 0 }}</span>
+            </div>
+            <div>
+                <strong>Inserted</strong>
+                <span>{{ last_sync.inserted or 0 }}</span>
+            </div>
+        </div>
+        {% if last_sync.error %}
+        <p class="error-text refresh-error">{{ last_sync.error }}</p>
+        {% endif %}
+        {% else %}
+        <div class="empty-state compact-empty">
+            <div class="empty-icon">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 6v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="14" r="1" fill="currentColor"/></svg>
+            </div>
+            <p>No sync events recorded yet.</p>
+        </div>
+        {% endif %}
+        <div class="panel-actions">
+            <a href="/admin/sync-status" class="btn btn-small">View full sync log</a>
+        </div>
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>Request counters</h2>
+            <span class="pill">Since last restart</span>
+        </div>
+        <div class="metrics-grid embedded-metrics" style="grid-template-columns: repeat(2, 1fr);">
+            <article class="metric-card {% if counters.get('4xx', 0) > 0 %}ops-warn{% endif %}">
+                <span class="metric-label">4xx errors</span>
+                <strong>{{ counters.get('4xx', 0) }}</strong>
+            </article>
+            <article class="metric-card {% if counters.get('5xx', 0) > 0 %}ops-danger{% endif %}">
+                <span class="metric-label">5xx errors</span>
+                <strong>{{ counters.get('5xx', 0) }}</strong>
+            </article>
+        </div>
+        <p class="subtle" style="margin-top:12px;font-size:0.84rem;">Counters reset on process restart.</p>
+    </article>
+
+</div>
+{% endblock %}

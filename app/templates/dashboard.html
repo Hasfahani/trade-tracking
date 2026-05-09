@@ -155,7 +155,10 @@
         </div>
         {% else %}
         <div class="empty-state compact-empty">
-            <p>No trade value stored yet.</p>
+            <div class="empty-icon">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10h14M10 3v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <p>No trade value stored yet. Refresh a wallet to populate the split.</p>
         </div>
         {% endif %}
     </article>
@@ -186,7 +189,11 @@
         </div>
         {% else %}
         <div class="empty-state compact-empty">
+            <div class="empty-icon">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="10" r="3" fill="currentColor"/></svg>
+            </div>
             <p>No trades stored yet.</p>
+            <a href="/wallets" class="btn btn-primary btn-small" style="margin-top:4px;">Manage wallets</a>
         </div>
         {% endif %}
     </article>
@@ -211,6 +218,9 @@
         </div>
         {% else %}
         <div class="empty-state compact-empty">
+            <div class="empty-icon">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="11" width="3" height="6" rx="1" fill="currentColor" opacity="0.5"/><rect x="8.5" y="7" width="3" height="10" rx="1" fill="currentColor" opacity="0.7"/><rect x="14" y="4" width="3" height="13" rx="1" fill="currentColor"/></svg>
+            </div>
             <p>No market value stored yet.</p>
         </div>
         {% endif %}
@@ -255,7 +265,11 @@
     </div>
     {% else %}
     <div class="empty-state">
-        <p>No interesting activity detected in the last 24 hours. Refresh wallets to pull in recent trades.</p>
+        <div class="empty-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v6l4 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <h3>No interesting activity in the last 24 hours</h3>
+        <p>Large trades, spikes, and new market entries appear here. Refresh wallets to pull in recent trades.</p>
     </div>
     {% endif %}
 </section>
@@ -299,90 +313,19 @@
     </div>
     {% else %}
     <div class="empty-state">
-        <h3>No trades yet</h3>
+        <div class="empty-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><polyline points="2,15 6,9 10,12 14,5 18,8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>No trades stored yet</h3>
         <p>Add wallets and refresh them to see trade activity here.</p>
+        <a href="/wallets" class="btn btn-primary btn-small" style="margin-top:4px;">Add a wallet</a>
     </div>
     {% endif %}
 </section>
 {% endblock %}
 
 {% block scripts %}
+<script type="application/json" id="activity-chart-data">{"labels":[{% for d in activity_days %}"{{ d.label }}"{% if not loop.last %},{% endif %}{% endfor %}],"counts":[{% for d in activity_days %}{{ d.count }}{% if not loop.last %},{% endif %}{% endfor %}]}</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<script>
-// Count-up animation for metric cards
-(function () {
-    var els = document.querySelectorAll('[data-countup]');
-    if (!els.length || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    els.forEach(function (el) {
-        var target = parseInt(el.getAttribute('data-countup'), 10);
-        if (isNaN(target) || target === 0) return;
-        var start = 0;
-        var duration = 900;
-        var startTime = null;
-        function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
-        function step(ts) {
-            if (!startTime) startTime = ts;
-            var progress = Math.min((ts - startTime) / duration, 1);
-            el.textContent = Math.floor(ease(progress) * target).toLocaleString();
-            if (progress < 1) requestAnimationFrame(step);
-            else el.textContent = target.toLocaleString();
-        }
-        requestAnimationFrame(step);
-    });
-}());
-</script>
-<script>
-(function () {
-    var ctx = document.getElementById('activity-chart');
-    if (!ctx) return;
-    var labels = [{% for d in activity_days %}"{{ d.label }}"{% if not loop.last %},{% endif %}{% endfor %}];
-    var counts = [{% for d in activity_days %}{{ d.count }}{% if not loop.last %},{% endif %}{% endfor %}];
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: counts,
-                backgroundColor: 'rgba(118, 228, 214, 0.55)',
-                borderColor: 'rgba(118, 228, 214, 0.9)',
-                borderWidth: 1,
-                borderRadius: 5,
-                borderSkipped: false
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(11, 16, 26, 0.95)',
-                    borderColor: 'rgba(118, 228, 214, 0.28)',
-                    borderWidth: 1,
-                    titleColor: '#98a4b5',
-                    bodyColor: '#f5f7fb',
-                    callbacks: {
-                        label: function (c) {
-                            return c.parsed.y + ' trade' + (c.parsed.y !== 1 ? 's' : '');
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    grid: { color: 'rgba(255,255,255,0.05)' },
-                    ticks: { color: '#98a4b5', font: { family: 'Inter, sans-serif', size: 12 } },
-                    border: { color: 'rgba(255,255,255,0.08)' }
-                },
-                y: {
-                    beginAtZero: true,
-                    grid: { color: 'rgba(255,255,255,0.05)' },
-                    ticks: { color: '#98a4b5', precision: 0, font: { family: 'Inter, sans-serif', size: 12 } },
-                    border: { color: 'rgba(255,255,255,0.08)' }
-                }
-            }
-        }
-    });
-}());
-</script>
+<script src="/static/dashboard.js"></script>
 {% endblock %}

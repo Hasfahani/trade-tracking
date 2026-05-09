@@ -343,14 +343,6 @@
         </div>
     </div>
 
-    <script>
-    document.querySelector('form').addEventListener('submit', function() {
-        const btn = this.querySelector('.login-submit');
-        if (btn && !btn.disabled) {
-            btn.disabled = true;
-            btn.textContent = 'Signing in…';
-        }
-    });
-    </script>
+    <script src="/static/login.js"></script>
 </body>
 </html>

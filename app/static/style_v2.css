@@ -909,10 +909,41 @@ th {
 }
 
 .empty-state {
-    border: 1px dashed var(--border);
+    border: 1px dashed rgba(118, 228, 214, 0.18);
     border-radius: 12px;
-    padding: 20px;
+    padding: 36px 24px;
     color: var(--muted);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.empty-state h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.empty-state p {
+    margin: 0;
+    line-height: 1.5;
+    max-width: 340px;
+}
+
+.empty-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(118, 228, 214, 0.08);
+    border: 1px solid rgba(118, 228, 214, 0.18);
+    color: var(--accent);
+    margin-bottom: 4px;
+    flex-shrink: 0;
 }
 
 .error-text,
@@ -1565,9 +1596,17 @@ td {
 
 .empty-state {
     border-radius: 10px;
-    border-color: rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.025);
+    border-color: rgba(118, 228, 214, 0.16);
+    background: rgba(118, 228, 214, 0.025);
 }
+
+.staleness-ts {
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.ops-warn strong { color: var(--warning); }
+.ops-danger strong { color: var(--danger); }
 
 .wallet-card,
 .feed-item,

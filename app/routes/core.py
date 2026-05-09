@@ -128,6 +128,73 @@ async def ops_diagnostics(request: Request):
     })
 
 
+@router.get("/api/last-sync")
+async def last_sync_api():
+    """Return the last successful sync timestamp for the staleness indicator."""
+    try:
+        from app.db import SessionLocal as _SL
+        db = _SL()
+        sync = db.query(SyncEvent).filter(SyncEvent.status == "success").order_by(desc(SyncEvent.created_at)).first()
+        db.close()
+        if sync and sync.created_at:
+            return JSONResponse({"iso": sync.created_at.isoformat(), "has_sync": True})
+    except Exception:
+        pass
+    return JSONResponse({"iso": None, "has_sync": False})
+
+
+@router.get("/admin/ops-ui")
+async def ops_ui(request: Request):
+    """HTML operational diagnostics dashboard."""
+    db_ok = False
+    db_error = None
+    last_sync = None
+    applied_migrations = []
+    pending = []
+    try:
+        check_database_ready()
+        db_ok = True
+    except Exception as exc:
+        db_error = str(exc)
+    try:
+        from app.db import SCHEMA_MIGRATIONS, SessionLocal as _SL
+        applied_migrations = get_applied_migration_versions()
+        db = _SL()
+        sync = db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).first()
+        if sync:
+            last_sync = {
+                "status": sync.status,
+                "wallet": sync.wallet_address,
+                "inserted": sync.inserted_count,
+                "fetched": sync.fetched_count,
+                "at": sync.created_at.isoformat() if sync.created_at else None,
+                "error": sync.error_message,
+            }
+        db.close()
+        all_versions = [v for v, _ in SCHEMA_MIGRATIONS]
+        pending = [v for v in all_versions if v not in set(applied_migrations)]
+    except Exception:
+        pending = []
+    return templates.TemplateResponse(
+        request,
+        "ops_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "db_ok": db_ok,
+            "db_error": db_error,
+            "applied_migrations": applied_migrations,
+            "pending_migrations": pending,
+            "last_sync": last_sync,
+            "build_version": APP_VERSION,
+            "build_commit": GIT_COMMIT,
+            "build_env": APP_ENV,
+            "ready": bool(getattr(request.app.state, "ready", False)),
+            "counters": _get_status_counters(),
+        },
+    )
+
+
 @router.get("/robots.txt")
 async def robots_txt():
     return PlainTextResponse(
