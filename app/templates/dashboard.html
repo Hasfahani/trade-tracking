@@ -24,23 +24,38 @@
 
 <section class="metrics-grid dashboard-metrics">
     <article class="metric-card">
-        <span class="metric-label">Total wallets</span>
-        <strong>{{ total_wallets }}</strong>
+        <span class="metric-label">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align:middle;margin-right:5px;opacity:0.6"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.5"/><circle cx="6" cy="6" r="2" fill="currentColor"/></svg>
+            Total wallets
+        </span>
+        <strong data-countup="{{ total_wallets }}">{{ total_wallets }}</strong>
     </article>
     <article class="metric-card">
-        <span class="metric-label">Active wallets</span>
-        <strong>{{ active_wallets_count }}</strong>
+        <span class="metric-label">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align:middle;margin-right:5px;opacity:0.6"><path d="M6 1L11 4V8L6 11L1 8V4L6 1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            Active wallets
+        </span>
+        <strong data-countup="{{ active_wallets_count }}">{{ active_wallets_count }}</strong>
     </article>
     <article class="metric-card">
-        <span class="metric-label">Archived wallets</span>
-        <strong>{{ archived_wallets_count }}</strong>
+        <span class="metric-label">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align:middle;margin-right:5px;opacity:0.6"><rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><line x1="4" y1="6" x2="8" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Archived
+        </span>
+        <strong data-countup="{{ archived_wallets_count }}">{{ archived_wallets_count }}</strong>
     </article>
     <article class="metric-card">
-        <span class="metric-label">Total trades</span>
-        <strong>{{ total_trades }}</strong>
+        <span class="metric-label">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align:middle;margin-right:5px;opacity:0.6"><polyline points="1,9 4,5 7,7 11,2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Total trades
+        </span>
+        <strong data-countup="{{ total_trades }}">{{ total_trades }}</strong>
     </article>
     <article class="metric-card">
-        <span class="metric-label">Stored value</span>
+        <span class="metric-label">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align:middle;margin-right:5px;opacity:0.6"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.5"/><text x="6" y="9.5" text-anchor="middle" font-size="7" fill="currentColor" font-family="monospace">$</text></svg>
+            Stored value
+        </span>
         {% if total_trade_value >= 1000000000 %}
         {% set stored_value_display = '${:,.2f}B'.format(total_trade_value / 1000000000) %}
         {% elif total_trade_value >= 1000000 %}
@@ -293,6 +308,29 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+// Count-up animation for metric cards
+(function () {
+    var els = document.querySelectorAll('[data-countup]');
+    if (!els.length || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    els.forEach(function (el) {
+        var target = parseInt(el.getAttribute('data-countup'), 10);
+        if (isNaN(target) || target === 0) return;
+        var start = 0;
+        var duration = 900;
+        var startTime = null;
+        function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+        function step(ts) {
+            if (!startTime) startTime = ts;
+            var progress = Math.min((ts - startTime) / duration, 1);
+            el.textContent = Math.floor(ease(progress) * target).toLocaleString();
+            if (progress < 1) requestAnimationFrame(step);
+            else el.textContent = target.toLocaleString();
+        }
+        requestAnimationFrame(step);
+    });
+}());
+</script>
 <script>
 (function () {
     var ctx = document.getElementById('activity-chart');
