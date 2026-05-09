@@ -2,6 +2,8 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
+from fastapi.responses import Response
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
@@ -55,6 +57,43 @@ async def readyz(request: Request):
         },
         status_code=status_code,
     )
+
+
+@router.get("/robots.txt")
+async def robots_txt():
+    return PlainTextResponse(
+        "\n".join(
+            [
+                "User-agent: *",
+                "Allow: /",
+                "Disallow: /admin/",
+                "Disallow: /settings",
+                "Sitemap: https://trade-tracking-production.up.railway.app/sitemap.xml",
+            ]
+        )
+        + "\n"
+    )
+
+
+@router.get("/sitemap.xml")
+async def sitemap_xml(request: Request):
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    urls = [
+        "/",
+        "/dashboard",
+        "/wallets",
+        "/all-trades",
+        "/wallets/import",
+        "/healthz",
+        "/readyz",
+    ]
+    body = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"]
+    for path in urls:
+        body.append("  <url>")
+        body.append(f"    <loc>{base_url}{path}</loc>")
+        body.append("  </url>")
+    body.append("</urlset>")
+    return Response("\n".join(body), media_type="application/xml")
 
 
 @router.get("/dashboard")

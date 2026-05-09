@@ -4,6 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ app_name or "PolySignal" }}{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}Track Polymarket wallet activity with manual refresh, local storage, and fast trade review.{% endblock %}">
+    {% if request is defined %}
+    <link rel="canonical" href="{{ request.url.scheme }}://{{ request.url.netloc }}{{ request.url.path }}">
+    {% if request.url.path.startswith('/admin') or request.url.path.startswith('/settings') %}
+    <meta name="robots" content="noindex,nofollow">
+    {% else %}
+    <meta name="robots" content="index,follow">
+    {% endif %}
+    {% else %}
+    <meta name="robots" content="index,follow">
+    {% endif %}
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{% block og_title %}{{ app_name or 'PolySignal' }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Manual-refresh watchlist for Polymarket wallets and trades.{% endblock %}">
+    {% if request is defined %}
+    <meta property="og:url" content="{{ request.url.scheme }}://{{ request.url.netloc }}{{ request.url.path }}">
+    {% endif %}
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{% block twitter_title %}{{ app_name or 'PolySignal' }}{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}Manual-refresh watchlist for Polymarket wallets and trades.{% endblock %}">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
