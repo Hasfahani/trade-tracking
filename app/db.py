@@ -169,6 +169,12 @@ def _ensure_postgres_trade_columns(target_engine: Engine) -> None:
         ).first()
         if row is None:
             conn.exec_driver_sql("ALTER TABLE trades ADD COLUMN alert_sent INTEGER NOT NULL DEFAULT 0")
+        updated_at_row = conn.exec_driver_sql(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'trades' AND column_name = 'updated_at'"
+        ).first()
+        if updated_at_row is None:
+            conn.exec_driver_sql("ALTER TABLE trades ADD COLUMN updated_at TIMESTAMP")
 
 
 def _ensure_postgres_wallet_columns(target_engine: Engine) -> None:
