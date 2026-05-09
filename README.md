@@ -131,10 +131,13 @@ All settings are read from environment variables at startup. None are required; 
 | Variable | Default | Description |
 |---|---|---|
 | `APP_NAME` | `PolySignal` | Title displayed in the browser tab and nav header. |
+| `APP_ENV` | `development` | Runtime environment label. `production` enables production-oriented cookie defaults. Railway also sets this through `RAILWAY_ENVIRONMENT`. |
 | `LOG_LEVEL` | `INFO` | Python logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
 | `HOST` | `0.0.0.0` | Bind address for the uvicorn server. |
 | `PORT` | `8000` | TCP port the server listens on. |
 | `DATABASE_URL` | `sqlite:///./data/trades.db` | SQLAlchemy database URL. SQLite and PostgreSQL are both supported. For PostgreSQL use `postgresql+psycopg2://user:pass@host/db`. |
+| `STARTUP_DB_MAX_ATTEMPTS` | `3` | Number of startup database initialization/readiness attempts before the app enters degraded readiness. |
+| `STARTUP_DB_RETRY_SECONDS` | `1.0` | Delay between startup DB attempts. |
 
 ### Authentication
 
@@ -142,6 +145,8 @@ All settings are read from environment variables at startup. None are required; 
 |---|---|---|
 | `DASHBOARD_PASSWORD` | *(unset)* | When set, enables single-user password authentication. All pages redirect to `/login` until the correct password is entered. Leave unset to disable auth entirely (suitable for local-only deployments). |
 | `SESSION_SECRET_KEY` | `change-me-in-production-use-a-long-random-secret` | Secret used to sign the session cookie via `itsdangerous`. **Change this in any non-local deployment.** Generate with `python -c "import secrets; print(secrets.token_hex(32))"`. |
+| `SESSION_COOKIE_SECURE` | `true` in production, else `false` | Forces the session cookie to use the Secure flag. Keep enabled behind Railway HTTPS. |
+| `CSRF_COOKIE_SECURE` | `true` in production, else `false` | Forces the CSRF cookie to use the Secure flag. |
 
 ### Pagination and Refresh
 
@@ -255,6 +260,8 @@ Core:
 - POST /wallets/{identifier}/delete
 
 Operational:
+- GET /healthz (liveness; returns 200 when the app process is serving)
+- GET /readyz (readiness; returns 200 only after startup DB initialization and a DB ping succeed)
 - POST /admin/refresh
 - POST /admin/refresh-all
 - GET /admin/sync-status (paginated; default page_size=50)

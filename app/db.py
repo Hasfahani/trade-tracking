@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, Iterable, Optional, Set, Tuple
 
 from sqlalchemy import Engine, create_engine
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from app.models import Base, SyncEvent
@@ -196,6 +197,13 @@ def init_db() -> None:
     """Initialize database tables and apply tracked compatibility migrations."""
     Base.metadata.create_all(bind=engine)
     run_schema_migrations()
+
+
+def check_database_ready(target_engine: Optional[Engine] = None) -> None:
+    """Raise if the configured database cannot execute a trivial query."""
+    target_engine = target_engine or engine
+    with target_engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
 
 
 @contextmanager

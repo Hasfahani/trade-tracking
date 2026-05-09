@@ -20,6 +20,8 @@ from fastapi import Request
 from fastapi.responses import Response
 from starlette.responses import HTMLResponse
 
+from app import settings as app_settings
+
 logger = logging.getLogger(__name__)
 
 _COOKIE_NAME = "csrftoken"
@@ -34,6 +36,11 @@ def _get_or_create_token(request: Request) -> str:
     if not token or len(token) < 32:
         token = secrets.token_hex(32)
     return token
+
+
+def _csrf_cookie_secure(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    return app_settings.CSRF_COOKIE_SECURE or forwarded_proto == "https" or request.url.scheme == "https"
 
 
 async def csrf_middleware(request: Request, call_next: Callable) -> Response:
@@ -71,7 +78,7 @@ async def csrf_middleware(request: Request, call_next: Callable) -> Response:
         max_age=_COOKIE_MAX_AGE,
         httponly=False,
         samesite="lax",
-        secure=False,
+        secure=_csrf_cookie_secure(request),
     )
     return response
 

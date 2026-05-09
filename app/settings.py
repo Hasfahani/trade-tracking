@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,6 +50,8 @@ DATABASE_URL = _raw_db_url
 # App metadata
 APP_NAME = _env_str("APP_NAME", "PolySignal")
 LOG_LEVEL = _env_str("LOG_LEVEL", "INFO").upper()
+APP_ENV = _env_str("APP_ENV", os.getenv("RAILWAY_ENVIRONMENT", "development")).lower()
+IS_PRODUCTION = APP_ENV in {"production", "prod"} or bool(os.getenv("RAILWAY_ENVIRONMENT"))
 
 # Server runtime
 HOST = os.getenv("HOST", "0.0.0.0")
@@ -69,4 +72,27 @@ POLYMARKET_POOL_TIMEOUT_SECONDS = _env_float("POLYMARKET_POOL_TIMEOUT_SECONDS", 
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip() or None
 
 # Session secret key for itsdangerous / Starlette sessions
-SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "change-me-in-production-use-a-long-random-secret")
+DEFAULT_SESSION_SECRET_KEY = "change-me-in-production-use-a-long-random-secret"
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", DEFAULT_SESSION_SECRET_KEY)
+
+# Cookie/security behavior. Railway terminates TLS before forwarding to the app,
+# so production defaults should emit Secure cookies even though uvicorn sees HTTP.
+SESSION_COOKIE_NAME = _env_str("SESSION_COOKIE_NAME", "polysignal_session")
+SESSION_COOKIE_SECURE = _env_str(
+    "SESSION_COOKIE_SECURE",
+    "true" if IS_PRODUCTION else "false",
+).lower() in {"1", "true", "yes", "on"}
+CSRF_COOKIE_SECURE = _env_str(
+    "CSRF_COOKIE_SECURE",
+    "true" if IS_PRODUCTION else "false",
+).lower() in {"1", "true", "yes", "on"}
+
+# Startup/readiness tuning
+STARTUP_DB_MAX_ATTEMPTS = _env_int("STARTUP_DB_MAX_ATTEMPTS", 3)
+STARTUP_DB_RETRY_SECONDS = _env_float("STARTUP_DB_RETRY_SECONDS", 1.0)
+
+
+def session_secret_is_weak(secret: Optional[str] = None) -> bool:
+    """Return True for known-default or too-short session secrets."""
+    value = secret if secret is not None else SESSION_SECRET_KEY
+    return not value or value == DEFAULT_SESSION_SECRET_KEY or len(value) < 32

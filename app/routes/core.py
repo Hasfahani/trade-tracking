@@ -2,12 +2,13 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.db import get_db
-from app.models import Trade, Wallet
+from app.db import check_database_ready, get_db
+from app.models import SyncEvent, Trade, Wallet
 from app.queries import get_dashboard_stats
-from app.settings import APP_NAME
+from app.settings import APP_NAME, APP_ENV, IS_PRODUCTION
 from app import view_helpers as vh
 from app.routes._shared import templates
 
@@ -20,8 +21,40 @@ async def root():
 
 
 @router.get("/healthz")
-async def healthz():
-    return JSONResponse({"status": "ok"}, status_code=200)
+async def healthz(request: Request):
+    return JSONResponse(
+        {
+            "status": "ok",
+            "app": APP_NAME,
+            "env": APP_ENV,
+            "production": IS_PRODUCTION,
+            "ready": bool(getattr(request.app.state, "ready", False)),
+        },
+        status_code=200,
+    )
+
+
+@router.get("/readyz")
+async def readyz(request: Request):
+    ready = bool(getattr(request.app.state, "ready", False))
+    db_ok = False
+    error = getattr(request.app.state, "startup_error", None)
+    if ready:
+        try:
+            check_database_ready()
+            db_ok = True
+        except Exception:
+            ready = False
+            error = "database check failed"
+    status_code = 200 if ready and db_ok else 503
+    return JSONResponse(
+        {
+            "status": "ready" if status_code == 200 else "not_ready",
+            "database": "ok" if db_ok else "unavailable",
+            "startup_error": error,
+        },
+        status_code=status_code,
+    )
 
 
 @router.get("/dashboard")
@@ -55,9 +88,18 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 
     last_success_at = stats["last_success_at"]
     last_error_at = stats["last_error_at"]
+    latest_sync_event = db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).first()
     refresh_health = {
         "last_success_label": last_success_at.strftime("%Y-%m-%d %H:%M UTC") if last_success_at else "Never",
         "last_error_label": last_error_at.strftime("%Y-%m-%d %H:%M UTC") if last_error_at else "None recorded",
+        "latest_status": latest_sync_event.status if latest_sync_event else "none",
+        "latest_status_label": (latest_sync_event.status or "unknown").replace("_", " ").title() if latest_sync_event else "No syncs yet",
+        "latest_summary": (
+            f"{latest_sync_event.inserted_count or 0} inserted from {latest_sync_event.fetched_count or 0} fetched"
+            if latest_sync_event
+            else "Run a wallet refresh to establish the first sync event."
+        ),
+        "latest_error": latest_sync_event.error_message if latest_sync_event and latest_sync_event.error_message else None,
         "tone": "danger" if last_error_at and (not last_success_at or last_error_at > last_success_at) else "success",
     }
     interesting_activity = vh.detect_interesting_activity(db)
@@ -97,6 +139,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "activity_days": activity_days,
             "wallet_map": wallet_map,
             "short_address": vh.short_address,
+            "sync_status_class": vh.sync_status_class,
             "interesting_activity": interesting_activity,
         },
     )

@@ -7,7 +7,7 @@
     <div class="hero-copy">
         <p class="eyebrow">Data quality</p>
         <h1>Sync status</h1>
-        <p class="subtle">Review sync outcomes, duplicate groups, and cleanup actions.</p>
+        <p class="subtle">Review recent sync outcomes, failures, duplicate groups, and cleanup actions.</p>
     </div>
 </section>
 
@@ -18,6 +18,10 @@
 {% endif %}
 
 <section class="card">
+    <div class="section-head status-summary-head">
+        <h2>Operational view</h2>
+        <span class="pill">{{ total_events }} event{{ 's' if total_events != 1 else '' }}</span>
+    </div>
     <form method="get" class="filter-grid compact-filter-grid">
         <label>
             Wallet search
@@ -114,4 +118,3 @@
     </article>
 </section>
 {% endblock %}
-
