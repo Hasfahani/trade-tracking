@@ -1,3 +1,4 @@
+import contextvars
 import logging
 import time
 import uuid
@@ -17,22 +18,27 @@ from app.routes import router
 from app.settings import APP_NAME, DASHBOARD_PASSWORD, LOG_LEVEL, SESSION_SECRET_KEY
 
 
-_record_factory = logging.getLogRecordFactory()
+_request_id_context: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 
 
-def _request_aware_record_factory(*args, **kwargs):
-    record = _record_factory(*args, **kwargs)
-    if not hasattr(record, "request_id"):
-        record.request_id = "-"
-    return record
+class RequestIdFilter(logging.Filter):
+    """Attach the current request id to records that do not already have one."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "request_id"):
+            record.request_id = _request_id_context.get()
+        return True
 
 
 def configure_logging() -> None:
-    logging.setLogRecordFactory(_request_aware_record_factory)
     logging.basicConfig(
         level=getattr(logging, LOG_LEVEL, logging.INFO),
         format="%(asctime)s %(levelname)s [%(name)s] [request_id=%(request_id)s] %(message)s",
     )
+    request_id_filter = RequestIdFilter()
+    for handler in logging.getLogger().handlers:
+        if not any(isinstance(existing_filter, RequestIdFilter) for existing_filter in handler.filters):
+            handler.addFilter(request_id_filter)
 
 
 configure_logging()
@@ -103,12 +109,15 @@ def _run_startup_maintenance() -> None:
 
 async def unhandled_exception_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", "-")
-    logger.exception(
-        "Unhandled application error method=%s path=%s",
-        request.method,
-        request.url.path,
-        extra={"request_id": request_id},
-    )
+    request_id_token = _request_id_context.set(request_id)
+    try:
+        logger.exception(
+            "Unhandled application error method=%s path=%s",
+            request.method,
+            request.url.path,
+        )
+    finally:
+        _request_id_context.reset(request_id_token)
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error", "request_id": request_id},
@@ -120,6 +129,7 @@ async def request_logging_middleware(request: Request, call_next):
     """Log every request with a stable request id and duration."""
     request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
     request.state.request_id = request_id
+    request_id_token = _request_id_context.set(request_id)
     started = time.perf_counter()
     try:
         response = await call_next(request)
@@ -130,20 +140,21 @@ async def request_logging_middleware(request: Request, call_next):
             request.method,
             request.url.path,
             duration_ms,
-            extra={"request_id": request_id},
         )
         raise
-    duration_ms = int((time.perf_counter() - started) * 1000)
-    response.headers["X-Request-ID"] = request_id
-    logger.info(
-        "Request complete method=%s path=%s status=%d duration_ms=%d",
-        request.method,
-        request.url.path,
-        response.status_code,
-        duration_ms,
-        extra={"request_id": request_id},
-    )
-    return response
+    else:
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        response.headers["X-Request-ID"] = request_id
+        logger.info(
+            "Request complete method=%s path=%s status=%d duration_ms=%d",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+        return response
+    finally:
+        _request_id_context.reset(request_id_token)
 
 
 async def security_headers_middleware(request: Request, call_next):
