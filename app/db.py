@@ -171,6 +171,16 @@ def _ensure_postgres_trade_columns(target_engine: Engine) -> None:
             conn.exec_driver_sql("ALTER TABLE trades ADD COLUMN alert_sent INTEGER NOT NULL DEFAULT 0")
 
 
+def _ensure_postgres_wallet_columns(target_engine: Engine) -> None:
+    with target_engine.begin() as conn:
+        row = conn.exec_driver_sql(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'wallets' AND column_name = 'updated_at'"
+        ).first()
+        if row is None:
+            conn.exec_driver_sql("ALTER TABLE wallets ADD COLUMN updated_at TIMESTAMP")
+
+
 def run_schema_migrations(
     target_engine: Optional[Engine] = None,
     *,
@@ -181,6 +191,7 @@ def run_schema_migrations(
     target_engine = target_engine or engine
     if not _is_sqlite(database_url):
         _ensure_postgres_trade_columns(target_engine)
+        _ensure_postgres_wallet_columns(target_engine)
         return
 
     with target_engine.begin() as conn:
