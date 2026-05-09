@@ -291,6 +291,12 @@ h1 {
     font-size: 1.12rem;
 }
 
+.dashboard-metrics .metric-card strong {
+    font-size: clamp(1.65rem, 3.6vw, 2.05rem);
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+}
+
 .metric-label {
     display: block;
     color: var(--muted);

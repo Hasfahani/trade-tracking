@@ -41,7 +41,16 @@
     </article>
     <article class="metric-card">
         <span class="metric-label">Stored value</span>
-        <strong>${{ '{:,.2f}'.format(total_trade_value) }}</strong>
+        {% if total_trade_value >= 1000000000 %}
+        {% set stored_value_display = '${:,.2f}B'.format(total_trade_value / 1000000000) %}
+        {% elif total_trade_value >= 1000000 %}
+        {% set stored_value_display = '${:,.2f}M'.format(total_trade_value / 1000000) %}
+        {% elif total_trade_value >= 1000 %}
+        {% set stored_value_display = '${:,.2f}K'.format(total_trade_value / 1000) %}
+        {% else %}
+        {% set stored_value_display = '${:,.2f}'.format(total_trade_value) %}
+        {% endif %}
+        <strong title="${{ '{:,.2f}'.format(total_trade_value) }}">{{ stored_value_display }}</strong>
     </article>
 </section>
 
