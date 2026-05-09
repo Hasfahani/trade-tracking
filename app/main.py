@@ -25,7 +25,7 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 # Paths that do NOT require authentication (login page itself, static assets)
-_PUBLIC_PATHS = frozenset({"/login", "/logout"})
+_PUBLIC_PATHS = frozenset({"/login", "/logout", "/healthz"})
 
 
 @asynccontextmanager

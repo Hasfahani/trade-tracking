@@ -1,5 +1,6 @@
 """Root redirect and dashboard routes."""
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,11 @@ router = APIRouter()
 @router.get("/")
 async def root():
     return RedirectResponse(url="/wallets", status_code=302)
+
+
+@router.get("/healthz")
+async def healthz():
+    return JSONResponse({"status": "ok"}, status_code=200)
 
 
 @router.get("/dashboard")
