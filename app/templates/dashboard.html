@@ -7,7 +7,18 @@
     <div class="hero-copy">
         <p class="eyebrow">Overview</p>
         <h1>Dashboard</h1>
-        <p class="subtle">Summary of stored wallets, trades, sync health, and recent activity.</p>
+        <p class="subtle">Status, value, and recent activity in one place. Start here before refreshing or drilling into trades.</p>
+    </div>
+    <div class="hero-actions">
+        <div class="hero-actions-row">
+            <a href="/wallets" class="btn btn-small">Manage wallets</a>
+            <a href="/all-trades" class="btn btn-small">Open all trades</a>
+            <a href="/admin/sync-status" class="btn btn-small">Check sync status</a>
+        </div>
+        <div class="hero-status-row">
+            <span class="pill {{ refresh_health.tone }}">Refresh {{ refresh_health.tone|title }}</span>
+            <span class="subtle">Latest run: {{ refresh_health.latest_status_label }}</span>
+        </div>
     </div>
 </section>
 
@@ -31,6 +42,29 @@
     <article class="metric-card">
         <span class="metric-label">Stored value</span>
         <strong>${{ '{:,.2f}'.format(total_trade_value) }}</strong>
+    </article>
+</section>
+
+<section class="dashboard-clarity-grid">
+    <article class="card dashboard-clarity-card">
+        <span class="metric-label">Data scope</span>
+        <strong>Local snapshot</strong>
+        <p class="subtle">Views read from your stored database, not live API calls during page render.</p>
+    </article>
+    <article class="card dashboard-clarity-card">
+        <span class="metric-label">Latest refresh</span>
+        <strong>{{ refresh_health.latest_status_label }}</strong>
+        <p class="subtle">{{ refresh_health.latest_summary }}</p>
+    </article>
+    <article class="card dashboard-clarity-card">
+        <span class="metric-label">Recommended next step</span>
+        {% if total_trades %}
+        <strong>Review recent trades</strong>
+        <p class="subtle">Open recent activity below or use All Trades for filtering and export.</p>
+        {% else %}
+        <strong>Refresh wallets now</strong>
+        <p class="subtle">No stored trades yet. Start with wallet refresh to populate data.</p>
+        {% endif %}
     </article>
 </section>
 
