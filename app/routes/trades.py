@@ -5,11 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
 from app.models import Trade, Wallet
 from app.routes._shared import normalized_date_filters, paginated_query, resolve_wallet, sanitize_search, validated_date_preset, templates
-from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, RETENTION_METRICS_ENABLED
 
 router = APIRouter()
 
@@ -82,7 +83,7 @@ async def view_trades(
 
 
 @router.get("/all-trades")
-async def all_trades(
+async def all_trades(  # noqa: PLR0913
     request: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
@@ -95,6 +96,13 @@ async def all_trades(
     sort_by: str = Query("time_desc"),
     db: Session = Depends(get_db),
 ):
+    if RETENTION_METRICS_ENABLED:
+        ret.emit(ret.RawEvent(
+            tracker_id=ret.get_or_create_tracker_id(request),
+            event_name="page_view",
+            route="all_trades",
+        ))
+
     wallet_search = sanitize_search(wallet_search)
     market_search = sanitize_search(market_search)
     date_preset = validated_date_preset(date_preset)
@@ -191,6 +199,14 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
     trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
+
+    if RETENTION_METRICS_ENABLED:
+        ret.emit(ret.RawEvent(
+            tracker_id=ret.get_or_create_tracker_id(request),
+            event_name="trade_detail_view",
+            route="trade_detail",
+            metadata={"trade_id": trade_id},
+        ))
 
     related_trades = (
         db.query(Trade)

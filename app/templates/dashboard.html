@@ -227,6 +227,46 @@
     </article>
 </section>
 
+{% if retention %}
+<section class="card">
+    <div class="section-head">
+        <h2>Retention</h2>
+        <span class="pill">Last 7 days</span>
+    </div>
+    <div class="metrics-grid">
+        <article class="metric-card">
+            <span class="metric-label">Weekly Active Users</span>
+            <strong data-countup="{{ retention.wau or 0 }}">{{ retention.wau or 0 }}</strong>
+            {% if retention.trend_pct is not none %}
+            <small class="subtle">
+                {% if retention.trend >= 0 %}+{% endif %}{{ retention.trend_pct }}% vs prev week
+            </small>
+            {% else %}
+            <small class="subtle">No prior period data</small>
+            {% endif %}
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Alert Open Rate</span>
+            <strong>{% if retention.open_rate_pct is not none %}{{ retention.open_rate_pct }}%{% else %}—{% endif %}</strong>
+            <small class="subtle">{{ retention.open_users or 0 }} / {{ retention.impression_users or 0 }} users</small>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">D1 Return</span>
+            <strong>{% if retention.d1_return_rate is not none %}{{ retention.d1_return_rate }}%{% else %}—{% endif %}</strong>
+            <small class="subtle">Next-day return rate</small>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">D7 Return</span>
+            <strong>{% if retention.d7_return_rate is not none %}{{ retention.d7_return_rate }}%{% else %}—{% endif %}</strong>
+            <small class="subtle">7-day return rate</small>
+        </article>
+    </div>
+    <div class="panel-actions">
+        <a href="/admin/metrics/retention" class="btn btn-small">Full retention data (JSON)</a>
+    </div>
+</section>
+{% endif %}
+
 <section class="card">
     <div class="section-head">
         <h2>Interesting activity</h2>

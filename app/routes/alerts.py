@@ -9,12 +9,13 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app import alerts
+from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
 from app.ingest import cleanup_duplicate_trades, find_duplicate_groups, refresh_wallet
 from app.models import SyncEvent
 from app.routes._shared import _flash_redirect_to, resolve_wallet, sanitize_search, templates
-from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT
+from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT, RETENTION_METRICS_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,13 @@ router = APIRouter()
 
 @router.get("/settings")
 async def settings_page(request: Request, db: Session = Depends(get_db)):
+    if RETENTION_METRICS_ENABLED:
+        ret.emit(ret.RawEvent(
+            tracker_id=ret.get_or_create_tracker_id(request),
+            event_name="alert_impression",
+            route="settings",
+        ))
+
     settings = alerts.get_app_settings(db)
     return templates.TemplateResponse(
         request,
@@ -65,7 +73,7 @@ async def save_settings(
 
 
 @router.post("/settings/test-alert")
-async def test_alert(db: Session = Depends(get_db)):
+async def test_alert(request: Request, db: Session = Depends(get_db)):
     settings = alerts.get_app_settings(db)
     token = (settings.telegram_bot_token or "").strip()
     chat_id = (settings.telegram_chat_id or "").strip()
@@ -73,6 +81,12 @@ async def test_alert(db: Session = Depends(get_db)):
         return _flash_redirect_to("/settings", "Enter a bot token and chat ID before testing.", "error")
     ok = alerts.send_telegram_message(token, chat_id, "\u2705 <b>PolySignal test alert</b>\nYour Telegram alerts are working.")
     if ok:
+        if RETENTION_METRICS_ENABLED:
+            ret.emit(ret.RawEvent(
+                tracker_id=ret.get_or_create_tracker_id(request),
+                event_name="alert_open",
+                route="settings_test_alert",
+            ))
         return _flash_redirect_to("/settings", "Test alert sent successfully.", "success")
     return _flash_redirect_to("/settings", "Test failed \u2014 check your bot token and chat ID.", "error")
 

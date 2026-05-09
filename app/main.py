@@ -12,11 +12,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import auth
+from app import retention
 from app import settings as app_settings
 from app.csrf import csrf_middleware, get_csrf_token
 from app.db import SessionLocal, check_database_ready, init_db, prune_old_sync_events
 from app.routes import router
-from app.settings import APP_NAME, APP_VERSION, GIT_COMMIT, DASHBOARD_PASSWORD, LOG_LEVEL, SESSION_SECRET_KEY
+from app.settings import APP_NAME, APP_VERSION, GIT_COMMIT, DASHBOARD_PASSWORD, LOG_LEVEL, RETENTION_METRICS_ENABLED, SESSION_SECRET_KEY
 
 
 _request_id_context: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
@@ -105,7 +106,14 @@ async def lifespan(app: FastAPI):
     else:
         app.state.startup_error = "database initialization failed"
         logger.error("Application startup degraded: database initialization failed")
+
+    if RETENTION_METRICS_ENABLED:
+        await retention.start_drain()
+
     yield
+
+    if RETENTION_METRICS_ENABLED:
+        await retention.stop_drain()
 
 
 def _database_label() -> str:

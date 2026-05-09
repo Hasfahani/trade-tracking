@@ -9,6 +9,7 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app import alerts
+from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
 from app.ingest import refresh_wallet
@@ -22,7 +23,7 @@ from app.routes._shared import (
     sanitize_search,
     templates,
 )
-from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT
+from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT, RETENTION_METRICS_ENABLED
 
 router = APIRouter()
 
@@ -109,6 +110,13 @@ async def list_wallets(
     include_archived: int = Query(0),
     db: Session = Depends(get_db),
 ):
+    if RETENTION_METRICS_ENABLED:
+        ret.emit(ret.RawEvent(
+            tracker_id=ret.get_or_create_tracker_id(request),
+            event_name="page_view",
+            route="wallets",
+        ))
+
     wallet_search = sanitize_search(wallet_search)
     wallets = vh.build_wallet_query(
         db,
@@ -319,11 +327,20 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
 
 @router.post("/wallets/{identifier}/refresh")
 def refresh_single_wallet(
+    request: Request,
     identifier: str,
     db: Session = Depends(get_db),
     limit: int = Query(DEFAULT_REFRESH_LIMIT, ge=1, le=1000),
     next_path: Optional[str] = Query(None, alias="next"),
 ):
+    if RETENTION_METRICS_ENABLED:
+        ret.emit(ret.RawEvent(
+            tracker_id=ret.get_or_create_tracker_id(request),
+            event_name="refresh_triggered",
+            route="wallet_refresh",
+            metadata={"identifier": identifier},
+        ))
+
     wallet = resolve_wallet(db, identifier)
     result = refresh_wallet(db, wallet, limit=limit)
     redirect_to = _safe_next(next_path)

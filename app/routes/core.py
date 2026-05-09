@@ -7,10 +7,11 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app import retention as ret
 from app.db import check_database_ready, get_db, get_applied_migration_versions
 from app.models import SyncEvent, Trade, Wallet
 from app.queries import get_dashboard_stats
-from app.settings import APP_NAME, APP_ENV, APP_VERSION, GIT_COMMIT, IS_PRODUCTION
+from app.settings import APP_NAME, APP_ENV, APP_VERSION, GIT_COMMIT, IS_PRODUCTION, RETENTION_METRICS_ENABLED
 from app import view_helpers as vh
 from app.routes._shared import templates
 
@@ -234,6 +235,13 @@ async def sitemap_xml(request: Request):
 
 @router.get("/dashboard")
 async def dashboard(request: Request, db: Session = Depends(get_db)):
+    if RETENTION_METRICS_ENABLED:
+        ret.emit(ret.RawEvent(
+            tracker_id=ret.get_or_create_tracker_id(request),
+            event_name="page_view",
+            route="dashboard",
+        ))
+
     stats = get_dashboard_stats(db)
 
     recent_trades = db.query(Trade).order_by(Trade.traded_at.desc()).limit(20).all()
@@ -299,6 +307,8 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         },
     ]
 
+    retention_stats = ret.get_retention_summary(db) if RETENTION_METRICS_ENABLED else None
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -316,5 +326,6 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "short_address": vh.short_address,
             "sync_status_class": vh.sync_status_class,
             "interesting_activity": interesting_activity,
+            "retention": retention_stats,
         },
     )

@@ -7,7 +7,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from app.models import Base, SyncEvent
+from app.models import Base, EventLog, SyncEvent
 from app.settings import (
     DATABASE_URL,
     DB_MAX_OVERFLOW,
@@ -143,6 +143,26 @@ def _migrate_updated_at_columns(conn) -> None:
     _add_missing_columns(conn, "trades", {"updated_at": "DATETIME"})
 
 
+def _migrate_retention_indexes(conn) -> None:
+    index_statements = [
+        (
+            "event_log",
+            "CREATE INDEX IF NOT EXISTS ix_event_log_tracker_ts ON event_log (tracker_id, event_ts)",
+        ),
+        (
+            "event_log",
+            "CREATE INDEX IF NOT EXISTS ix_event_log_name_ts ON event_log (event_name, event_ts)",
+        ),
+        (
+            "event_log",
+            "CREATE INDEX IF NOT EXISTS ix_event_log_event_ts ON event_log (event_ts)",
+        ),
+    ]
+    for table_name, statement in index_statements:
+        if _table_exists(conn, table_name):
+            conn.exec_driver_sql(statement)
+
+
 def _migrate_sqlite_indexes(conn) -> None:
     index_statements = [
         (
@@ -179,10 +199,19 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("004_trade_alert_sent", _migrate_trade_alert_sent),
     ("005_sqlite_indexes", _migrate_sqlite_indexes),
     ("006_updated_at_columns", _migrate_updated_at_columns),
+    ("007_retention_indexes", _migrate_retention_indexes),
 )
 
 
 POSTGRES_COMPAT_COLUMNS: Dict[str, ColumnSpec] = {
+    "event_log": {
+        "tracker_id": "VARCHAR(64)",
+        "event_name": "VARCHAR(64)",
+        "event_ts": "TIMESTAMP",
+        "route": "VARCHAR(255)",
+        "metadata_json": "TEXT",
+        "alert_id": "VARCHAR(255)",
+    },
     "wallets": {
         "tags": "TEXT",
         "notes": "TEXT",

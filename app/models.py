@@ -3,7 +3,7 @@
 SQLite compatibility changes are applied by app.db.run_schema_migrations.
 """
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
@@ -88,3 +88,52 @@ class AppSettings(Base):
     alert_min_size = Column(Float, nullable=True, default=0.0)
     alerts_enabled = Column(Integer, nullable=True, default=0)
     updated_at = Column(DateTime, nullable=True)
+
+
+class EventLog(Base):
+    """Raw event stream for retention signal tracking."""
+
+    __tablename__ = "event_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tracker_id = Column(String(64), nullable=False)
+    event_name = Column(String(64), nullable=False)
+    event_ts = Column(DateTime, nullable=False, server_default=func.now())
+    route = Column(String(255), nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    alert_id = Column(String(255), nullable=True)
+
+    __table_args__ = (
+        Index("ix_event_log_tracker_ts", "tracker_id", "event_ts"),
+        Index("ix_event_log_name_ts", "event_name", "event_ts"),
+    )
+
+
+class RetentionDaily(Base):
+    """Pre-computed daily retention snapshot (populated by backfill script)."""
+
+    __tablename__ = "retention_daily"
+
+    date = Column(Date, primary_key=True)
+    dau = Column(Integer, nullable=True)
+    wau_rolling_7 = Column(Integer, nullable=True)
+    alert_impressions_users = Column(Integer, nullable=True)
+    alert_open_users = Column(Integer, nullable=True)
+    alert_open_rate = Column(Float, nullable=True)
+    d1_return_rate = Column(Float, nullable=True)
+    d7_return_rate = Column(Float, nullable=True)
+    sessions_per_user = Column(Float, nullable=True)
+    computed_at = Column(DateTime, server_default=func.now())
+
+
+class RetentionWeekly(Base):
+    """Pre-computed weekly retention snapshot (populated by backfill script)."""
+
+    __tablename__ = "retention_weekly"
+
+    week_start = Column(Date, primary_key=True)
+    wau = Column(Integer, nullable=True)
+    repeat_users = Column(Integer, nullable=True)
+    sessions_per_user = Column(Float, nullable=True)
+    alert_open_rate = Column(Float, nullable=True)
+    computed_at = Column(DateTime, server_default=func.now())
