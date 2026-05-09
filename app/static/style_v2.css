@@ -172,7 +172,7 @@ a:hover {
 .eyebrow {
     margin: 0 0 8px;
     color: var(--accent);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.13em;
     font-weight: 800;
@@ -888,7 +888,7 @@ td {
 
 th {
     color: var(--muted);
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
@@ -1201,7 +1201,7 @@ th {
         display: block;
         color: var(--muted);
         text-transform: uppercase;
-        font-size: 0.72rem;
+        font-size: 0.75rem;
         letter-spacing: 0.06em;
         margin-bottom: 4px;
     }
@@ -1641,7 +1641,7 @@ td {
 }
 
 .site-footer {
-    color: #7f8b9b;
+    color: #96a4b6;
 }
 
 /* Premium finish layer */
@@ -1841,7 +1841,7 @@ td {
 .trade-table td:first-child,
 .trade-table td[data-label="Date"],
 .trade-table td[data-label="Timestamp"] {
-    color: #aeb9c8;
+    color: #bac4d2;
     font-variant-numeric: tabular-nums;
 }
 
@@ -1999,7 +1999,8 @@ button:focus-visible {
     }
 
     .metric-label {
-        font-size: 0.68rem;
+        font-size: 0.75rem;
+        color: #b8c6d8;
     }
 
     .metric-card strong,
@@ -2366,7 +2367,7 @@ body::after {
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    filter: drop-shadow(0 0 18px rgba(118, 228, 214, 0.35));
+    filter: drop-shadow(0 0 14px rgba(118, 228, 214, 0.27));
 }
 
 /* Bottom glow line on metric cards */
@@ -2375,7 +2376,7 @@ body::after {
     position: absolute;
     inset: auto 12px 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(118, 228, 214, 0.4), transparent);
+    background: linear-gradient(90deg, transparent, rgba(118, 228, 214, 0.28), transparent);
     pointer-events: none;
 }
 
@@ -2433,7 +2434,7 @@ body::after {
     box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.12),
         0 0 0 1px rgba(118, 228, 214, 0.14),
-        0 0 22px rgba(118, 228, 214, 0.18),
+        0 0 16px rgba(118, 228, 214, 0.13),
         0 4px 14px rgba(0,0,0,0.28) !important;
 }
 
@@ -2445,13 +2446,13 @@ body::after {
 @keyframes dot-pulse {
     0%, 100% {
         box-shadow:
-            0 0 0 5px  rgba(118, 228, 214, 0.12),
-            0 0 28px   rgba(118, 228, 214, 0.55);
+            0 0 0 5px  rgba(118, 228, 214, 0.1),
+            0 0 22px   rgba(118, 228, 214, 0.44);
     }
     50% {
         box-shadow:
-            0 0 0 9px  rgba(118, 228, 214, 0.05),
-            0 0 48px   rgba(118, 228, 214, 0.3);
+            0 0 0 9px  rgba(118, 228, 214, 0.04),
+            0 0 36px   rgba(118, 228, 214, 0.22);
     }
 }
 
@@ -2573,7 +2574,7 @@ body::after {
 /* ── Ranked bars: text glow on hover ── */
 .ranked-bar:hover em {
     color: var(--accent);
-    text-shadow: 0 0 16px rgba(118, 228, 214, 0.45);
+    text-shadow: 0 0 12px rgba(118, 228, 214, 0.34);
 }
 
 /* ── Table: stronger row hover ── */
@@ -2614,7 +2615,7 @@ tbody tr:hover {
     background-size: 200% 100%;
     animation: loader-advance 2.5s cubic-bezier(0.1, 0.5, 0.2, 1) forwards,
                loader-color   2s linear infinite;
-    box-shadow: 0 0 28px rgba(118, 228, 214, 0.75), 0 0 8px rgba(244,199,107,0.5);
+    box-shadow: 0 0 20px rgba(118, 228, 214, 0.58), 0 0 6px rgba(244,199,107,0.38);
 }
 
 @keyframes loader-color {
@@ -2681,16 +2682,18 @@ th {
     100% { border-color: rgba(118,228,214,0.14); }
 }
 
-/* ── Focus ring: strong but refined ── */
+/* ── Focus ring: solid colour, guaranteed contrast ── */
+/* Semi-transparent outlines fail WCAG 1.4.11 — the visible colour depends on
+   background. Use opaque teal (13:1+ on dark) so contrast is unconditional. */
 .btn:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 button:focus-visible {
-    outline: 2px solid rgba(118, 228, 214, 0.6);
+    outline: 2px solid #76e4d6;
     outline-offset: 3px;
-    box-shadow: 0 0 0 5px rgba(118, 228, 214, 0.1);
+    box-shadow: 0 0 0 4px rgba(118, 228, 214, 0.18);
 }
 
 /* ── Reduced motion: disable all animations ── */
@@ -2724,7 +2727,7 @@ button:focus-visible {
 
     .dashboard-metrics .metric-card strong {
         font-size: 1.8rem;
-        filter: drop-shadow(0 0 12px rgba(118, 228, 214, 0.3));
+        filter: drop-shadow(0 0 10px rgba(118, 228, 214, 0.24));
     }
 }
 
@@ -2739,8 +2742,8 @@ button:focus-visible {
    Richer aurora · Universal gradient numbers · Glow language
    ══════════════════════════════════════════════════════════════ */
 
-/* Improved muted text contrast */
-:root { --muted: #a8b4c6; }
+/* Improved muted text contrast — meets ~4.5:1 on dark glass cards */
+:root { --muted: #aebcce; }
 
 /* Brand name: gradient text (dot ::before keeps its own bg) */
 .brand {
@@ -2766,8 +2769,8 @@ body {
     height: 20px;
     opacity: 1;
     box-shadow:
-        0 0 14px rgba(118, 228, 214, 0.65),
-        0 0  6px rgba(244, 199, 107, 0.28);
+        0 0 11px rgba(118, 228, 214, 0.5),
+        0 0  5px rgba(244, 199, 107, 0.2);
 }
 
 /* ALL metric card numbers: gradient + subtle glow */
@@ -2778,7 +2781,7 @@ body {
     background-clip: text;
     color: transparent;
     font-variant-numeric: tabular-nums;
-    filter: drop-shadow(0 0 8px rgba(118, 228, 214, 0.22));
+    filter: drop-shadow(0 0 7px rgba(118, 228, 214, 0.17));
 }
 
 /* Dashboard big numbers: larger + more vivid */
@@ -2787,7 +2790,7 @@ body {
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    filter: drop-shadow(0 0 28px rgba(118, 228, 214, 0.52));
+    filter: drop-shadow(0 0 20px rgba(118, 228, 214, 0.4));
     font-size: clamp(2.1rem, 4vw, 2.9rem);
     letter-spacing: -0.035em;
 }
@@ -2853,7 +2856,7 @@ body {
 
 @media (max-width: 760px) {
     .dashboard-metrics .metric-card strong {
-        filter: drop-shadow(0 0 14px rgba(118, 228, 214, 0.36));
+        filter: drop-shadow(0 0 11px rgba(118, 228, 214, 0.28));
     }
 
     .ops-grid {
