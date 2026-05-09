@@ -48,6 +48,7 @@ def test_readyz_returns_200_after_database_check(monkeypatch):
 
 def test_startup_retries_transient_database_failures(monkeypatch):
     import app.main as main_mod
+    import app.routes.core as core_mod
 
     attempts = {"count": 0}
 
@@ -60,6 +61,7 @@ def test_startup_retries_transient_database_failures(monkeypatch):
     monkeypatch.setattr(main_mod.app_settings, "STARTUP_DB_RETRY_SECONDS", 0)
     monkeypatch.setattr(main_mod, "init_db", flaky_init_db)
     monkeypatch.setattr(main_mod, "check_database_ready", lambda: None)
+    monkeypatch.setattr(core_mod, "check_database_ready", lambda: None)
     monkeypatch.setattr(main_mod, "_run_startup_maintenance", lambda: None)
 
     app = create_app(lifespan_context=lifespan, csrf_enabled=False)

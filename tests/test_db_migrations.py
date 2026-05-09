@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db import SCHEMA_MIGRATIONS, run_schema_migrations
+from app.db import POSTGRES_COMPAT_COLUMNS, SCHEMA_MIGRATIONS, run_schema_migrations
 
 
 def _sqlite_engine():
@@ -112,3 +112,64 @@ def test_schema_migrations_create_tracking_table_even_without_app_tables():
         ]
 
     assert applied_versions == [version for version, _ in SCHEMA_MIGRATIONS]
+
+
+def test_postgres_compat_migrations_add_missing_columns_once():
+    class _FakeResult:
+        def __init__(self, row):
+            self._row = row
+
+        def first(self):
+            return self._row
+
+    class _FakeConn:
+        def __init__(self):
+            self.columns = {
+                "wallets": {"address", "created_at"},
+                "trades": {"trade_id", "wallet_address"},
+                "sync_events": {"status", "created_at"},
+                "app_settings": {"id"},
+            }
+            self.alters = []
+
+        def exec_driver_sql(self, statement, params=None):
+            if "information_schema.columns" in statement:
+                table_name = params["table_name"]
+                column_name = params["column_name"]
+                exists = column_name in self.columns.get(table_name, set())
+                return _FakeResult((column_name,) if exists else None)
+            if statement.startswith("ALTER TABLE"):
+                self.alters.append(statement)
+                parts = statement.split()
+                table_name = parts[2]
+                column_name = parts[5]
+                self.columns.setdefault(table_name, set()).add(column_name)
+                return _FakeResult(None)
+            raise AssertionError(f"Unexpected SQL: {statement}")
+
+    class _FakeBegin:
+        def __init__(self, conn):
+            self._conn = conn
+
+        def __enter__(self):
+            return self._conn
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeEngine:
+        def __init__(self):
+            self.conn = _FakeConn()
+
+        def begin(self):
+            return _FakeBegin(self.conn)
+
+    fake_engine = _FakeEngine()
+
+    run_schema_migrations(fake_engine, database_url="postgresql+psycopg://example")
+    first_run_alters = list(fake_engine.conn.alters)
+    run_schema_migrations(fake_engine, database_url="postgresql+psycopg://example")
+
+    expected_column_count = sum(len(cols) for cols in POSTGRES_COMPAT_COLUMNS.values())
+    assert len(first_run_alters) == expected_column_count
+    assert len(fake_engine.conn.alters) == expected_column_count

@@ -161,30 +161,53 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
 )
 
 
-def _ensure_postgres_trade_columns(target_engine: Engine) -> None:
-    with target_engine.begin() as conn:
-        row = conn.exec_driver_sql(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'trades' AND column_name = 'alert_sent'"
-        ).first()
-        if row is None:
-            conn.exec_driver_sql("ALTER TABLE trades ADD COLUMN alert_sent INTEGER NOT NULL DEFAULT 0")
-        updated_at_row = conn.exec_driver_sql(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'trades' AND column_name = 'updated_at'"
-        ).first()
-        if updated_at_row is None:
-            conn.exec_driver_sql("ALTER TABLE trades ADD COLUMN updated_at TIMESTAMP")
+POSTGRES_COMPAT_COLUMNS: Dict[str, ColumnSpec] = {
+    "wallets": {
+        "tags": "TEXT",
+        "notes": "TEXT",
+        "is_pinned": "INTEGER",
+        "is_archived": "INTEGER",
+        "last_checked_at": "TIMESTAMP",
+        "last_refresh_status": "VARCHAR(32)",
+        "last_refresh_count": "INTEGER",
+        "last_error_at": "TIMESTAMP",
+        "last_error_message": "TEXT",
+        "updated_at": "TIMESTAMP",
+    },
+    "trades": {
+        "alert_sent": "INTEGER NOT NULL DEFAULT 0",
+        "updated_at": "TIMESTAMP",
+    },
+    "sync_events": {
+        "duplicate_count": "INTEGER",
+        "duration_ms": "INTEGER",
+    },
+    "app_settings": {
+        "telegram_bot_token": "TEXT",
+        "telegram_chat_id": "TEXT",
+        "alert_min_size": "DOUBLE PRECISION",
+        "alerts_enabled": "INTEGER",
+        "updated_at": "TIMESTAMP",
+    },
+}
 
 
-def _ensure_postgres_wallet_columns(target_engine: Engine) -> None:
+def _postgres_column_exists(conn, table_name: str, column_name: str) -> bool:
+    row = conn.exec_driver_sql(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = :table_name AND column_name = :column_name",
+        {"table_name": table_name, "column_name": column_name},
+    ).first()
+    return row is not None
+
+
+def _ensure_postgres_compat_columns(target_engine: Engine) -> None:
     with target_engine.begin() as conn:
-        row = conn.exec_driver_sql(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'wallets' AND column_name = 'updated_at'"
-        ).first()
-        if row is None:
-            conn.exec_driver_sql("ALTER TABLE wallets ADD COLUMN updated_at TIMESTAMP")
+        for table_name, expected_columns in POSTGRES_COMPAT_COLUMNS.items():
+            for column_name, column_type in expected_columns.items():
+                if _postgres_column_exists(conn, table_name, column_name):
+                    continue
+                conn.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
 
 def run_schema_migrations(
@@ -196,8 +219,7 @@ def run_schema_migrations(
     """Run lightweight, tracked compatibility migrations for local SQLite databases."""
     target_engine = target_engine or engine
     if not _is_sqlite(database_url):
-        _ensure_postgres_trade_columns(target_engine)
-        _ensure_postgres_wallet_columns(target_engine)
+        _ensure_postgres_compat_columns(target_engine)
         return
 
     with target_engine.begin() as conn:
