@@ -1,9 +1,25 @@
 import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _read_git_commit() -> str:
+    """Return the current git commit SHA, preferring the env var set at build/deploy time."""
+    commit = os.getenv("GIT_COMMIT", "").strip()
+    if commit:
+        return commit
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=2, check=False,
+        )
+        return result.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
 
 
 def _env_int(name: str, default: int) -> int:
@@ -49,6 +65,8 @@ DATABASE_URL = _raw_db_url
 
 # App metadata
 APP_NAME = _env_str("APP_NAME", "PolySignal")
+APP_VERSION = _env_str("APP_VERSION", "0.0.0")
+GIT_COMMIT = _read_git_commit()
 LOG_LEVEL = _env_str("LOG_LEVEL", "INFO").upper()
 APP_ENV = _env_str("APP_ENV", os.getenv("RAILWAY_ENVIRONMENT", "development")).lower()
 IS_PRODUCTION = APP_ENV in {"production", "prod"} or bool(os.getenv("RAILWAY_ENVIRONMENT"))
@@ -90,6 +108,12 @@ CSRF_COOKIE_SECURE = _env_str(
 # Startup/readiness tuning
 STARTUP_DB_MAX_ATTEMPTS = _env_int("STARTUP_DB_MAX_ATTEMPTS", 3)
 STARTUP_DB_RETRY_SECONDS = _env_float("STARTUP_DB_RETRY_SECONDS", 1.0)
+
+# Connection pool tuning (PostgreSQL only; SQLite uses StaticPool/NullPool)
+DB_POOL_SIZE = _env_int("DB_POOL_SIZE", 5)
+DB_MAX_OVERFLOW = _env_int("DB_MAX_OVERFLOW", 10)
+DB_POOL_TIMEOUT = _env_float("DB_POOL_TIMEOUT", 30.0)
+DB_POOL_RECYCLE = _env_int("DB_POOL_RECYCLE", 1800)
 
 
 def session_secret_is_weak(secret: Optional[str] = None) -> bool:

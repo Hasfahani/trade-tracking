@@ -1,3 +1,4 @@
+import logging
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, Iterable, Optional, Set, Tuple
@@ -7,10 +8,29 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from app.models import Base, SyncEvent
-from app.settings import DATABASE_URL
+from app.settings import (
+    DATABASE_URL,
+    DB_MAX_OVERFLOW,
+    DB_POOL_RECYCLE,
+    DB_POOL_SIZE,
+    DB_POOL_TIMEOUT,
+)
 
-_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True)
+logger = logging.getLogger(__name__)
+
+_is_sqlite_url = DATABASE_URL.startswith("sqlite")
+_connect_args = {"check_same_thread": False} if _is_sqlite_url else {}
+_pool_kwargs = (
+    {}
+    if _is_sqlite_url
+    else {
+        "pool_size": DB_POOL_SIZE,
+        "max_overflow": DB_MAX_OVERFLOW,
+        "pool_timeout": DB_POOL_TIMEOUT,
+        "pool_recycle": DB_POOL_RECYCLE,
+    }
+)
+engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True, **_pool_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 ColumnSpec = Dict[str, str]
@@ -43,6 +63,7 @@ def _add_missing_columns(conn, table_name: str, expected_columns: ColumnSpec) ->
     for column_name, column_type in expected_columns.items():
         if column_name not in existing_columns:
             conn.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+            logger.info("Migration: added column %s.%s (%s)", table_name, column_name, column_type)
 
 
 def _create_schema_migrations_table(conn) -> None:
@@ -208,6 +229,7 @@ def _ensure_postgres_compat_columns(target_engine: Engine) -> None:
                 if _postgres_column_exists(conn, table_name, column_name):
                     continue
                 conn.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+                logger.info("Migration: added column %s.%s (%s)", table_name, column_name, column_type)
 
 
 def run_schema_migrations(
@@ -266,6 +288,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def get_applied_migration_versions() -> list:
+    """Return list of applied schema migration version strings, or empty list if table missing."""
+    try:
+        with engine.connect() as conn:
+            rows = conn.exec_driver_sql("SELECT version FROM schema_migrations ORDER BY version").fetchall()
+            return [row[0] for row in rows]
+    except Exception:
+        return []
 
 
 def prune_old_sync_events(db, keep_days: int = 90) -> int:

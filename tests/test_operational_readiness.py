@@ -99,18 +99,20 @@ def test_request_id_is_returned_and_preserved_from_header():
     assert response.headers["X-Request-ID"] == "test-request-123"
 
 
-def test_production_auth_with_weak_session_secret_logs_error_but_starts(monkeypatch, caplog):
+def test_production_auth_with_weak_session_secret_raises():
     import app.auth as auth_mod
     import app.main as main_mod
+    import pytest
 
+    monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(auth_mod, "DASHBOARD_PASSWORD", "correct-password")
     monkeypatch.setattr(main_mod.app_settings, "IS_PRODUCTION", True)
     monkeypatch.setattr(main_mod.app_settings, "SESSION_SECRET_KEY", main_mod.app_settings.DEFAULT_SESSION_SECRET_KEY)
 
-    app = create_app(lifespan_context=None, csrf_enabled=False)
+    with pytest.raises(RuntimeError, match="SESSION_SECRET_KEY is weak"):
+        create_app(lifespan_context=None, csrf_enabled=False)
 
-    assert app.title
-    assert "SESSION_SECRET_KEY is weak" in caplog.text
+    monkeypatch.undo()
 
 
 def test_secure_session_cookie_can_be_enabled_for_reverse_proxy_https(monkeypatch):

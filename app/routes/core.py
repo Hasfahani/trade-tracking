@@ -7,12 +7,20 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.db import check_database_ready, get_db
+from app.db import check_database_ready, get_db, get_applied_migration_versions
 from app.models import SyncEvent, Trade, Wallet
 from app.queries import get_dashboard_stats
-from app.settings import APP_NAME, APP_ENV, IS_PRODUCTION
+from app.settings import APP_NAME, APP_ENV, APP_VERSION, GIT_COMMIT, IS_PRODUCTION
 from app import view_helpers as vh
 from app.routes._shared import templates
+
+
+def _get_status_counters() -> dict:
+    try:
+        from app.main import get_status_counters
+        return get_status_counters()
+    except Exception:
+        return {}
 
 router = APIRouter()
 
@@ -57,6 +65,67 @@ async def readyz(request: Request):
         },
         status_code=status_code,
     )
+
+
+@router.get("/admin/schema-version")
+async def schema_version():
+    """Return applied migration versions and pending count for diagnostics."""
+    from app.db import SCHEMA_MIGRATIONS
+    applied = get_applied_migration_versions()
+    all_versions = [v for v, _ in SCHEMA_MIGRATIONS]
+    pending = [v for v in all_versions if v not in set(applied)]
+    return JSONResponse({
+        "applied": applied,
+        "pending": pending,
+        "total_defined": len(all_versions),
+        "total_applied": len(applied),
+    })
+
+
+@router.get("/admin/ops")
+async def ops_diagnostics(request: Request):
+    """One-click operational diagnostics: db ping, migration status, last sync, build info."""
+    db_ok = False
+    db_error = None
+    last_sync = None
+    applied_migrations = []
+    try:
+        check_database_ready()
+        db_ok = True
+    except Exception as exc:
+        db_error = str(exc)
+
+    try:
+        from app.db import SCHEMA_MIGRATIONS, SessionLocal as _SL
+        applied_migrations = get_applied_migration_versions()
+        db = _SL()
+        sync = db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).first()
+        if sync:
+            last_sync = {
+                "status": sync.status,
+                "wallet": sync.wallet_address,
+                "inserted": sync.inserted_count,
+                "fetched": sync.fetched_count,
+                "at": sync.created_at.isoformat() if sync.created_at else None,
+                "error": sync.error_message,
+            }
+        db.close()
+        all_versions = [v for v, _ in SCHEMA_MIGRATIONS]
+        pending = [v for v in all_versions if v not in set(applied_migrations)]
+    except Exception:
+        pending = []
+
+    return JSONResponse({
+        "database": "ok" if db_ok else "error",
+        "database_error": db_error,
+        "migration_status": "ok" if not pending else "pending",
+        "migrations_applied": len(applied_migrations),
+        "migrations_pending": pending,
+        "last_sync": last_sync,
+        "build": {"version": APP_VERSION, "commit": GIT_COMMIT, "env": APP_ENV},
+        "ready": bool(getattr(request.app.state, "ready", False)),
+        "counters": _get_status_counters(),
+    })
 
 
 @router.get("/robots.txt")

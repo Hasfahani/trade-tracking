@@ -1,4 +1,5 @@
 import contextvars
+import json
 import logging
 import time
 import uuid
@@ -15,7 +16,7 @@ from app import settings as app_settings
 from app.csrf import csrf_middleware, get_csrf_token
 from app.db import SessionLocal, check_database_ready, init_db, prune_old_sync_events
 from app.routes import router
-from app.settings import APP_NAME, DASHBOARD_PASSWORD, LOG_LEVEL, SESSION_SECRET_KEY
+from app.settings import APP_NAME, APP_VERSION, GIT_COMMIT, DASHBOARD_PASSWORD, LOG_LEVEL, SESSION_SECRET_KEY
 
 
 _request_id_context: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
@@ -30,20 +31,54 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
+class _JsonFormatter(logging.Formatter):
+    """Emit each log record as a single JSON line for structured log ingestion."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        record.message = record.getMessage()
+        payload = {
+            "time": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "request_id": getattr(record, "request_id", "-"),
+            "message": record.message,
+        }
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
 def configure_logging() -> None:
     logging.setLogRecordFactory(logging.LogRecord)
-    logging.basicConfig(
-        level=getattr(logging, LOG_LEVEL, logging.INFO),
-        format="%(asctime)s %(levelname)s [%(name)s] [request_id=%(request_id)s] %(message)s",
-    )
+    level = getattr(logging, LOG_LEVEL, logging.INFO)
     request_id_filter = RequestIdFilter()
-    for handler in logging.getLogger().handlers:
-        if not any(isinstance(existing_filter, RequestIdFilter) for existing_filter in handler.filters):
+    root = logging.getLogger()
+    root.setLevel(level)
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        root.addHandler(handler)
+    for handler in root.handlers:
+        handler.setLevel(level)
+        if app_settings.IS_PRODUCTION:
+            handler.setFormatter(_JsonFormatter())
+        else:
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s %(levelname)s [%(name)s] [request_id=%(request_id)s] %(message)s")
+            )
+        if not any(isinstance(f, RequestIdFilter) for f in handler.filters):
             handler.addFilter(request_id_filter)
 
 
 configure_logging()
 logger = logging.getLogger(__name__)
+
+# Global counters for 4xx/5xx responses (in-process, reset on restart)
+_status_counters: dict = {"4xx": 0, "5xx": 0}
+
+
+def get_status_counters() -> dict:
+    return dict(_status_counters)
+
 
 # Paths that do NOT require authentication (login page itself, static assets)
 _PUBLIC_PATHS = frozenset({"/login", "/logout", "/healthz", "/readyz"})
@@ -55,11 +90,13 @@ async def lifespan(app: FastAPI):
     app.state.ready = False
     app.state.startup_error = None
     logger.info(
-        "Application startup beginning env=%s production=%s database=%s auth_enabled=%s",
+        "Application startup beginning env=%s production=%s database=%s auth_enabled=%s version=%s commit=%s",
         app_settings.APP_ENV,
         app_settings.IS_PRODUCTION,
         _database_label(),
         auth.auth_enabled(),
+        APP_VERSION,
+        GIT_COMMIT,
     )
     if _initialize_database_with_retries():
         _run_startup_maintenance()
@@ -136,6 +173,7 @@ async def request_logging_middleware(request: Request, call_next):
         response = await call_next(request)
     except Exception:
         duration_ms = int((time.perf_counter() - started) * 1000)
+        _status_counters["5xx"] += 1
         logger.exception(
             "Request failed method=%s path=%s duration_ms=%d",
             request.method,
@@ -145,12 +183,18 @@ async def request_logging_middleware(request: Request, call_next):
         raise
     else:
         duration_ms = int((time.perf_counter() - started) * 1000)
+        status = response.status_code
+        if 400 <= status < 500:
+            _status_counters["4xx"] += 1
+        elif status >= 500:
+            _status_counters["5xx"] += 1
         response.headers["X-Request-ID"] = request_id
+        response.headers["Server-Timing"] = f"total;dur={duration_ms}"
         logger.info(
             "Request complete method=%s path=%s status=%d duration_ms=%d",
             request.method,
             request.url.path,
-            response.status_code,
+            status,
             duration_ms,
         )
         return response
@@ -232,8 +276,9 @@ def _validate_runtime_configuration() -> None:
     if app_settings.session_secret_is_weak():
         message = "SESSION_SECRET_KEY is weak or using the default value"
         if app_settings.IS_PRODUCTION and auth.auth_enabled():
-            logger.error("%s; set a random 32+ character secret for stable, safe production sessions", message)
-            return
+            raise RuntimeError(
+                f"{message}. Set SESSION_SECRET_KEY to a random 32+ character string before deploying."
+            )
         logger.warning("%s; sessions are not production-hardened", message)
     if app_settings.IS_PRODUCTION and not auth.auth_enabled():
         logger.warning("DASHBOARD_PASSWORD is not set; production deployment will be publicly accessible")
