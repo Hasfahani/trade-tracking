@@ -31,6 +31,7 @@ class RequestIdFilter(logging.Filter):
 
 
 def configure_logging() -> None:
+    logging.setLogRecordFactory(logging.LogRecord)
     logging.basicConfig(
         level=getattr(logging, LOG_LEVEL, logging.INFO),
         format="%(asctime)s %(levelname)s [%(name)s] [request_id=%(request_id)s] %(message)s",
