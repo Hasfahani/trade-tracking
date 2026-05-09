@@ -216,7 +216,8 @@ def _validate_runtime_configuration() -> None:
     if app_settings.session_secret_is_weak():
         message = "SESSION_SECRET_KEY is weak or using the default value"
         if app_settings.IS_PRODUCTION and auth.auth_enabled():
-            raise RuntimeError(f"{message}; set a random 32+ character secret before enabling production auth")
+            logger.error("%s; set a random 32+ character secret for stable, safe production sessions", message)
+            return
         logger.warning("%s; sessions are not production-hardened", message)
     if app_settings.IS_PRODUCTION and not auth.auth_enabled():
         logger.warning("DASHBOARD_PASSWORD is not set; production deployment will be publicly accessible")
