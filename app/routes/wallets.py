@@ -126,12 +126,14 @@ async def list_wallets(
     ).all()
     wallet_stats = vh.wallet_stats_map(db, [wallet.address for wallet in wallets])
     recent_events = db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).limit(12).all()
-    summary = vh.wallet_summary_counts(
-        db,
-        wallet_search=wallet_search,
-        status_filter=status_filter,
-        include_archived=bool(include_archived),
-    )
+    summary = {
+        "wallet_count": len(wallets),
+        "pinned_count": sum(1 for w in wallets if bool(w.is_pinned)),
+        "archived_count": sum(1 for w in wallets if bool(w.is_archived)),
+        "refreshed_count": sum(1 for w in wallets if w.last_checked_at is not None),
+        "error_count": sum(1 for w in wallets if w.last_refresh_status == "error"),
+        "trade_count": sum(int((wallet_stats.get(w.address) or {}).get("trade_count") or 0) for w in wallets),
+    }
     return templates.TemplateResponse(
         request,
         "wallets_v2.html",

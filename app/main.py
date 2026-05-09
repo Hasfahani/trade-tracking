@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import auth
@@ -213,6 +214,7 @@ async def request_logging_middleware(request: Request, call_next):
 async def security_headers_middleware(request: Request, call_next):
     """Add security headers to every response."""
     response = await call_next(request)
+    path = request.url.path
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "same-origin"
@@ -226,7 +228,10 @@ async def security_headers_middleware(request: Request, call_next):
         "frame-ancestors 'none';"
     )
     content_type = (response.headers.get("content-type") or "").lower()
-    if "text/html" in content_type:
+    if path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
+        response.headers["Vary"] = "Accept-Encoding"
+    elif "text/html" in content_type:
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
     return response
@@ -264,6 +269,7 @@ def create_app(
         https_only=app_settings.SESSION_COOKIE_SECURE,
         max_age=60 * 60 * 8,
     )
+    app.add_middleware(GZipMiddleware, minimum_size=500)
     app.middleware("http")(request_logging_middleware)
     app.middleware("http")(security_headers_middleware)
     app.middleware("http")(auth_middleware)
