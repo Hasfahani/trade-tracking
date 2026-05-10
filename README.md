@@ -1,84 +1,56 @@
-# Polymarket Wallet Trades Watchlist
+# PolySignal
 
-A focused, server-rendered watchlist app for tracking Polymarket wallet trades.
+A focused, server-rendered watchlist for tracking Polymarket wallet activity.
 
-The product is intentionally narrow: add wallets, refresh trades manually, and inspect stored trade history quickly from local SQLite.
+PolySignal is intentionally narrow:
+- Add wallets
+- Refresh on demand
+- Review trade history from local storage
 
-## Product Scope
+No background polling. No page-time API calls. No strategy engine.
+
+## Why This App Exists
+
+Most dashboards optimize for breadth. PolySignal optimizes for speed and operational clarity:
+- Fast page loads from SQLite
+- Manual refresh controls with visible results
+- Clear wallet organization with tags, notes, pinning, and archive
+- Export-ready trade views
+
+## Product Boundaries
 
 Included:
-- Wallet watchlist with optional labels
-- Wallet notes, tags, pinning, and archive state
-- Manual refresh per wallet or for all wallets
-- Trade storage in local SQLite
-- Trade filtering, sorting, pagination, date presets, CSV export
-- Trade value summaries (YES/NO/total value, avg price) per active filter set
-- Sync status and refresh event visibility
-- Refresh result visibility per wallet, including last refresh time/status/error
+- Wallet watchlist with labels, tags, notes, pin, archive
+- Manual refresh per wallet or all active wallets
+- Sync status history and duplicate cleanup tooling
+- Wallet and all-trades views with filtering, sorting, pagination, date presets
+- CSV import and export
+- Telegram alert settings and test action
 
-Explicitly excluded:
-- Win/loss dashboards
+Not included:
 - Copy trading
-- Strategy analytics
-- Live auto-refresh on page render
+- PnL or strategy analytics
+- Auto-refresh on page render
+- External API calls during page render
 
-## Hard Rules
+## Core Rules
 
-- No external API calls during page render
-- All page loads read from SQLite only
-- Ingestion stays isolated from web routes (via app/ingest.py)
-- Trade deduplication via unique trade_id
+- Page rendering reads from SQLite only
+- Ingestion side effects stay outside page routes
+- Trade deduplication is keyed by trade_id
 - Manual refresh is the operating model
 
 ## Tech Stack
 
 - FastAPI
 - SQLAlchemy
-- SQLite
+- SQLite (default) or PostgreSQL
 - Jinja2 templates
-- Server-rendered HTML/CSS
+- Server-rendered HTML and CSS
 
-## Architecture
+## Quick Start (Windows PowerShell)
 
-- app/main.py: App factory, production app instance, static mount, exception handler, and startup initialization
-- app/routes/: HTTP routes and server-rendered page handlers split by area
-  - app/routes/core.py: root redirect and dashboard
-  - app/routes/wallets.py: wallet list/detail/edit/archive/delete/import/refresh pages
-  - app/routes/trades.py: wallet trades, all trades, and trade detail pages
-  - app/routes/exports.py: wallet and trade CSV exports
-  - app/routes/alerts.py: settings, sync status, and admin refresh routes
-  - app/routes/_shared.py: shared route helpers
-- app/ingest.py: Polymarket fetch, normalize, and ingest logic
-- app/models.py: SQLAlchemy models
-- app/db.py: Engine/session setup and tracked lightweight schema migrations
-- app/view_helpers.py: Query/filter/date-preset/view helper logic used by routes
-- app/templates/: Jinja templates
-- app/static/style_v2.css: Shared design system and responsive UI
-
-Active runtime path:
-- `app.main.create_app()` builds the FastAPI app and mounts `app.routes.router`
-- The production ASGI object is `app.main.app`
-- `_v2` templates and `style_v2.css` are the active UI stack
-- `app/routes_v2.py` is a small compatibility shim for older imports of `app.routes_v2.router`
-- Legacy `routes.py`, `style.css`, and non-`_v2` templates have been removed
-
-Design decisions:
-- Keep ingestion side effects out of page rendering paths
-- Keep routes simple and explicit
-- Prefer local query-driven pages over background complexity
-- Favor maintainability over feature volume
-
-Operational model:
-- Page renders never call external APIs
-- Refresh happens only when a user triggers it from the UI or admin endpoints
-- Refresh results are stored in SQLite and shown later on the wallet and sync pages
-- Archived wallets stay in SQLite but are hidden from the default wallet list
-
-## Setup
-
-1. Create and activate virtual environment
-
-Windows PowerShell:
+1. Create and activate a virtual environment
 
 ```powershell
 python -m venv .venv
@@ -91,280 +63,236 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-3. Initialize database
+3. Initialize the database
 
 ```powershell
 python scripts/init_db.py
 ```
 
-4. Run server
+4. Start the app
 
 ```powershell
 ./start_dev.ps1
 ```
 
-Alternative launchers (Windows):
-- PowerShell launcher: `./start_server.ps1`
-- Batch launcher: `./start_server.bat`
-- Dev launcher with scoped reload: `./start_dev.ps1`
-
-The PowerShell launcher:
-- Resolves virtualenv Python from `venv` or `.venv`
-- Checks that `uvicorn` is installed
-- Starts on `PORT` (default 8000)
-- Restarts server automatically if it exits
-
-The dev launcher:
-- Enables `--reload`
-- Watches only `app` and `tests`
-- Excludes `venv`, `.venv`, `.venv313`, and `data` to avoid Windows file-watch slowdowns
-
-Open:
+5. Open:
 - http://localhost:8000/wallets
+
+## Launch Options
+
+PowerShell:
+- ./start_dev.ps1
+- ./start_server.ps1
+
+Batch:
+- ./start_dev.bat
+- ./start_server.bat
+
+Direct uvicorn:
+
+```powershell
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Notes:
+- Launch scripts resolve Python from venv or .venv
+- Launch scripts respect PORT
+- Dev launcher watches app and tests, excluding venv/.venv/.venv313/data for better Windows watch performance
+
+## First-Run Workflow
+
+1. Go to /wallets
+2. Add one wallet address
+3. Click Refresh on that wallet
+4. Open View trades
+5. Check /admin/sync-status for refresh event details
+
+## Architecture
+
+Main modules:
+- app/main.py: app factory, middleware, static mount, startup lifecycle
+- app/routes/core.py: root, health, readiness, dashboard, ops pages
+- app/routes/wallets.py: watchlist pages and wallet CRUD flows
+- app/routes/trades.py: wallet trades, all trades, trade detail
+- app/routes/exports.py: CSV exports
+- app/routes/alerts.py: settings, sync status, admin refresh
+- app/routes/_shared.py: route helpers
+- app/ingest.py: fetch and ingest logic
+- app/db.py: engine/session and lightweight schema migrations
+- app/models.py: SQLAlchemy models
+- app/view_helpers.py: reusable formatting and query helpers
+
+UI runtime:
+- Active stylesheet: app/static/style_v2.css
+- Shared client behavior: app/static/base.js
+- Primary templates are v2 templates, while a small set of legacy-compatible templates still exists in the repository
+
+Design intent:
+- Keep routes explicit and maintainable
+- Keep external API work in refresh flows only
+- Favor predictable local reads over background complexity
 
 ## Runtime Configuration
 
-All settings are read from environment variables at startup. None are required; defaults are listed below.
+All configuration is read from environment variables at startup.
 
 ### Application
 
 | Variable | Default | Description |
 |---|---|---|
-| `APP_NAME` | `PolySignal` | Title displayed in the browser tab and nav header. |
-| `APP_ENV` | `development` | Runtime environment label. `production` enables production-oriented cookie defaults. Railway also sets this through `RAILWAY_ENVIRONMENT`. |
-| `LOG_LEVEL` | `INFO` | Python logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
-| `HOST` | `0.0.0.0` | Bind address for the uvicorn server. |
-| `PORT` | `8000` | TCP port the server listens on. |
-| `DATABASE_URL` | `sqlite:///./data/trades.db` | SQLAlchemy database URL. SQLite and PostgreSQL are both supported. For PostgreSQL use `postgresql+psycopg2://user:pass@host/db`. |
-| `STARTUP_DB_MAX_ATTEMPTS` | `3` | Number of startup database initialization/readiness attempts before the app enters degraded readiness. |
-| `STARTUP_DB_RETRY_SECONDS` | `1.0` | Delay between startup DB attempts. |
+| APP_NAME | PolySignal | App title in UI. |
+| APP_ENV | development | Environment label. production enables production-oriented cookie defaults. |
+| LOG_LEVEL | INFO | Python log level. |
+| HOST | 0.0.0.0 | Server bind address. |
+| PORT | 8000 | Server port. |
+| DATABASE_URL | sqlite:///./data/trades.db | SQLAlchemy URL. SQLite and PostgreSQL are supported. |
+| STARTUP_DB_MAX_ATTEMPTS | 3 | Startup DB retry attempts before degraded readiness. |
+| STARTUP_DB_RETRY_SECONDS | 1.0 | Delay between startup DB retries. |
 
-### Authentication
+### Authentication and Session
 
 | Variable | Default | Description |
 |---|---|---|
-| `DASHBOARD_PASSWORD` | *(unset)* | When set, enables single-user password authentication. All pages redirect to `/login` until the correct password is entered. Leave unset to disable auth entirely (suitable for local-only deployments). |
-| `SESSION_SECRET_KEY` | `change-me-in-production-use-a-long-random-secret` | Secret used to sign the session cookie via `itsdangerous`. **Change this in any non-local deployment.** Generate with `python -c "import secrets; print(secrets.token_hex(32))"`. |
-| `SESSION_COOKIE_SECURE` | `true` in production, else `false` | Forces the session cookie to use the Secure flag. Keep enabled behind Railway HTTPS. |
-| `CSRF_COOKIE_SECURE` | `true` in production, else `false` | Forces the CSRF cookie to use the Secure flag. |
+| DASHBOARD_PASSWORD | unset | If set, enables password protection and redirects unauthenticated users to /login. |
+| SESSION_SECRET_KEY | change-me-in-production-use-a-long-random-secret | Session signing secret. Change for any non-local deployment. |
+| SESSION_COOKIE_SECURE | true in production, else false | Secure flag for session cookie. |
+| CSRF_COOKIE_SECURE | true in production, else false | Secure flag for CSRF cookie. |
 
 ### Pagination and Refresh
 
 | Variable | Default | Description |
 |---|---|---|
-| `DEFAULT_PAGE_SIZE` | `50` | Number of trades shown per page on trade list views. |
-| `MAX_PAGE_SIZE` | `200` | Maximum value a caller may request via the `page_size` query param. |
-| `DEFAULT_REFRESH_LIMIT` | `500` | Number of trades fetched per wallet per refresh call. Applies to both UI-triggered and admin refreshes. |
+| DEFAULT_PAGE_SIZE | 50 | Default page size on trade views. |
+| MAX_PAGE_SIZE | 200 | Maximum allowed page_size query value. |
+| DEFAULT_REFRESH_LIMIT | 500 | Fetch limit per wallet refresh request. |
 
 ### Polymarket API Timeouts
 
 | Variable | Default | Description |
 |---|---|---|
-| `POLYMARKET_CONNECT_TIMEOUT_SECONDS` | `5.0` | TCP connection timeout when reaching `data-api.polymarket.com`. |
-| `POLYMARKET_READ_TIMEOUT_SECONDS` | `15.0` | Time allowed to receive the response body after connecting. |
-| `POLYMARKET_WRITE_TIMEOUT_SECONDS` | `15.0` | Time allowed to send the request body. |
-| `POLYMARKET_POOL_TIMEOUT_SECONDS` | `5.0` | Time to wait for a connection from the httpx connection pool. |
+| POLYMARKET_CONNECT_TIMEOUT_SECONDS | 5.0 | TCP connect timeout. |
+| POLYMARKET_READ_TIMEOUT_SECONDS | 15.0 | Response read timeout. |
+| POLYMARKET_WRITE_TIMEOUT_SECONDS | 15.0 | Request write timeout. |
+| POLYMARKET_POOL_TIMEOUT_SECONDS | 5.0 | Connection pool wait timeout. |
 
 ### Telegram Alerts
 
-Telegram credentials are stored in the database (via the `/settings` page) and are not read from environment variables at startup. Configure them in the UI after launch:
+Telegram settings are configured in /settings and stored in the app_settings table.
 
 | Setting | Description |
 |---|---|
-| **Bot Token** | Token from [@BotFather](https://t.me/BotFather). Stored encrypted-at-rest in the `app_settings` table. Submitting a blank value on the settings page preserves the existing token. |
-| **Chat ID** | Telegram chat or channel ID to send alerts to. |
-| **Alert minimum size** | Trades smaller than this USDC value are silently skipped. |
-| **Alerts enabled** | Master on/off switch for all Telegram notifications. |
+| Bot Token | Bot token from @BotFather. Leave blank during save to preserve the existing token. |
+| Chat ID | Target chat or channel id. |
+| Alert minimum size | Lower-value trades are skipped. |
+| Alerts enabled | Master on or off switch. |
 
-Refresh/API query parameters:
-- `POST /wallets/{identifier}/refresh?limit=<int>` (1-1000)
-- `POST /wallets/refresh-all?limit=<int>` (1-1000)
-- `POST /admin/refresh?address=<wallet>&limit_per_wallet=<int>`
-- `POST /admin/refresh-all?address=<wallet>&limit_per_wallet=<int>`
+Security note:
+- In the current implementation, Telegram credentials are stored in the database and are not managed via environment variables.
+- Protect database access and filesystem permissions in deployment environments.
 
-Notes:
-- `admin/refresh-all` triggers full-history pagination mode (`fetch_all=True`) in ingestion
-- `address` on admin endpoints scopes refresh to one wallet; omit to process all wallets
+## Main Routes
 
-Example (PowerShell):
-
-```powershell
-$env:PORT = "8010"
-./start_dev.ps1
-```
-
-## Usage
-
-1. Add wallet on /wallets
-- Address must be 0x + 40 hex chars
-- Optional label for readability
-- Optional tags and notes for organization
-
-2. Refresh data manually
-- Use Refresh this wallet or Refresh all wallets in UI
-- Or call admin API endpoints
-- Refresh status, inserted trade count, and errors are written to SQLite for later review
-- Refresh calls require outbound network access to Polymarket public data API (`https://data-api.polymarket.com`)
-- Archived wallets are excluded from refresh-all flows until restored
-
-3. Review trades
-- Open the wallet profile page (/wallets/{identifier}) for a summary: trade count, first/latest trade date, value summary (YES/NO/total, VWAP), refresh status, and activity timeline
-- Open wallet trades page or /all-trades for a unified view across all wallets
-- Filter by side/date/market search
-- Use date presets like today / 7d / 30d when helpful
-- Sort by newest, oldest, largest size, or highest value
-- Use copy buttons for wallet, trade, and condition IDs where helpful
-- Export filtered trades to CSV using the Export CSV button on any trades page
-- Wallet search on /all-trades matches both wallet address and wallet label
-
-4. Review the dashboard
-- Visit /dashboard for a quick overview: wallet counts, total stored trades, last refresh timestamps
-- See the 20 most recent trades across all wallets
-- See the top 5 wallets by trade count
-- Interesting activity section highlights notable events from the last 24 hours: large trades (>$200), activity spikes (3+ trades in 10 minutes), and new market entries (first-ever trade in a market)
-
-5. Import and export wallets
-- Export all wallets to CSV via /wallets/export (includes address, label, tags, notes, pin/archive state)
-- Import wallets in bulk via /wallets/import — invalid addresses and duplicates are skipped automatically
-- Tags are semicolon-separated in the CSV (e.g. `tag1;tag2`)
-
-6. Organize the watchlist
-- Search wallets by label, address, tags, and notes
-- Pin important wallets to the top
-- Archive wallets to hide them without deleting stored trades
-- Use the edit page to update labels, tags, notes, and pin state
-
-## API Endpoints
-
-Core:
-- GET /dashboard
+Core pages:
 - GET /wallets
+- GET /dashboard
+- GET /all-trades
+- GET /admin/sync-status
+- GET /settings
+- GET /admin/ops-ui
+
+Health and readiness:
+- GET /healthz (liveness)
+- GET /readyz (readiness with DB check)
+
+Wallet and trade actions:
 - POST /wallets
-- GET /wallets/{identifier}
-- GET /wallets/{identifier}/edit
-- POST /wallets/{identifier}/edit
-- POST /wallets/{identifier}/pin
-- POST /wallets/{identifier}/archive
-- POST /wallets/{identifier}/unarchive
 - POST /wallets/{identifier}/refresh
 - POST /wallets/refresh-all
-- GET /wallets/{identifier}/trades
-- GET /wallets/{identifier}/trades/export
-- GET /all-trades
-- GET /all-trades/export
-- GET /trades/{trade_id}
 - GET /wallets/export
-- GET /wallets/import
 - POST /wallets/import
-- GET /wallets/{identifier}/delete-confirm
-- POST /wallets/{identifier}/delete
+- GET /all-trades/export
 
-Operational:
-- GET /healthz (liveness; returns 200 when the app process is serving)
-- GET /readyz (readiness; returns 200 only after startup DB initialization and a DB ping succeed)
+Admin refresh APIs:
 - POST /admin/refresh
 - POST /admin/refresh-all
-- GET /admin/sync-status (paginated; default page_size=50)
-- POST /admin/sync-status/cleanup (redirects to /admin/sync-status with flash confirmation)
+- POST /admin/sync-status/cleanup
 
-Common query params:
-- `limit` on wallet refresh routes controls per-request fetch size
-- `limit_per_wallet` on admin refresh routes controls per-wallet fetch size
-- `address` on admin routes targets one wallet (id/address resolution supported)
+## Query Parameters You Will Use Most
 
-## Schema Notes
+- limit on wallet refresh endpoints
+- limit_per_wallet on admin refresh endpoints
+- address on admin refresh endpoints to target one wallet
 
-The app performs tracked, lightweight SQLite compatibility migrations at startup. Applied migrations are recorded in `schema_migrations`, keeping the local-first setup simple while avoiding untracked schema drift.
+## Data and Schema Notes
 
-Newer schema fields used by refresh status:
+- Lightweight schema compatibility migrations run at startup
+- Applied migrations are tracked in schema_migrations
+- No external migration framework is required
+
+Fields used by refresh status include:
 - wallets.last_checked_at
 - wallets.last_refresh_status
 - wallets.last_refresh_count
 - wallets.last_error_at
 - wallets.last_error_message
 
-Additional wallet compatibility fields:
-- wallets.tags
-- wallets.notes
-- wallets.is_pinned
-- wallets.is_archived
-- sync_events.duplicate_count
-- sync_events.duration_ms
-
-Indexes added for responsiveness:
+Useful indexes include:
 - wallets(is_archived, is_pinned, created_at)
 - trades(wallet_address, traded_at)
 - trades(wallet_address, side, traded_at)
 - trades(wallet_address, market_title)
 - sync_events(wallet_address, created_at)
 
-No external migration framework is required for this project. New schema compatibility changes should be added to `SCHEMA_MIGRATIONS` in `app/db.py` and covered by migration tests.
-
-## CLI Utilities
-
-`refresh_now.py` — standalone script to refresh all wallets from the command line without the web server:
-
-```powershell
-python refresh_now.py
-```
-
-Outputs per-wallet trade counts to stdout. Useful for one-off bulk refreshes outside the UI.
-
 ## Troubleshooting
 
 Port already in use:
-- Change port: set `PORT` and run `./start_dev.ps1`
-- Or set PORT and rerun
-- PowerShell example:
 
 ```powershell
 $env:PORT = "8010"
 ./start_dev.ps1
 ```
 
-- Batch/launcher scripts also respect `PORT`
-
 Virtual environment issues:
 - Confirm interpreter exists under .venv/Scripts/python.exe or venv/Scripts/python.exe
 - Reinstall dependencies with pip install -r requirements.txt
 
 No new trades after refresh:
-- This can be normal if nothing new is available
-- Check /admin/sync-status for refresh events and errors
+- This can be valid when upstream has no new records
+- Check /admin/sync-status for details
 
-Archived wallets not visible:
-- Archived wallets are hidden from the default `/wallets` view
-- Use the wallet filters and enable `Show archived wallets` to restore them
+Archived wallets missing:
+- Enable Show archived wallets filter on /wallets
 
-Refresh/API connectivity failures:
-- Manual/admin refresh depends on Polymarket data API reachability
-- Confirm outbound access to `https://data-api.polymarket.com`
-- If failures persist, review `/admin/sync-status` for recorded error messages
+Refresh connectivity failures:
+- Verify outbound access to https://data-api.polymarket.com
+- Review errors in /admin/sync-status
 
-Windows auto-start (optional):
-- `setup_autostart.ps1` registers scheduled task `PolymarketTracker`
-- Run as Administrator to create/update the startup task
+Windows auto-start:
+- setup_autostart.ps1 registers scheduled task PolymarketTracker
+- Run as Administrator to create or update task
 
 ## Testing
 
-Run tests:
+Run all tests:
 
 ```powershell
 pytest -q
 ```
 
-Tests cover:
-- Production app factory wiring for static files, routes, and exception handler
-- Wallet address validation behavior
-- Wallet creation with tags/notes
-- Trade dedup logic
-- Trade normalization behavior
-- Core route behavior for wallet/trades pages
-- Manual refresh route messaging
-- Wallet archive/edit behavior
-- Trade date preset filtering
-- View helper formatting, pagination, and wallet search behavior
-- Interesting activity detection, including empty-data and missing-label edge cases
-- Shared route helper behavior
-- Guardrail that page renders do not call refresh/ingestion or Telegram side effects
-- SQLite schema migration runner behavior and idempotency
+Coverage includes:
+- App factory wiring and middleware behavior
+- Wallet and trades route behavior
+- Refresh and sync status flows
+- View helper formatting and filtering
+- Schema migration idempotency
+- Guardrail checks that page renders do not trigger ingestion side effects
+
+## CLI Utility
+
+refresh_now.py refreshes all wallets from command line:
+
+```powershell
+python refresh_now.py
+```
+
+This is useful for one-off refresh runs without using the web UI.
