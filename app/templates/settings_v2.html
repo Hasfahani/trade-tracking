@@ -46,6 +46,8 @@
                 name="telegram_bot_token"
                 placeholder="{{ '(token set — leave blank to keep)' if settings.telegram_bot_token else '123456789:AAExj7...' }}"
                 value=""
+                pattern="\d+:[\w\-]+"
+                title="Use Telegram bot token format: 123456789:AAExj7..."
                 autocomplete="off"
                 spellcheck="false"
             >
@@ -57,6 +59,9 @@
                 name="telegram_chat_id"
                 placeholder="8708428862"
                 value="{{ settings.telegram_chat_id or '' }}"
+                pattern="-?\d+"
+                title="Chat ID must be numeric, e.g. 8708428862 or -100123456"
+                inputmode="numeric"
                 autocomplete="off"
                 spellcheck="false"
             >

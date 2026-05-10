@@ -6,10 +6,9 @@ checks that the submitted form field matches the cookie value.
 
 Exempt paths: /login (no session exists yet; the password is the credential).
 
-Body-replay pattern: after reading the form body to extract the CSRF token we
-restore the request._receive so that the downstream route handler can still
-read the full body.  Without this, FastAPI's Form(...) dependencies get a
-consumed (empty) stream and return 422.
+After reading the form body to extract the CSRF token, we rely on Starlette's
+request body caching so downstream Form(...) dependencies can still read the
+same payload safely.
 """
 import logging
 import secrets
@@ -63,13 +62,6 @@ async def csrf_middleware(request: Request, call_next: Callable) -> Response:
                     "<h1>403 Forbidden</h1><p>CSRF token invalid or missing. Please go back and try again.</p>",
                     status_code=403,
                 )
-
-            # Replay the body so downstream route handlers (FastAPI Form(...) deps)
-            # can still read it from the receive callable.
-            async def _replay_receive():
-                return {"type": "http.request", "body": body, "more_body": False}
-
-            request._receive = _replay_receive
 
     response = await call_next(request)
     response.set_cookie(

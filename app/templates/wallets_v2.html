@@ -40,7 +40,7 @@
             <form method="post" action="/wallets/refresh-all">
                 <button type="submit" class="btn btn-primary">Refresh all wallets</button>
             </form>
-            <a href="/wallets/export" class="btn">Export CSV</a>
+            <a href="/wallets/export" class="btn" target="_blank" rel="noreferrer">Export CSV</a>
             <a href="/wallets/import" class="btn">Import CSV</a>
         </div>
     </div>
@@ -155,7 +155,7 @@
                             <button type="submit" class="btn btn-primary btn-small" {% if wallet.is_archived %}disabled{% endif %}>Refresh</button>
                         </form>
                         <a href="/wallets/{{ wallet.address }}" class="btn btn-small">Profile</a>
-                        <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-small">Open trades</a>
+                        <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-small" aria-label="View trades for {{ wallet.label or wallet.address }}">View trades</a>
                         <a href="/wallets/{{ wallet.address }}/edit" class="btn btn-small">Edit</a>
                         <form method="post" action="/wallets/{{ wallet.address }}/pin">
                             <button type="submit" class="btn btn-small">{% if wallet.is_pinned %}Unpin{% else %}Pin{% endif %}</button>
@@ -220,7 +220,7 @@
         <h3>{% if wallet_search or status_filter or include_archived %}No wallets match these filters{% else %}No wallets in your watchlist{% endif %}</h3>
         <p>{% if wallet_search or status_filter or include_archived %}Try broadening the filters or reset them to see the full watchlist.{% else %}Add your first wallet using the form above, then refresh it to pull in trades.{% endif %}</p>
         {% if not wallet_search and not status_filter and not include_archived %}
-        <a href="#" onclick="document.querySelector('[name=address]').focus();return false;" class="btn btn-primary btn-small" style="margin-top:4px;">Add a wallet</a>
+        <a href="#" class="btn btn-primary btn-small js-focus-address" style="margin-top:4px;">Add a wallet</a>
         {% else %}
         <a href="/wallets" class="btn btn-small" style="margin-top:4px;">Reset filters</a>
         {% endif %}

@@ -46,9 +46,20 @@ document.querySelectorAll('form').forEach(function (form) {
         if (btn && !btn.disabled) {
             btn.disabled = true;
             btn.dataset.orig = btn.textContent;
-            btn.textContent = 'Loading...';
+            btn.textContent = 'Loading…';
+            btn.classList.add('btn-loading');
         }
     });
+});
+
+// Generic submit confirmation hook (replaces inline onsubmit confirm handlers)
+document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+        var msg = form.getAttribute('data-confirm') || 'Are you sure?';
+        if (!window.confirm(msg)) {
+            e.preventDefault();
+        }
+    }, true);
 });
 
 // Hamburger menu toggle
@@ -105,6 +116,80 @@ if (flash) {
         setTimeout(function () { flash.remove(); }, 650);
     }, 9000);
 }
+
+// Toast notifications
+var _toastContainer = null;
+function _getToastContainer() {
+    if (!_toastContainer) {
+        _toastContainer = document.createElement('div');
+        _toastContainer.className = 'toast-container';
+        _toastContainer.setAttribute('aria-live', 'polite');
+        document.body.appendChild(_toastContainer);
+    }
+    return _toastContainer;
+}
+
+function showToast(message, type) {
+    type = type || 'info';
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = message;
+    _getToastContainer().appendChild(el);
+    requestAnimationFrame(function () {
+        requestAnimationFrame(function () { el.classList.add('toast-in'); });
+    });
+    setTimeout(function () {
+        el.classList.remove('toast-in');
+        setTimeout(function () { el.remove(); }, 300);
+    }, 4000);
+}
+
+// Settings form validation (client-side)
+var settingsForm = document.querySelector('form[action="/settings"]');
+if (settingsForm) {
+    var TOKEN_RE = /^\d+:[\w\-]+$/;
+    var CHAT_RE = /^-?\d+$/;
+    settingsForm.addEventListener('submit', function (e) {
+        var tokenInput = settingsForm.querySelector('[name="telegram_bot_token"]');
+        var chatInput = settingsForm.querySelector('[name="telegram_chat_id"]');
+        var submitBtn = settingsForm.querySelector('button[type="submit"]');
+        function clearLoadingState() {
+            if (!submitBtn) return;
+            submitBtn.disabled = false;
+            if (submitBtn.dataset.orig) {
+                submitBtn.textContent = submitBtn.dataset.orig;
+                delete submitBtn.dataset.orig;
+            }
+            submitBtn.classList.remove('btn-loading');
+        }
+        var tokenVal = tokenInput ? tokenInput.value.trim() : '';
+        var chatVal = chatInput ? chatInput.value.trim() : '';
+        if (tokenVal && !TOKEN_RE.test(tokenVal)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            clearLoadingState();
+            showToast('Bot token format is invalid. Expected: 123456789:AAExj7...', 'error');
+            if (tokenInput) tokenInput.focus();
+            return;
+        }
+        if (chatVal && !CHAT_RE.test(chatVal)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            clearLoadingState();
+            showToast('Chat ID must be a number (e.g. 8708428862 or -100123456).', 'error');
+            if (chatInput) chatInput.focus();
+        }
+    }, true);
+}
+
+// "Add a wallet" focus shortcut — replaces inline onclick in template
+document.querySelectorAll('.js-focus-address').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+        e.preventDefault();
+        var target = document.querySelector('[name="address"]');
+        if (target) target.focus();
+    });
+});
 
 // Staleness indicator: show how long ago the last sync completed
 function _relativeTime(isoStr) {

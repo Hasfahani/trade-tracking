@@ -111,7 +111,11 @@
         {% if duplicates %}
         <div class="sync-cleanup">
             <p class="subtle">Cleanup removes extra duplicate rows from SQLite, keeping one trade per unique trade_id. Safe to run at any time.</p>
-            <form method="post" action="/admin/sync-status/cleanup" onsubmit="return confirm('Remove duplicate trade rows from local SQLite? One row per unique trade_id is kept.')">
+            <form
+                method="post"
+                action="/admin/sync-status/cleanup"
+                data-confirm="Remove duplicate trade rows from local SQLite? One row per unique trade_id is kept."
+            >
                 <button type="submit" class="btn btn-danger btn-small">Remove duplicates</button>
             </form>
         </div>

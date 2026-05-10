@@ -1,7 +1,11 @@
 """Settings and refresh/status routes."""
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
+_TELEGRAM_TOKEN_RE = re.compile(r'^\d+:[\w\-]+$')
+_TELEGRAM_CHAT_ID_RE = re.compile(r'^-?\d+$')
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import JSONResponse
@@ -56,9 +60,14 @@ async def save_settings(
     try:
         settings = alerts.get_app_settings(db)
         new_token = (telegram_bot_token or "").strip()
+        new_chat_id = (telegram_chat_id or "").strip()
+        if new_token and not _TELEGRAM_TOKEN_RE.match(new_token):
+            return _flash_redirect_to("/settings", "Invalid bot token format (expected 123456789:AAExj7...).", "error")
+        if new_chat_id and not _TELEGRAM_CHAT_ID_RE.match(new_chat_id):
+            return _flash_redirect_to("/settings", "Chat ID must be a number (e.g. 8708428862 or -100123456).", "error")
         if new_token:
             settings.telegram_bot_token = new_token
-        settings.telegram_chat_id = (telegram_chat_id or "").strip() or None
+        settings.telegram_chat_id = new_chat_id or None
         settings.alerts_enabled = 1 if alerts_enabled else 0
         try:
             settings.alert_min_size = float(alert_min_size) if alert_min_size else 0.0
