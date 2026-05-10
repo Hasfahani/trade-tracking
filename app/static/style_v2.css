@@ -2942,3 +2942,44 @@ th {
     content-visibility: auto;
     contain-intrinsic-size: 56px;
 }
+
+/* ── Performance pass: strip GPU-heavy effects that hurt page load and scroll ── */
+
+/* backdrop-filter on non-sticky/non-fixed cards forces GPU compositing per-card.
+   Dark backgrounds don't benefit from blur — remove it everywhere except the sticky header. */
+.hero-card,
+.card,
+.metric-card,
+.flash,
+.insight-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Stop continuous looping animations — border-shimmer and dot-pulse run indefinitely
+   and schedule GPU work on every frame even when the user isn't looking at them. */
+.hero-card::after {
+    animation: none;
+    opacity: 0.85;
+    background-position: 50% 0;
+}
+
+.brand::before {
+    animation: none;
+    box-shadow: 0 0 0 5px rgba(118, 228, 214, 0.1), 0 0 22px rgba(118, 228, 214, 0.44);
+}
+
+/* Reduce card hover transforms to eliminate layout recalculations on scroll-adjacent hover */
+.card:hover,
+.metric-card:hover,
+.dashboard-metrics .metric-card:hover,
+.insight-card:hover {
+    transform: none;
+}
+
+/* Add layout containment to card lists so the browser can skip painting offscreen cards */
+.wallet-list,
+.stack-list,
+.ranked-bars {
+    contain: layout paint;
+}

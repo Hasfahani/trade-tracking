@@ -12,8 +12,9 @@
     <div class="hero-actions">
         <div class="hero-actions-row">
             <a href="/admin/sync-status" class="btn btn-small">Sync history</a>
-            <a href="/admin/ops" class="btn btn-small">Raw JSON</a>
-            <a href="/readyz" class="btn btn-small">Health check</a>
+            <a href="/admin/ops" class="btn btn-small" target="_blank" rel="noreferrer">Raw JSON</a>
+            <a href="/healthz" class="btn btn-small" target="_blank" rel="noreferrer">Health check</a>
+            <a href="/readyz" class="btn btn-small" target="_blank" rel="noreferrer">DB ready</a>
         </div>
         <div class="hero-status-row">
             <span class="pill {% if db_ok %}success{% else %}danger{% endif %}">
