@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python -m pytest tests/ -q)",
       "Bash(venv/Scripts/python.exe --version)",
-      "Bash(venv/Scripts/pip install *)"
+      "Bash(venv/Scripts/pip install *)",
+      "Bash(python -m pytest tests/ -x -q --tb=short)"
     ]
   }
 }

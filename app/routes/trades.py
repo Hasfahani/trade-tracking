@@ -5,8 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app import retention as ret
-from app import view_helpers as vh
+from app import ai_analysis, retention as ret, view_helpers as vh
 from app.db import get_db
 from app.models import Trade, Wallet
 from app.routes._shared import normalized_date_filters, paginated_query, resolve_wallet, sanitize_search, validated_date_preset, templates
@@ -229,3 +228,21 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
             "short_address": vh.short_address,
         },
     )
+
+
+@router.get("/api/trades/{trade_id}/ai-analysis")
+async def get_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
+    """Get AI-powered analysis of a trade.
+    
+    Requires Ollama running locally (ollama.ai) or HuggingFace API key.
+    """
+    trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    
+    analysis = ai_analysis.analyze_trade(trade)
+    return {
+        "trade_id": trade_id,
+        "analysis": analysis,
+        "available": analysis is not None,
+    }

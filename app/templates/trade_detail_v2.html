@@ -43,6 +43,59 @@
 
 <section class="card">
     <div class="section-head">
+        <h2>AI Analysis</h2>
+        <button type="button" class="btn btn-small" id="ai-analysis-btn" onclick="loadTradeAnalysis('{{ trade.trade_id }}')">Get Analysis</button>
+    </div>
+    <div id="ai-analysis-result" style="display: none; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+        <p id="ai-analysis-text"></p>
+        <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+            <em>Powered by AI (Ollama or Hugging Face)</em>
+        </p>
+    </div>
+    <p id="ai-analysis-loading" style="display: none; color: #666;">
+        ⏳ Analyzing trade...
+    </p>
+    <p id="ai-analysis-unavailable" style="display: none; color: #999; font-size: 0.9rem;">
+        AI analysis unavailable. Set up Ollama or Hugging Face to enable. See AI_SETUP.md for instructions.
+    </p>
+</section>
+
+<script>
+async function loadTradeAnalysis(tradeId) {
+    const btn = document.getElementById('ai-analysis-btn');
+    const result = document.getElementById('ai-analysis-result');
+    const loading = document.getElementById('ai-analysis-loading');
+    const unavailable = document.getElementById('ai-analysis-unavailable');
+    
+    btn.disabled = true;
+    result.style.display = 'none';
+    unavailable.style.display = 'none';
+    loading.style.display = 'block';
+    
+    try {
+        const response = await fetch(`/api/trades/${tradeId}/ai-analysis`);
+        const data = await response.json();
+        
+        loading.style.display = 'none';
+        
+        if (data.available && data.analysis) {
+            document.getElementById('ai-analysis-text').textContent = data.analysis;
+            result.style.display = 'block';
+        } else {
+            unavailable.style.display = 'block';
+        }
+    } catch (error) {
+        loading.style.display = 'none';
+        unavailable.style.display = 'block';
+        console.error('Error fetching AI analysis:', error);
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
+
+<section class="card">
+    <div class="section-head">
         <h2>Same market across all wallets</h2>
         <span class="pill">{{ related_trades|length }} trade{% if related_trades|length != 1 %}s{% endif %}</span>
     </div>
