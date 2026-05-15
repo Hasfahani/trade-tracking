@@ -2977,6 +2977,128 @@ th {
     transform: none;
 }
 
+/* ── AI Analysis section ───────────────────────────────────────────────── */
+
+.ai-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.75rem 0;
+}
+
+.ai-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: ai-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes ai-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ai-badges {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 1rem;
+}
+
+.ai-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.ai-provider-label {
+    font-size: 0.8rem;
+    margin-left: auto;
+}
+
+.ai-verdict {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.5;
+    padding: 0.85rem 1rem;
+    border-left: 3px solid var(--accent);
+    background: rgba(110, 209, 255, 0.05);
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 1.2rem;
+}
+
+.ai-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+}
+
+@media (max-width: 640px) {
+    .ai-details { grid-template-columns: 1fr; }
+}
+
+.ai-detail-block {
+    background: var(--card-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+}
+
+.ai-detail-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 0.35rem;
+}
+
+.ai-detail-text {
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.55;
+    margin: 0;
+}
+
+.ai-context-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 6px;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+
+.ai-ctx-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 6px;
+}
+
+.ai-ctx-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+}
+
+.ai-ctx-val {
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
 /* Add layout containment to card lists so the browser can skip painting offscreen cards */
 .wallet-list,
 .stack-list,

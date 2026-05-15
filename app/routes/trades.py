@@ -231,18 +231,30 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
 
 
 @router.get("/api/trades/{trade_id}/ai-analysis")
-async def get_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
-    """Get AI-powered analysis of a trade.
-    
-    Requires Ollama running locally (ollama.ai) or HuggingFace API key.
-    """
+def get_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
+    """Get AI-powered analysis of a trade. Requires Ollama or HUGGINGFACE_API_KEY."""
     trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
-    
-    analysis = ai_analysis.analyze_trade(trade)
+
+    result = ai_analysis.analyze_trade(trade, db)
+
+    if result and result.get("_error") == "model_loading":
+        return {
+            "trade_id": trade_id,
+            "available": False,
+            "error": "model_loading",
+            "message": "AI model is warming up. Try again in ~20 seconds.",
+        }
+
     return {
         "trade_id": trade_id,
-        "analysis": analysis,
-        "available": analysis is not None,
+        "available": result is not None and "_error" not in result,
+        "signal": result.get("signal") if result else None,
+        "risk": result.get("risk") if result else None,
+        "price_insight": result.get("price_insight") if result else None,
+        "behavior": result.get("behavior") if result else None,
+        "verdict": result.get("verdict") if result else None,
+        "provider": result.get("provider") if result else None,
+        "context": result.get("context") if result else None,
     }

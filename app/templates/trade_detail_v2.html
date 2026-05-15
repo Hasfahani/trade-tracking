@@ -41,57 +41,140 @@
     </div>
 </section>
 
-<section class="card">
+<section class="card" id="ai-section">
     <div class="section-head">
         <h2>AI Analysis</h2>
-        <button type="button" class="btn btn-small" id="ai-analysis-btn" onclick="loadTradeAnalysis('{{ trade.trade_id }}')">Get Analysis</button>
+        <button type="button" class="btn btn-small" id="ai-btn" onclick="loadTradeAnalysis('{{ trade.trade_id }}')">Analyze</button>
     </div>
-    <div id="ai-analysis-result" style="display: none; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
-        <p id="ai-analysis-text"></p>
-        <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
-            <em>Powered by AI (Ollama or Hugging Face)</em>
-        </p>
+
+    <div id="ai-loading" class="ai-loading" style="display:none">
+        <div class="ai-spinner"></div>
+        <span class="subtle">Analyzing trade with AI&hellip;</span>
     </div>
-    <p id="ai-analysis-loading" style="display: none; color: #666;">
-        ⏳ Analyzing trade...
-    </p>
-    <p id="ai-analysis-unavailable" style="display: none; color: #999; font-size: 0.9rem;">
-        AI analysis unavailable. Set up Ollama or Hugging Face to enable. See AI_SETUP.md for instructions.
-    </p>
+
+    <div id="ai-result" style="display:none">
+        <div class="ai-badges">
+            <span class="ai-badge" id="ai-signal-badge"></span>
+            <span class="ai-badge ai-risk-badge" id="ai-risk-badge"></span>
+            <span class="subtle ai-provider-label" id="ai-provider-label"></span>
+        </div>
+
+        <div class="ai-verdict" id="ai-verdict"></div>
+
+        <div class="ai-details">
+            <div class="ai-detail-block">
+                <p class="ai-detail-label">Price insight</p>
+                <p class="ai-detail-text" id="ai-price-insight"></p>
+            </div>
+            <div class="ai-detail-block">
+                <p class="ai-detail-label">Behaviour</p>
+                <p class="ai-detail-text" id="ai-behavior"></p>
+            </div>
+        </div>
+
+        <div class="ai-context-grid" id="ai-context-grid"></div>
+    </div>
+
+    <div id="ai-model-loading" style="display:none" class="subtle">
+        Model is warming up.
+        <button type="button" class="btn btn-small" onclick="loadTradeAnalysis('{{ trade.trade_id }}')">Retry</button>
+    </div>
+
+    <div id="ai-unavailable" style="display:none" class="subtle">
+        AI unavailable — run <strong>Ollama</strong> locally or set <code>HUGGINGFACE_API_KEY</code>.
+    </div>
 </section>
 
 <script>
-async function loadTradeAnalysis(tradeId) {
-    const btn = document.getElementById('ai-analysis-btn');
-    const result = document.getElementById('ai-analysis-result');
-    const loading = document.getElementById('ai-analysis-loading');
-    const unavailable = document.getElementById('ai-analysis-unavailable');
-    
-    btn.disabled = true;
-    result.style.display = 'none';
-    unavailable.style.display = 'none';
-    loading.style.display = 'block';
-    
-    try {
-        const response = await fetch(`/api/trades/${tradeId}/ai-analysis`);
-        const data = await response.json();
-        
-        loading.style.display = 'none';
-        
-        if (data.available && data.analysis) {
-            document.getElementById('ai-analysis-text').textContent = data.analysis;
+(function () {
+    const SIGNAL_COLOR = {
+        CONTRARIAN: '#f59e0b',
+        CONSENSUS:  '#6ed1ff',
+        CONVICTION: '#a78bfa',
+        SPECULATIVE:'#f97316',
+    };
+    const RISK_COLOR = { LOW: '#3bcb93', MEDIUM: '#f4bb61', HIGH: '#f26b88' };
+
+    window.loadTradeAnalysis = async function (tradeId) {
+        const btn        = document.getElementById('ai-btn');
+        const loading    = document.getElementById('ai-loading');
+        const result     = document.getElementById('ai-result');
+        const modelWarm  = document.getElementById('ai-model-loading');
+        const unavail    = document.getElementById('ai-unavailable');
+
+        btn.disabled = true;
+        loading.style.display    = 'flex';
+        result.style.display     = 'none';
+        modelWarm.style.display  = 'none';
+        unavail.style.display    = 'none';
+
+        try {
+            const resp = await fetch(`/api/trades/${tradeId}/ai-analysis`);
+            const data = await resp.json();
+            loading.style.display = 'none';
+
+            if (data.error === 'model_loading') {
+                modelWarm.style.display = 'block';
+                btn.disabled = false;
+                return;
+            }
+            if (!data.available) {
+                unavail.style.display = 'block';
+                btn.disabled = false;
+                return;
+            }
+
+            // Signal badge
+            const sigEl = document.getElementById('ai-signal-badge');
+            sigEl.textContent = data.signal || '—';
+            sigEl.style.background = SIGNAL_COLOR[data.signal] || '#6b7280';
+            sigEl.style.color = '#070b12';
+
+            // Risk badge
+            const riskEl = document.getElementById('ai-risk-badge');
+            riskEl.textContent = (data.risk || '—') + ' RISK';
+            riskEl.style.background = RISK_COLOR[data.risk] || '#6b7280';
+            riskEl.style.color = '#070b12';
+
+            document.getElementById('ai-provider-label').textContent = data.provider ? `via ${data.provider}` : '';
+            document.getElementById('ai-verdict').textContent        = data.verdict       || '';
+            document.getElementById('ai-price-insight').textContent  = data.price_insight || '';
+            document.getElementById('ai-behavior').textContent       = data.behavior      || '';
+
+            // Context stats grid
+            const ctx = data.context;
+            if (ctx) {
+                const firstBadge = ctx.is_first_trade_on_market
+                    ? '<span class="pill warning" style="font-size:0.75rem;padding:2px 8px">First entry</span>'
+                    : `${ctx.wallet_trades_on_this_market} prior trades here`;
+
+                const sizeLabel = ctx.size_vs_wallet_avg >= 2.0
+                    ? `<span style="color:var(--warning)">${ctx.size_vs_wallet_avg}× avg</span>`
+                    : ctx.size_vs_wallet_avg <= 0.4
+                    ? `<span style="color:var(--muted)">${ctx.size_vs_wallet_avg}× avg</span>`
+                    : `${ctx.size_vs_wallet_avg}× avg`;
+
+                document.getElementById('ai-context-grid').innerHTML = `
+                    <div class="ai-ctx-item"><span class="ai-ctx-label">Market sentiment</span><span class="ai-ctx-val">${ctx.market_yes_pct}% YES &mdash; ${ctx.market_sentiment}</span></div>
+                    <div class="ai-ctx-item"><span class="ai-ctx-label">Market depth</span><span class="ai-ctx-val">${ctx.market_total_trades} trades &middot; ${ctx.market_unique_wallets} wallets</span></div>
+                    <div class="ai-ctx-item"><span class="ai-ctx-label">Price vs consensus</span><span class="ai-ctx-val">${ctx.price_vs_consensus}</span></div>
+                    <div class="ai-ctx-item"><span class="ai-ctx-label">Position size</span><span class="ai-ctx-val">$${ctx.trade_value} &mdash; ${sizeLabel}</span></div>
+                    <div class="ai-ctx-item"><span class="ai-ctx-label">Market history</span><span class="ai-ctx-val">${firstBadge}</span></div>
+                    <div class="ai-ctx-item"><span class="ai-ctx-label">Wallet bias</span><span class="ai-ctx-val">${ctx.wallet_bias} (${ctx.wallet_yes_bias_pct}% YES overall)</span></div>
+                `;
+            }
+
             result.style.display = 'block';
-        } else {
-            unavailable.style.display = 'block';
+            btn.textContent = 'Re-analyse';
+            btn.disabled = false;
+        } catch (err) {
+            loading.style.display = 'none';
+            unavail.style.display = 'block';
+            btn.disabled = false;
+            console.error('AI analysis error:', err);
         }
-    } catch (error) {
-        loading.style.display = 'none';
-        unavailable.style.display = 'block';
-        console.error('Error fetching AI analysis:', error);
-    } finally {
-        btn.disabled = false;
-    }
-}
+    };
+}());
 </script>
 
 <section class="card">
