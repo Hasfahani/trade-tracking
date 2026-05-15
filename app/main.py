@@ -91,6 +91,7 @@ async def lifespan(app: FastAPI):
     """Manage application lifecycle - startup and shutdown."""
     app.state.ready = False
     app.state.startup_error = None
+    app.state.startup_task = None
     logger.info(
         "Application startup beginning env=%s production=%s database=%s auth_enabled=%s version=%s commit=%s",
         app_settings.APP_ENV,
@@ -100,13 +101,24 @@ async def lifespan(app: FastAPI):
         APP_VERSION,
         GIT_COMMIT,
     )
-    if _initialize_database_with_retries():
-        _run_startup_maintenance()
-        app.state.ready = True
-        logger.info("Application startup complete")
-    else:
-        app.state.startup_error = "database initialization failed"
-        logger.error("Application startup degraded: database initialization failed")
+    
+    # Start initialization as a background task to not block lifespan startup.
+    # This allows uvicorn to begin accepting connections while DB init proceeds.
+    import asyncio
+    async def _background_init():
+        try:
+            if _initialize_database_with_retries():
+                _run_startup_maintenance()
+                app.state.ready = True
+                logger.info("Application startup complete")
+            else:
+                app.state.startup_error = "database initialization failed"
+                logger.error("Application startup degraded: database initialization failed")
+        except Exception as exc:
+            app.state.startup_error = str(exc)
+            logger.exception("Background startup failed")
+    
+    app.state.startup_task = asyncio.create_task(_background_init())
 
     if RETENTION_METRICS_ENABLED:
         await retention.start_drain()
