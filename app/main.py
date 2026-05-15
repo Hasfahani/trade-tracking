@@ -1,4 +1,5 @@
 import contextvars
+import asyncio
 import json
 import logging
 import time
@@ -102,13 +103,12 @@ async def lifespan(app: FastAPI):
         GIT_COMMIT,
     )
     
-    # Start initialization as a background task to not block lifespan startup.
-    # This allows uvicorn to begin accepting connections while DB init proceeds.
-    import asyncio
+    # Start initialization as a background task and run blocking DB work in a
+    # worker thread so the event loop stays responsive for health checks.
     async def _background_init():
         try:
-            if _initialize_database_with_retries():
-                _run_startup_maintenance()
+            if await asyncio.to_thread(_initialize_database_with_retries):
+                await asyncio.to_thread(_run_startup_maintenance)
                 app.state.ready = True
                 logger.info("Application startup complete")
             else:
