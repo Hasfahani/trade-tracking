@@ -44,18 +44,22 @@
 <section class="card" id="ai-section">
     <div class="section-head">
         <h2>AI Analysis</h2>
-        <button type="button" class="btn btn-small" id="ai-btn" onclick="loadTradeAnalysis('{{ trade.trade_id }}')">Analyze</button>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+            <button type="button" class="btn btn-small" id="ai-reanalyze-btn" onclick="reanalyzeTrade('{{ trade.trade_id }}')" style="display:none">Re-analyze</button>
+            <button type="button" class="btn btn-small" id="ai-btn" onclick="loadTradeAnalysis('{{ trade.trade_id }}')">Analyze</button>
+        </div>
     </div>
 
     <div id="ai-loading" class="ai-loading" style="display:none">
         <div class="ai-spinner"></div>
-        <span class="subtle">Analyzing trade with AI&hellip;</span>
+        <span class="subtle" id="ai-loading-msg">Analyzing trade with AI&hellip;</span>
     </div>
 
     <div id="ai-result" style="display:none">
-        <div class="ai-badges">
+        <div class="ai-badges" style="flex-wrap:wrap;gap:0.4rem">
             <span class="ai-badge" id="ai-signal-badge"></span>
             <span class="ai-badge ai-risk-badge" id="ai-risk-badge"></span>
+            <span class="ai-cache-badge" id="ai-cache-badge" style="display:none"></span>
             <span class="subtle ai-provider-label" id="ai-provider-label"></span>
         </div>
 
@@ -81,7 +85,7 @@
     </div>
 
     <div id="ai-unavailable" style="display:none" class="subtle">
-        AI unavailable — run <strong>Ollama</strong> locally or set <code>HUGGINGFACE_API_KEY</code>.
+        AI unavailable — set <code>ANTHROPIC_API_KEY</code>, run <strong>Ollama</strong> locally, or set <code>HUGGINGFACE_API_KEY</code>.
     </div>
 </section>
 
@@ -95,32 +99,46 @@
     };
     const RISK_COLOR = { LOW: '#3bcb93', MEDIUM: '#f4bb61', HIGH: '#f26b88' };
 
-    window.loadTradeAnalysis = async function (tradeId) {
-        const btn        = document.getElementById('ai-btn');
-        const loading    = document.getElementById('ai-loading');
-        const result     = document.getElementById('ai-result');
-        const modelWarm  = document.getElementById('ai-model-loading');
-        const unavail    = document.getElementById('ai-unavailable');
+    function setLoading(msg) {
+        const loading = document.getElementById('ai-loading');
+        document.getElementById('ai-loading-msg').textContent = msg || 'Analyzing trade with AI…';
+        loading.style.display = 'flex';
+        document.getElementById('ai-result').style.display       = 'none';
+        document.getElementById('ai-model-loading').style.display = 'none';
+        document.getElementById('ai-unavailable').style.display   = 'none';
+    }
 
-        btn.disabled = true;
-        loading.style.display    = 'flex';
-        result.style.display     = 'none';
-        modelWarm.style.display  = 'none';
-        unavail.style.display    = 'none';
+    function setButtonsDisabled(disabled) {
+        document.getElementById('ai-btn').disabled          = disabled;
+        document.getElementById('ai-reanalyze-btn').disabled = disabled;
+    }
+
+    window.reanalyzeTrade = async function (tradeId) {
+        setButtonsDisabled(true);
+        setLoading('Clearing cached analysis…');
+        try {
+            await fetch(`/api/trades/${tradeId}/ai-analysis/invalidate`, { method: 'POST' });
+        } catch (_) { /* ignore — still re-fetch */ }
+        await window.loadTradeAnalysis(tradeId);
+    };
+
+    window.loadTradeAnalysis = async function (tradeId) {
+        setButtonsDisabled(true);
+        setLoading('Analyzing trade with AI…');
 
         try {
             const resp = await fetch(`/api/trades/${tradeId}/ai-analysis`);
             const data = await resp.json();
-            loading.style.display = 'none';
+            document.getElementById('ai-loading').style.display = 'none';
 
             if (data.error === 'model_loading') {
-                modelWarm.style.display = 'block';
-                btn.disabled = false;
+                document.getElementById('ai-model-loading').style.display = 'block';
+                setButtonsDisabled(false);
                 return;
             }
             if (!data.available) {
-                unavail.style.display = 'block';
-                btn.disabled = false;
+                document.getElementById('ai-unavailable').style.display = 'block';
+                setButtonsDisabled(false);
                 return;
             }
 
@@ -136,7 +154,23 @@
             riskEl.style.background = RISK_COLOR[data.risk] || '#6b7280';
             riskEl.style.color = '#070b12';
 
-            document.getElementById('ai-provider-label').textContent = data.provider ? `via ${data.provider}` : '';
+            // Cache / freshness badge
+            const cacheEl = document.getElementById('ai-cache-badge');
+            if (data.from_cache) {
+                cacheEl.textContent = 'cached';
+                cacheEl.style.display = 'inline-flex';
+                document.getElementById('ai-reanalyze-btn').style.display = 'inline-flex';
+            } else {
+                cacheEl.style.display = 'none';
+                document.getElementById('ai-reanalyze-btn').style.display = 'none';
+            }
+
+            // Provider + model version label
+            let providerText = '';
+            if (data.provider) providerText = `via ${data.provider}`;
+            if (data.model_version) providerText += providerText ? ` · ${data.model_version}` : data.model_version;
+            document.getElementById('ai-provider-label').textContent = providerText;
+
             document.getElementById('ai-verdict').textContent        = data.verdict       || '';
             document.getElementById('ai-price-insight').textContent  = data.price_insight || '';
             document.getElementById('ai-behavior').textContent       = data.behavior      || '';
@@ -164,13 +198,13 @@
                 `;
             }
 
-            result.style.display = 'block';
-            btn.textContent = 'Re-analyse';
-            btn.disabled = false;
+            document.getElementById('ai-result').style.display = 'block';
+            document.getElementById('ai-btn').textContent = 'Analyze again';
+            setButtonsDisabled(false);
         } catch (err) {
-            loading.style.display = 'none';
-            unavail.style.display = 'block';
-            btn.disabled = false;
+            document.getElementById('ai-loading').style.display   = 'none';
+            document.getElementById('ai-unavailable').style.display = 'block';
+            setButtonsDisabled(false);
             console.error('AI analysis error:', err);
         }
     };

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, tuple_
+from sqlalchemy import func, text, tuple_
 from sqlalchemy.orm import Query, Session
 
 from app.formatting import short_address as _short_address, sync_status_class
@@ -15,101 +15,151 @@ _SPIKE_WINDOW_MINUTES = 10
 def detect_interesting_activity(db: Session) -> List[Dict[str, Any]]:
     """Return up to 10 notable trade events from the last 24 hours.
 
-    Detects three event categories:
-    - ``large_trade``: single trade whose price × size exceeds ``_LARGE_TRADE_THRESHOLD``.
-    - ``activity_spike``: wallet with 3+ trades within a 10-minute window.
-    - ``new_market``: wallet's first-ever trade on a condition within the window.
+    Categories:
+    - large_trade: single trade whose price × size >= _LARGE_TRADE_THRESHOLD.
+    - activity_spike: wallet with _SPIKE_COUNT+ trades within _SPIKE_WINDOW_MINUTES.
+    - new_market: wallet's first-ever trade on a condition entered within the window.
 
-    Args:
-        db: Active SQLAlchemy session.
-
-    Returns:
-        List of event dicts sorted newest-first, capped at 10.
+    Queries are SQL-only; no full table scans in Python.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    recent = (
-        db.query(Trade)
-        .filter(Trade.traded_at >= cutoff)
-        .order_by(Trade.traded_at.desc())
-        .all()
-    )
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    trade_value = Trade.price * Trade.size
 
-    wallet_map: Dict[str, Optional[str]] = {row.address: row.label or None for row in db.query(Wallet.address, Wallet.label).all()}
+    wallet_map: Dict[str, Optional[str]] = {
+        row.address: row.label or None
+        for row in db.query(Wallet.address, Wallet.label).all()
+    }
 
     def _label(address: str) -> str:
         return wallet_map.get(address) or _short_address(address)
 
     events: List[Dict[str, Any]] = []
 
-    # A. Large single trades
-    for trade in recent:
-        value = trade.price * trade.size
-        if value >= _LARGE_TRADE_THRESHOLD:
-            events.append({
-                "type": "large_trade",
-                "wallet": trade.wallet_address,
-                "label": _label(trade.wallet_address),
-                "market": trade.market_title or trade.condition_id,
-                "value": value,
-                "timestamp": trade.traded_at,
-                "trade_id": trade.trade_id,
-            })
+    # --- A. Large single trades (SQL-filtered) ---
+    large_trades = (
+        db.query(Trade)
+        .filter(Trade.traded_at >= cutoff, trade_value >= _LARGE_TRADE_THRESHOLD)
+        .order_by(Trade.traded_at.desc())
+        .limit(20)
+        .all()
+    )
+    for trade in large_trades:
+        events.append({
+            "type": "large_trade",
+            "wallet": trade.wallet_address,
+            "label": _label(trade.wallet_address),
+            "market": trade.market_title or trade.condition_id,
+            "value": trade.price * trade.size,
+            "timestamp": trade.traded_at,
+            "trade_id": trade.trade_id,
+        })
 
-    # B. Activity spikes — 3+ trades within a 10-minute sliding window per wallet
-    by_wallet: Dict[str, List[datetime]] = {}
-    for trade in recent:
-        by_wallet.setdefault(trade.wallet_address, []).append(trade.traded_at)
+    # --- B. Activity spikes — wallets with many trades in a short window ---
+    # Fetch per-wallet trade counts in the window; then check window tightness
+    # for the top candidates only (avoids loading all trades into memory).
+    spike_candidates = (
+        db.query(
+            Trade.wallet_address,
+            func.count(Trade.id).label("cnt"),
+        )
+        .filter(Trade.traded_at >= cutoff)
+        .group_by(Trade.wallet_address)
+        .having(func.count(Trade.id) >= _SPIKE_COUNT)
+        .order_by(func.count(Trade.id).desc())
+        .limit(20)
+        .all()
+    )
 
-    seen_spike: set = set()
-    window = timedelta(minutes=_SPIKE_WINDOW_MINUTES)
-    for address, timestamps in by_wallet.items():
+    spike_window = timedelta(minutes=_SPIKE_WINDOW_MINUTES)
+    seen_spike = set()
+    for row in spike_candidates:
+        if row.wallet_address in seen_spike:
+            continue
+        timestamps = [
+            t.traded_at
+            for t in (
+                db.query(Trade.traded_at)
+                .filter(Trade.wallet_address == row.wallet_address, Trade.traded_at >= cutoff)
+                .order_by(Trade.traded_at.desc())
+                .limit(50)
+                .all()
+            )
+        ]
         timestamps.sort(reverse=True)
         for i in range(len(timestamps) - _SPIKE_COUNT + 1):
             newest, oldest = timestamps[i], timestamps[i + _SPIKE_COUNT - 1]
-            if (newest - oldest) <= window and address not in seen_spike:
-                seen_spike.add(address)
+            if (newest - oldest) <= spike_window:
+                seen_spike.add(row.wallet_address)
+                window_count = sum(1 for t in timestamps if (newest - t) <= spike_window)
                 events.append({
                     "type": "activity_spike",
-                    "wallet": address,
-                    "label": _label(address),
-                    "count": len([t for t in timestamps if (newest - t) <= window]),
+                    "wallet": row.wallet_address,
+                    "label": _label(row.wallet_address),
+                    "count": window_count,
                     "time_window": f"{_SPIKE_WINDOW_MINUTES}m",
                     "timestamp": newest,
                 })
                 break
 
-    # C. First-ever trade by this wallet in a given market, within the cutoff window
-    condition_pairs = {(t.wallet_address, t.condition_id) for t in recent}
-    earliest_by_pair: Dict[tuple, datetime] = {}
+    # --- C. New market entries in the window ---
+    # Find the earliest trade per (wallet, condition) globally, then check
+    # if that earliest trade falls within the cutoff window.
+    recent_pairs_rows = (
+        db.query(Trade.wallet_address, Trade.condition_id)
+        .filter(Trade.traded_at >= cutoff)
+        .distinct()
+        .all()
+    )
+    condition_pairs = {(r.wallet_address, r.condition_id) for r in recent_pairs_rows}
+
     if condition_pairs:
-        rows = (
+        earliest_rows = (
             db.query(
                 Trade.wallet_address,
                 Trade.condition_id,
-                func.min(Trade.traded_at).label("earliest_traded_at"),
+                func.min(Trade.traded_at).label("earliest"),
             )
             .filter(tuple_(Trade.wallet_address, Trade.condition_id).in_(condition_pairs))
             .group_by(Trade.wallet_address, Trade.condition_id)
             .all()
         )
-        earliest_by_pair = {(r.wallet_address, r.condition_id): r.earliest_traded_at for r in rows}
+        # Fetch representative trades for new-market entries in one query
+        new_pairs = {
+            (r.wallet_address, r.condition_id)
+            for r in earliest_rows
+            if r.earliest and r.earliest >= cutoff
+        }
+        if new_pairs:
+            # Build earliest-timestamp lookup for the pairs that qualify
+            earliest_map = {
+                (r.wallet_address, r.condition_id): r.earliest
+                for r in earliest_rows
+                if (r.wallet_address, r.condition_id) in new_pairs and r.earliest
+            }
+            # Fetch all representative trades in one batch query
+            if earliest_map:
+                batch_trades = (
+                    db.query(Trade)
+                    .filter(tuple_(Trade.wallet_address, Trade.condition_id).in_(list(new_pairs)))
+                    .order_by(Trade.traded_at.asc())
+                    .all()
+                )
+                rep_trades: Dict[tuple, Trade] = {}
+                for trade in batch_trades:
+                    key = (trade.wallet_address, trade.condition_id)
+                    earliest = earliest_map.get(key)
+                    if earliest and trade.traded_at == earliest and key not in rep_trades:
+                        rep_trades[key] = trade
 
-    for address, condition_id in condition_pairs:
-        earliest = earliest_by_pair.get((address, condition_id))
-        if earliest and earliest >= cutoff.replace(tzinfo=None):
-            trade_for_market = next(
-                (t for t in recent if t.wallet_address == address and t.condition_id == condition_id),
-                None,
-            )
-            if trade_for_market:
-                events.append({
-                    "type": "new_market",
-                    "wallet": address,
-                    "label": _label(address),
-                    "market": trade_for_market.market_title or condition_id,
-                    "timestamp": earliest,
-                    "trade_id": trade_for_market.trade_id,
-                })
+                for key, trade in rep_trades.items():
+                    events.append({
+                        "type": "new_market",
+                        "wallet": key[0],
+                        "label": _label(key[0]),
+                        "market": trade.market_title or key[1],
+                        "timestamp": earliest_map[key],
+                        "trade_id": trade.trade_id,
+                    })
 
     def _ts(e: Dict[str, Any]) -> float:
         ts = e.get("timestamp")
@@ -124,18 +174,7 @@ def detect_interesting_activity(db: Session) -> List[Dict[str, Any]]:
 
 
 def get_wallet_intelligence_summary(db: Session, wallet_address: str) -> Dict[str, Any]:
-    """Return an activity intelligence summary for a single wallet.
-
-    Args:
-        db: Active SQLAlchemy session.
-        wallet_address: The 0x-prefixed wallet address to analyse.
-
-    Returns:
-        Dict with keys: ``activity_level``, ``trades_last_24h``,
-        ``total_value_last_24h``, ``average_trade_size``,
-        ``total_markets_traded``, ``markets_traded_last_24h``,
-        ``intelligence_text``, ``activity_tone``, ``total_trades``.
-    """
+    """Return an activity intelligence summary for a single wallet."""
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
     trade_value = Trade.price * Trade.size
 
@@ -160,16 +199,16 @@ def get_wallet_intelligence_summary(db: Session, wallet_address: str) -> Dict[st
         intelligence_text = "This wallet is currently inactive."
     elif trades_last_24h <= 2:
         activity_level, activity_tone = "Low", "info"
-        intelligence_text = "This wallet has low recent activity with small trade volume."
+        intelligence_text = "Low recent activity — minimal trade volume in the last day."
     elif trades_last_24h >= 10:
         activity_level, activity_tone = "High", "success"
-        intelligence_text = "This wallet is highly active in the last 24 hours and may be worth monitoring."
+        intelligence_text = f"Highly active: {trades_last_24h} trades in 24h across {markets_traded_last_24h} market{'s' if markets_traded_last_24h != 1 else ''}. Worth monitoring."
     else:
         activity_level, activity_tone = "Medium", "warning"
         if markets_traded_last_24h > 1 and total_value_last_24h >= 100:
-            intelligence_text = "This wallet recently traded multiple markets with significant volume."
+            intelligence_text = f"Active across {markets_traded_last_24h} markets with ${total_value_last_24h:,.2f} in stored trade value today."
         else:
-            intelligence_text = "This wallet has moderate recent activity in the last 24 hours."
+            intelligence_text = "Moderate recent activity in the last 24 hours."
 
     return {
         "activity_level": activity_level,
@@ -185,17 +224,7 @@ def get_wallet_intelligence_summary(db: Session, wallet_address: str) -> Dict[st
 
 
 def build_wallet_activity_timeline(db: Session, wallet_address: str, limit: int = 12) -> List[Dict[str, Any]]:
-    """Return a merged, newest-first timeline of trades and sync events for a wallet.
-
-    Args:
-        db: Active SQLAlchemy session.
-        wallet_address: The 0x-prefixed wallet address.
-        limit: Maximum number of items to return (applied after merging).
-
-    Returns:
-        List of event dicts, each with keys ``kind``, ``timestamp``, ``title``,
-        ``detail``, ``href``, ``tone``, and (for sync items) ``error_message``.
-    """
+    """Return a merged, newest-first timeline of trades and sync events for a wallet."""
     trade_events = [
         {
             "kind": "trade",
@@ -250,10 +279,7 @@ def build_wallet_activity_timeline(db: Session, wallet_address: str, limit: int 
 
 
 def build_activity_heatmap(db: Session, wallet_address: Optional[str] = None, days: int = 7) -> List[Dict[str, Any]]:
-    """Return a list of daily trade-count buckets for the past `days` days.
-
-    Pass wallet_address to scope to a single wallet; omit for all wallets.
-    """
+    """Return daily trade-count buckets for the past ``days`` days."""
     today = datetime.now(timezone.utc).date()
     cutoff_day = today - timedelta(days=days - 1)
     cutoff = datetime(cutoff_day.year, cutoff_day.month, cutoff_day.day)
@@ -277,8 +303,7 @@ def build_activity_heatmap(db: Session, wallet_address: Optional[str] = None, da
             "count": daily_map.get((today - timedelta(days=offset)).isoformat(), 0),
             "bar_pct": (
                 round((daily_map.get((today - timedelta(days=offset)).isoformat(), 0) / max_count) * 100)
-                if max_count
-                else 0
+                if max_count else 0
             ),
         }
         for offset in range(days - 1, -1, -1)
@@ -286,16 +311,7 @@ def build_activity_heatmap(db: Session, wallet_address: Optional[str] = None, da
 
 
 def build_filtered_top_markets(query: Query, limit: int = 5) -> List[Dict[str, Any]]:
-    """Return top markets by trade value from a pre-filtered Trade query.
-
-    Args:
-        query: A Trade query already filtered to the desired scope.
-        limit: Maximum number of market rows to return.
-
-    Returns:
-        List of dicts with keys ``condition_id``, ``market``,
-        ``trade_count``, ``total_value``, ``bar_pct``.
-    """
+    """Return top markets by trade value from a pre-filtered Trade query."""
     trade_value = Trade.price * Trade.size
     rows = (
         query.order_by(False)
@@ -324,16 +340,7 @@ def build_filtered_top_markets(query: Query, limit: int = 5) -> List[Dict[str, A
 
 
 def build_filtered_top_wallets(query: Query, limit: int = 5) -> List[Dict[str, Any]]:
-    """Return top wallets by trade value from a pre-filtered Trade query.
-
-    Args:
-        query: A Trade query already filtered to the desired scope.
-        limit: Maximum number of wallet rows to return.
-
-    Returns:
-        List of dicts with keys ``address``, ``trade_count``,
-        ``total_value``, ``bar_pct``.  No ORM Wallet objects included.
-    """
+    """Return top wallets by trade value from a pre-filtered Trade query."""
     trade_value = Trade.price * Trade.size
     rows = (
         query.order_by(False)

@@ -28,7 +28,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"></noscript>
     <link rel="stylesheet" href="/static/style_v2.css">
 </head>
 <body>
@@ -37,7 +36,7 @@
         <div class="nav-shell">
             <div class="brand-block">
                 <a href="/wallets" class="brand">{{ app_name or "PolySignal" }}</a>
-                <p class="brand-subtitle">Manual refresh watchlist. Pages read from local SQLite only.</p>
+                <p class="brand-subtitle">Manual refresh watchlist. Pages read from local {{ db_backend | upper }} only.</p>
             </div>
             <button class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="top-nav">
                 <span></span>
@@ -45,12 +44,13 @@
                 <span></span>
             </button>
             <nav class="top-nav" id="top-nav">
-                <a href="/dashboard">Dashboard</a>
-                <a href="/wallets">Wallets</a>
-                <a href="/all-trades">All Trades</a>
-                <a href="/admin/sync-status">Sync</a>
-                <a href="/admin/ops-ui">Ops</a>
-                <a href="/settings">Settings</a>
+                {% set _path = request.url.path if request is defined else '' %}
+                <a href="/dashboard" {% if _path == '/dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
+                <a href="/wallets" {% if _path.startswith('/wallets') %}class="active" aria-current="page"{% endif %}>Wallets</a>
+                <a href="/all-trades" {% if _path.startswith('/all-trades') or _path.startswith('/trades/') %}class="active" aria-current="page"{% endif %}>All Trades</a>
+                <a href="/admin/sync-status" {% if _path.startswith('/admin/sync') %}class="active" aria-current="page"{% endif %}>Sync</a>
+                <a href="/admin/ops-ui" {% if _path.startswith('/admin/ops') %}class="active" aria-current="page"{% endif %}>Ops</a>
+                <a href="/settings" {% if _path == '/settings' %}class="active" aria-current="page"{% endif %}>Settings</a>
             </nav>
         </div>
     </header>
@@ -60,7 +60,7 @@
     </main>
 
     <footer class="site-footer">
-        <p>Manual refresh only &mdash; reads from SQLite. Last sync: <span id="staleness-ts" class="staleness-ts">&mdash;</span></p>
+        <p>Manual refresh only &mdash; reads from {{ db_backend | upper }}. Last sync: <span id="staleness-ts" class="staleness-ts">&mdash;</span></p>
     </footer>
 
     <script src="/static/base.js"></script>

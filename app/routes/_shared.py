@@ -14,7 +14,9 @@ from sqlalchemy.orm import Query, Session
 from app import view_helpers as vh
 from app.models import Wallet
 
+from app.settings import DATABASE_URL as _DATABASE_URL
 templates = Jinja2Templates(directory="app/templates")
+templates.env.globals["db_backend"] = "postgresql" if _DATABASE_URL.startswith("postgresql") else "sqlite"
 DATE_PRESETS = frozenset({"today", "7d", "30d"})
 
 _MAX_SEARCH_LEN = 255
@@ -69,7 +71,7 @@ def normalized_date_filters(
 
 
 def paginated_query(query: Query, page: int, page_size: int) -> Tuple[int, int, int, Dict[str, int], Sequence[Any]]:
-    total_items = query.count()
+    total_items = query.order_by(False).count()
     total_pages = max(1, (total_items + page_size - 1) // page_size)
     current_page = min(page, total_pages)
     pagination = vh.pagination_meta(current_page, page_size, total_items)

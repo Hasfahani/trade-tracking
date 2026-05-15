@@ -137,3 +137,21 @@ class RetentionWeekly(Base):
     sessions_per_user = Column(Float, nullable=True)
     alert_open_rate = Column(Float, nullable=True)
     computed_at = Column(DateTime, server_default=func.now())
+
+
+class TradeAnalysis(Base):
+    """Persistent AI analysis cache for individual trades."""
+
+    __tablename__ = "trade_analysis"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_id = Column(String(255), unique=True, nullable=False, index=True)
+    provider = Column(String(64), nullable=True)
+    signal = Column(String(32), nullable=True)
+    risk = Column(String(16), nullable=True)
+    price_insight = Column(Text, nullable=True)
+    behavior = Column(Text, nullable=True)
+    verdict = Column(Text, nullable=True)
+    context_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    model_version = Column(String(128), nullable=True)

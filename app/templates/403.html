@@ -1,0 +1,20 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Access Denied{% endblock %}
+{% block meta_description %}Your request was rejected due to an invalid or missing security token.{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">403</p>
+        <h1>Request rejected</h1>
+        <p class="subtle">Your form submission was blocked because the security token was invalid or missing. This can happen if you navigated back to an old page. Please go back and try again.</p>
+    </div>
+    <div class="hero-actions">
+        <div class="hero-actions-row">
+            <a href="javascript:history.back()" class="btn btn-primary btn-small">Go back</a>
+            <a href="/wallets" class="btn btn-small">Wallets</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

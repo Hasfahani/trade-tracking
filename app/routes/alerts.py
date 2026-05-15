@@ -117,7 +117,7 @@ async def sync_status_page(
         status=status,
         error_only=bool(error_only),
     )
-    total_events = events_query.count()
+    total_events = events_query.order_by(False).count()
     total_pages = max(1, (total_events + page_size - 1) // page_size)
     page = min(page, total_pages)
     events = events_query.limit(page_size).offset((page - 1) * page_size).all()

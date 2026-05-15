@@ -17,6 +17,7 @@ from urllib.parse import parse_qs
 
 from fastapi import Request
 from fastapi.responses import Response
+from fastapi.templating import Jinja2Templates
 from starlette.responses import HTMLResponse
 
 from app import settings as app_settings
@@ -58,10 +59,19 @@ async def csrf_middleware(request: Request, call_next: Callable) -> Response:
 
             if submitted != token:
                 logger.warning("CSRF token mismatch on %s %s", request.method, request.url.path)
-                return HTMLResponse(
-                    "<h1>403 Forbidden</h1><p>CSRF token invalid or missing. Please go back and try again.</p>",
-                    status_code=403,
-                )
+                try:
+                    _tmpl = Jinja2Templates(directory="app/templates")
+                    return _tmpl.TemplateResponse(
+                        request,
+                        "403.html",
+                        {"request": request, "app_name": app_settings.APP_NAME},
+                        status_code=403,
+                    )
+                except Exception:
+                    return HTMLResponse(
+                        "<h1>403 Forbidden</h1><p>CSRF token invalid or missing. Please go back and try again.</p>",
+                        status_code=403,
+                    )
 
     response = await call_next(request)
     response.set_cookie(

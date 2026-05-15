@@ -119,9 +119,13 @@ DB_POOL_RECYCLE = _env_int("DB_POOL_RECYCLE", 1800)
 # Retention metrics feature flag — disable to stop event logging without code change
 RETENTION_METRICS_ENABLED: bool = os.getenv("RETENTION_METRICS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 
-# AI Analysis — Ollama or HuggingFace configuration
+# AI Analysis — Anthropic Claude (preferred), Ollama (local), or HuggingFace
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = _env_str("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_TIMEOUT_SECONDS = _env_float("OLLAMA_TIMEOUT_SECONDS", 60.0)
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
+AI_CACHE_TTL_HOURS = _env_int("AI_CACHE_TTL_HOURS", 72)
 
 
 def session_secret_is_weak(secret: Optional[str] = None) -> bool:

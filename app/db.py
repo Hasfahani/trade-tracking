@@ -192,6 +192,36 @@ def _migrate_sqlite_indexes(conn) -> None:
             conn.exec_driver_sql(statement)
 
 
+def _migrate_trade_analysis_table(conn) -> None:
+    conn.exec_driver_sql(
+        """
+        CREATE TABLE IF NOT EXISTS trade_analysis (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trade_id VARCHAR(255) NOT NULL UNIQUE,
+            provider VARCHAR(64),
+            signal VARCHAR(32),
+            risk VARCHAR(16),
+            price_insight TEXT,
+            behavior TEXT,
+            verdict TEXT,
+            context_json TEXT,
+            model_version VARCHAR(128),
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_trade_analysis_trade_id ON trade_analysis (trade_id)"
+    )
+
+
+def _migrate_trades_condition_traded_at_index(conn) -> None:
+    if _table_exists(conn, "trades"):
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_trades_condition_traded_at ON trades (condition_id, traded_at)"
+        )
+
+
 SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("001_wallet_compat_columns", _migrate_wallet_columns),
     ("002_sync_event_columns", _migrate_sync_event_columns),
@@ -200,10 +230,24 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("005_sqlite_indexes", _migrate_sqlite_indexes),
     ("006_updated_at_columns", _migrate_updated_at_columns),
     ("007_retention_indexes", _migrate_retention_indexes),
+    ("008_trade_analysis_table", _migrate_trade_analysis_table),
+    ("009_trades_condition_traded_at_index", _migrate_trades_condition_traded_at_index),
 )
 
 
 POSTGRES_COMPAT_COLUMNS: Dict[str, ColumnSpec] = {
+    "trade_analysis": {
+        "trade_id": "VARCHAR(255)",
+        "provider": "VARCHAR(64)",
+        "signal": "VARCHAR(32)",
+        "risk": "VARCHAR(16)",
+        "price_insight": "TEXT",
+        "behavior": "TEXT",
+        "verdict": "TEXT",
+        "context_json": "TEXT",
+        "model_version": "VARCHAR(128)",
+        "created_at": "TIMESTAMP",
+    },
     "event_log": {
         "tracker_id": "VARCHAR(64)",
         "event_name": "VARCHAR(64)",

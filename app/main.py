@@ -6,8 +6,8 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -154,6 +154,26 @@ def _run_startup_maintenance() -> None:
         logger.exception("Startup maintenance failed — continuing anyway")
 
 
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Return branded HTML for 404s; fall through for other HTTP errors."""
+    if exc.status_code == 404:
+        try:
+            from app.routes._shared import templates as _templates
+            response = _templates.TemplateResponse(
+                request,
+                "404.html",
+                {"request": request, "app_name": APP_NAME, "detail": exc.detail},
+                status_code=404,
+            )
+            return response
+        except Exception:
+            pass
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+
 async def unhandled_exception_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", "-")
     request_id_token = _request_id_context.set(request_id)
@@ -165,11 +185,21 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         )
     finally:
         _request_id_context.reset(request_id_token)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error", "request_id": request_id},
-        headers={"X-Request-ID": request_id},
-    )
+    try:
+        from app.routes._shared import templates as _templates
+        return _templates.TemplateResponse(
+            request,
+            "500.html",
+            {"request": request, "app_name": APP_NAME, "request_id": request_id},
+            status_code=500,
+            headers={"X-Request-ID": request_id},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error", "request_id": request_id},
+            headers={"X-Request-ID": request_id},
+        )
 
 
 async def request_logging_middleware(request: Request, call_next):
@@ -277,6 +307,7 @@ def create_app(
         app.middleware("http")(csrf_middleware)
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
     app.include_router(router)
+    app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
     # Inject csrf_token helper into every Jinja2 template context

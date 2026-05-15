@@ -1,0 +1,20 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Page Not Found{% endblock %}
+{% block meta_description %}The requested page could not be found.{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">404</p>
+        <h1>Page not found</h1>
+        <p class="subtle">{{ detail or "The page you're looking for doesn't exist or was removed." }}</p>
+    </div>
+    <div class="hero-actions">
+        <div class="hero-actions-row">
+            <a href="/wallets" class="btn btn-primary btn-small">Go to Wallets</a>
+            <a href="/dashboard" class="btn btn-small">Dashboard</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

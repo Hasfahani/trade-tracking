@@ -7,7 +7,7 @@
     <div class="hero-copy">
         <p class="eyebrow">Internal</p>
         <h1>Ops Dashboard</h1>
-        <p class="subtle">Live operational diagnostics: database status, migrations, last sync event, build info, and error counters.</p>
+        <p class="subtle">Live operational diagnostics: database status, migrations, last sync event, build info, AI provider, and error counters.</p>
     </div>
     <div class="hero-actions">
         <div class="hero-actions-row">
@@ -149,6 +149,34 @@
             </article>
         </div>
         <p class="subtle" style="margin-top:12px;font-size:0.84rem;">Counters reset on process restart.</p>
+    </article>
+
+    <article class="card dashboard-panel">
+        <div class="section-head">
+            <h2>AI analysis</h2>
+            <span class="pill {% if ai_provider and ai_provider != 'none' %}success{% else %}{% endif %}">
+                {{ ai_provider or 'none' }}
+            </span>
+        </div>
+        <div class="detail-grid dashboard-detail">
+            <div>
+                <strong>Provider</strong>
+                <span>{{ ai_provider or '—' }}</span>
+            </div>
+            <div>
+                <strong>Model</strong>
+                <span class="mono">{{ ai_model or '—' }}</span>
+            </div>
+            <div>
+                <strong>Cached analyses</strong>
+                <span>{{ ai_cached_analyses }}</span>
+            </div>
+        </div>
+        {% if ai_provider == 'none' or not ai_provider %}
+        <p class="subtle" style="margin-top:12px;font-size:0.84rem;">
+            No AI provider configured. Set <code>ANTHROPIC_API_KEY</code>, start Ollama, or set <code>HUGGINGFACE_API_KEY</code>.
+        </p>
+        {% endif %}
     </article>
 
 </div>

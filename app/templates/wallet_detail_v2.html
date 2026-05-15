@@ -193,6 +193,75 @@
     </article>
 </section>
 
+<section class="card" id="ai-summary-section">
+    <div class="section-head">
+        <h2>AI pattern summary</h2>
+        <button type="button" class="btn btn-small" id="ai-summary-btn" onclick="loadWalletSummary('{{ wallet.address }}')">Analyse recent trades</button>
+    </div>
+
+    <div id="ai-summary-loading" style="display:none" class="ai-loading">
+        <div class="ai-spinner"></div>
+        <span class="subtle">Generating AI pattern summary&hellip;</span>
+    </div>
+
+    <div id="ai-summary-result" style="display:none">
+        <p id="ai-summary-text" class="ai-wallet-summary"></p>
+        <small id="ai-summary-meta" class="subtle"></small>
+    </div>
+
+    <div id="ai-summary-unavailable" style="display:none" class="subtle">
+        <p>AI unavailable — configure <code>ANTHROPIC_API_KEY</code>, run <strong>Ollama</strong> locally, or set <code>HUGGINGFACE_API_KEY</code>.</p>
+    </div>
+
+    <div id="ai-summary-no-trades" style="display:none" class="subtle">
+        <p>No stored trades yet. Refresh this wallet first.</p>
+    </div>
+</section>
+
+<script>
+(function () {
+    window.loadWalletSummary = async function(address) {
+        var btn = document.getElementById('ai-summary-btn');
+        var loading = document.getElementById('ai-summary-loading');
+        var result = document.getElementById('ai-summary-result');
+        var unavail = document.getElementById('ai-summary-unavailable');
+        var noTrades = document.getElementById('ai-summary-no-trades');
+
+        btn.disabled = true;
+        loading.style.display = 'flex';
+        result.style.display = 'none';
+        unavail.style.display = 'none';
+        noTrades.style.display = 'none';
+
+        try {
+            var resp = await fetch('/api/wallets/' + address + '/ai-summary');
+            var data = await resp.json();
+            loading.style.display = 'none';
+
+            if (!data.available) {
+                if (data.reason === 'no_trades') {
+                    noTrades.style.display = 'block';
+                } else {
+                    unavail.style.display = 'block';
+                }
+                btn.disabled = false;
+                return;
+            }
+
+            document.getElementById('ai-summary-text').textContent = data.summary || '';
+            document.getElementById('ai-summary-meta').textContent = 'Based on ' + data.trade_count + ' most recent trade' + (data.trade_count !== 1 ? 's' : '');
+            result.style.display = 'block';
+            btn.textContent = 'Re-analyse';
+            btn.disabled = false;
+        } catch(err) {
+            loading.style.display = 'none';
+            unavail.style.display = 'block';
+            btn.disabled = false;
+        }
+    };
+}());
+</script>
+
 <section class="card">
     <div class="section-head">
         <h2>Activity timeline</h2>

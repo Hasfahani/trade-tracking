@@ -75,29 +75,35 @@ async def export_all_trades(
     query = vh.sorted_trade_query(query, sort_by)
 
     wallet_map = {w.address: w for w in db.query(Wallet).all()}
+    trades = query.all()
 
-    output = io.StringIO()
-    output.write(_BOM)
-    writer = csv.writer(output)
-    writer.writerow(["Trade ID", "Date (UTC)", "Wallet", "Market Title", "Condition ID", "Side", "Price", "Size", "Value"])
-    for trade in query.all():
-        w = wallet_map.get(trade.wallet_address)
-        wallet_label = w.label if w and w.label else trade.wallet_address
-        writer.writerow([
-            trade.trade_id,
-            trade.traded_at.strftime("%Y-%m-%d %H:%M:%S"),
-            wallet_label,
-            trade.market_title or "N/A",
-            trade.condition_id,
-            trade.side,
-            f"{trade.price:.4f}",
-            f"{trade.size:.2f}",
-            f"{(trade.price * trade.size):.2f}",
-        ])
+    def _rows():
+        yield _BOM
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["Trade ID", "Date (UTC)", "Wallet", "Market Title", "Condition ID", "Side", "Price", "Size", "Value"])
+        yield buf.getvalue()
+        for trade in trades:
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            w = wallet_map.get(trade.wallet_address)
+            wallet_label = w.label if w and w.label else trade.wallet_address
+            writer.writerow([
+                trade.trade_id,
+                trade.traded_at.strftime("%Y-%m-%d %H:%M:%S"),
+                wallet_label,
+                trade.market_title or "N/A",
+                trade.condition_id,
+                trade.side,
+                f"{trade.price:.4f}",
+                f"{trade.size:.2f}",
+                f"{(trade.price * trade.size):.2f}",
+            ])
+            yield buf.getvalue()
 
     filename = f"all_trades_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return StreamingResponse(
-        iter([output.getvalue()]),
+        _rows(),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -126,13 +132,18 @@ async def export_trades(
     )
     query = vh.sorted_trade_query(query, sort_by)
 
-    output = io.StringIO()
-    output.write(_BOM)
-    writer = csv.writer(output)
-    writer.writerow(["Trade ID", "Date (UTC)", "Market Title", "Condition ID", "Side", "Price", "Size", "Value"])
-    for trade in query.all():
-        writer.writerow(
-            [
+    trades = query.all()
+
+    def _rows():
+        yield _BOM
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["Trade ID", "Date (UTC)", "Market Title", "Condition ID", "Side", "Price", "Size", "Value"])
+        yield buf.getvalue()
+        for trade in trades:
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow([
                 trade.trade_id,
                 trade.traded_at.strftime("%Y-%m-%d %H:%M:%S"),
                 trade.market_title or "N/A",
@@ -141,12 +152,12 @@ async def export_trades(
                 f"{trade.price:.4f}",
                 f"{trade.size:.2f}",
                 f"{(trade.price * trade.size):.2f}",
-            ]
-        )
+            ])
+            yield buf.getvalue()
 
     filename = f"trades_{wallet.address[:8]}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return StreamingResponse(
-        iter([output.getvalue()]),
+        _rows(),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

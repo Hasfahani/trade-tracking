@@ -130,8 +130,12 @@ async def all_trades(  # noqa: PLR0913
     yes_value_pct = round((yes_value / total_value) * 100) if total_value else 0
     no_value_pct = 100 - yes_value_pct if total_value else 0
 
-    unique_wallets = int(filtered_base.with_entities(func.count(func.distinct(Trade.wallet_address))).scalar() or 0)
-    unique_markets = int(filtered_base.with_entities(func.count(func.distinct(Trade.condition_id))).scalar() or 0)
+    uniq_row = filtered_base.with_entities(
+        func.count(func.distinct(Trade.wallet_address)).label("wallets"),
+        func.count(func.distinct(Trade.condition_id)).label("markets"),
+    ).first()
+    unique_wallets = int(uniq_row.wallets or 0)
+    unique_markets = int(uniq_row.markets or 0)
     largest_trade = filtered_base.order_by((Trade.price * Trade.size).desc()).first()
     filtered_top_wallets_raw = vh.build_filtered_top_wallets(filtered_base)
     filtered_top_markets = vh.build_filtered_top_markets(filtered_base)
@@ -232,7 +236,7 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
 
 @router.get("/api/trades/{trade_id}/ai-analysis")
 def get_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
-    """Get AI-powered analysis of a trade. Requires Ollama or HUGGINGFACE_API_KEY."""
+    """Get AI-powered analysis of a trade. Provider priority: Claude > Ollama > HuggingFace."""
     trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
@@ -247,14 +251,27 @@ def get_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
             "message": "AI model is warming up. Try again in ~20 seconds.",
         }
 
+    available = result is not None and "_error" not in result
     return {
         "trade_id": trade_id,
-        "available": result is not None and "_error" not in result,
+        "available": available,
         "signal": result.get("signal") if result else None,
         "risk": result.get("risk") if result else None,
         "price_insight": result.get("price_insight") if result else None,
         "behavior": result.get("behavior") if result else None,
         "verdict": result.get("verdict") if result else None,
         "provider": result.get("provider") if result else None,
+        "model_version": result.get("model_version") if result else None,
+        "from_cache": result.get("_from_cache", False) if result else False,
         "context": result.get("context") if result else None,
     }
+
+
+@router.post("/api/trades/{trade_id}/ai-analysis/invalidate")
+def invalidate_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
+    """Remove the cached AI analysis so it will be re-analyzed on next request."""
+    trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    removed = ai_analysis.invalidate_cache(trade_id, db)
+    return {"trade_id": trade_id, "invalidated": removed}

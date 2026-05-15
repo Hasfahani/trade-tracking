@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import ssl
+import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
@@ -20,6 +21,8 @@ from app.settings import (
 logger = logging.getLogger(__name__)
 
 DATA_API_BASE = "https://data-api.polymarket.com"
+_MAX_RETRY_ATTEMPTS = 3
+_INITIAL_BACKOFF_SECONDS = 2.0
 
 
 @lru_cache(maxsize=1)
@@ -63,14 +66,31 @@ def _fetch_trade_batch(address: str, limit: int, offset: Optional[int] = None) -
     if offset is not None:
         params["offset"] = offset
 
-    with httpx.Client(timeout=_polymarket_timeout(), verify=_polymarket_ssl_context()) as client:
-        response = client.get(url, params=params)
+    backoff = _INITIAL_BACKOFF_SECONDS
+    for attempt in range(1, _MAX_RETRY_ATTEMPTS + 1):
+        with httpx.Client(timeout=_polymarket_timeout(), verify=_polymarket_ssl_context()) as client:
+            response = client.get(url, params=params)
+
+        if response.status_code == 429:
+            if attempt < _MAX_RETRY_ATTEMPTS:
+                retry_after = float(response.headers.get("Retry-After", backoff))
+                wait = min(retry_after, backoff)
+                logger.warning(
+                    "Rate limited by Polymarket API for wallet=%s, attempt=%d/%d, sleeping=%.1fs",
+                    address, attempt, _MAX_RETRY_ATTEMPTS, wait,
+                )
+                time.sleep(wait)
+                backoff *= 2
+                continue
+            response.raise_for_status()
+
         response.raise_for_status()
         payload = response.json()
+        if isinstance(payload, list):
+            return payload
+        logger.warning("Unexpected trades payload for wallet=%s type=%s", address, type(payload).__name__)
+        return []
 
-    if isinstance(payload, list):
-        return payload
-    logger.warning("Unexpected trades payload for wallet=%s type=%s", address, type(payload).__name__)
     return []
 
 

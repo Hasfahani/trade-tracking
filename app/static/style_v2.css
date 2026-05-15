@@ -3099,6 +3099,34 @@ th {
     color: var(--text);
 }
 
+/* ── Wallet AI summary ── */
+.ai-wallet-summary {
+    font-size: 0.98rem;
+    line-height: 1.7;
+    color: var(--text);
+    margin: 0 0 0.5rem;
+    padding: 1rem 1.2rem;
+    border-left: 3px solid var(--accent);
+    background: rgba(118, 228, 214, 0.04);
+    border-radius: 0 8px 8px 0;
+}
+
+/* Cache indicator badge for AI results */
+.ai-cache-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--muted);
+    vertical-align: middle;
+    margin-left: 6px;
+}
+
 /* Add layout containment to card lists so the browser can skip painting offscreen cards */
 .wallet-list,
 .stack-list,

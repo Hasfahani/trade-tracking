@@ -83,9 +83,30 @@ async def schema_version():
     })
 
 
+def _get_ai_provider_info() -> dict:
+    """Return current AI provider detection result for diagnostics."""
+    try:
+        from app.ai_analysis import _detect_provider
+        provider, model = _detect_provider()
+        return {"provider": provider or "none", "model": model}
+    except Exception:
+        return {"provider": "unknown", "model": None}
+
+
+def _get_ai_cache_stats(db) -> dict:
+    """Return aggregate stats from the trade_analysis cache table."""
+    try:
+        from app.models import TradeAnalysis
+        from sqlalchemy import func as _func
+        count = db.query(_func.count(TradeAnalysis.id)).scalar() or 0
+        return {"cached_analyses": int(count)}
+    except Exception:
+        return {"cached_analyses": 0}
+
+
 @router.get("/admin/ops")
-async def ops_diagnostics(request: Request):
-    """One-click operational diagnostics: db ping, migration status, last sync, build info."""
+async def ops_diagnostics(request: Request, db: Session = Depends(get_db)):
+    """One-click operational diagnostics: db ping, migration status, last sync, build info, AI status."""
     db_ok = False
     db_error = None
     last_sync = None
@@ -97,9 +118,8 @@ async def ops_diagnostics(request: Request):
         db_error = str(exc)
 
     try:
-        from app.db import SCHEMA_MIGRATIONS, SessionLocal as _SL
+        from app.db import SCHEMA_MIGRATIONS
         applied_migrations = get_applied_migration_versions()
-        db = _SL()
         sync = db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).first()
         if sync:
             last_sync = {
@@ -110,11 +130,13 @@ async def ops_diagnostics(request: Request):
                 "at": sync.created_at.isoformat() if sync.created_at else None,
                 "error": sync.error_message,
             }
-        db.close()
         all_versions = [v for v, _ in SCHEMA_MIGRATIONS]
         pending = [v for v in all_versions if v not in set(applied_migrations)]
     except Exception:
         pending = []
+
+    ai_info = _get_ai_provider_info()
+    ai_cache = _get_ai_cache_stats(db)
 
     return JSONResponse({
         "database": "ok" if db_ok else "error",
@@ -126,6 +148,7 @@ async def ops_diagnostics(request: Request):
         "build": {"version": APP_VERSION, "commit": GIT_COMMIT, "env": APP_ENV},
         "ready": bool(getattr(request.app.state, "ready", False)),
         "counters": _get_status_counters(),
+        "ai": {**ai_info, **ai_cache},
     })
 
 
@@ -176,6 +199,14 @@ async def ops_ui(request: Request):
         pending = [v for v in all_versions if v not in set(applied_migrations)]
     except Exception:
         pending = []
+    from app.db import SessionLocal as _SL2
+    _db2 = _SL2()
+    try:
+        ai_cache = _get_ai_cache_stats(_db2)
+    finally:
+        _db2.close()
+    ai_info = _get_ai_provider_info()
+
     return templates.TemplateResponse(
         request,
         "ops_v2.html",
@@ -192,6 +223,9 @@ async def ops_ui(request: Request):
             "build_env": APP_ENV,
             "ready": bool(getattr(request.app.state, "ready", False)),
             "counters": _get_status_counters(),
+            "ai_provider": ai_info.get("provider", "none"),
+            "ai_model": ai_info.get("model"),
+            "ai_cached_analyses": ai_cache.get("cached_analyses", 0),
         },
     )
 

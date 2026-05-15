@@ -1,0 +1,21 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Server Error{% endblock %}
+{% block meta_description %}An internal server error occurred.{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">500</p>
+        <h1>Something went wrong</h1>
+        <p class="subtle">An internal error occurred. The error has been logged.{% if request_id %} Request ID: <code>{{ request_id }}</code>{% endif %}</p>
+    </div>
+    <div class="hero-actions">
+        <div class="hero-actions-row">
+            <a href="/wallets" class="btn btn-primary btn-small">Go to Wallets</a>
+            <a href="/dashboard" class="btn btn-small">Dashboard</a>
+            <a href="/healthz" class="btn btn-small" target="_blank" rel="noreferrer">Health check</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

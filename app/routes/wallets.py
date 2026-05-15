@@ -4,11 +4,11 @@ import io
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from sqlalchemy import desc, func
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from sqlalchemy import case, desc, func
 from sqlalchemy.orm import Session
 
-from app import alerts
+from app import ai_analysis, alerts
 from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
@@ -254,10 +254,14 @@ def refresh_all_wallets(
 async def wallet_detail(request: Request, identifier: str, db: Session = Depends(get_db)):
     wallet = resolve_wallet(db, identifier)
 
+    recent_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
     summary_row = db.query(
         func.count(Trade.id).label("total_trades"),
         func.min(Trade.traded_at).label("first_trade_at"),
         func.max(Trade.traded_at).label("latest_trade_at"),
+        func.sum(case(
+            (Trade.traded_at >= recent_cutoff, Trade.price * Trade.size), else_=0
+        )).label("recent_value_24h"),
     ).filter(Trade.wallet_address == wallet.address).first()
 
     trade_query = db.query(Trade).filter(Trade.wallet_address == wallet.address)
@@ -273,13 +277,7 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
     yes_value_pct = round((yes_value / total_value) * 100) if total_value else 0
     no_value_pct = 100 - yes_value_pct if total_value else 0
 
-    recent_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
-    recent_value_24h = float(
-        db.query(func.sum(Trade.price * Trade.size))
-        .filter(Trade.wallet_address == wallet.address, Trade.traded_at >= recent_cutoff)
-        .scalar()
-        or 0
-    )
+    recent_value_24h = float(summary_row.recent_value_24h or 0)
 
     wallet_insights = [
         {
@@ -448,3 +446,24 @@ async def delete_wallet(
     db.delete(wallet)
     db.commit()
     return _flash_redirect("Wallet and associated trades were deleted.", "success")
+
+
+@router.get("/api/wallets/{identifier}/ai-summary")
+def get_wallet_ai_summary(identifier: str, db: Session = Depends(get_db)):
+    """Generate an AI-powered text summary of a wallet's recent trading pattern."""
+    wallet = resolve_wallet(db, identifier)
+    recent_trades = (
+        db.query(Trade)
+        .filter(Trade.wallet_address == wallet.address)
+        .order_by(Trade.traded_at.desc())
+        .limit(15)
+        .all()
+    )
+    if not recent_trades:
+        return {"available": False, "summary": None, "reason": "no_trades"}
+
+    summary = ai_analysis.get_trade_summary(recent_trades, db)
+    if summary is None:
+        return {"available": False, "summary": None, "reason": "no_provider"}
+
+    return {"available": True, "summary": summary, "trade_count": len(recent_trades)}
