@@ -119,6 +119,10 @@ DB_POOL_RECYCLE = _env_int("DB_POOL_RECYCLE", 1800)
 # Retention metrics feature flag — disable to stop event logging without code change
 RETENTION_METRICS_ENABLED: bool = os.getenv("RETENTION_METRICS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 
+# AI Analysis — Ollama or HuggingFace configuration
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
+
 
 def session_secret_is_weak(secret: Optional[str] = None) -> bool:
     """Return True for known-default or too-short session secrets."""

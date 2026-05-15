@@ -1,0 +1,6 @@
+FROM ollama/ollama:latest
+
+# Pull a model during build (optional - can also be done at runtime)
+RUN ollama pull mistral
+
+EXPOSE 11434

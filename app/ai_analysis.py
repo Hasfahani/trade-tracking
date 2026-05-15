@@ -1,7 +1,6 @@
 """AI trade analysis using free LLMs (Ollama or Hugging Face API)."""
 
 import logging
-import os
 from typing import Any, Dict, Optional
 
 import httpx
@@ -9,10 +8,11 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.models import Trade
+from app import settings
 
 logger = logging.getLogger(__name__)
 
-_OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+_OLLAMA_BASE = settings.OLLAMA_BASE_URL
 _analysis_cache: Dict[str, Dict[str, Any]] = {}
 
 
@@ -27,7 +27,7 @@ def _get_provider() -> Optional[str]:
         return "ollama"
     except Exception:
         pass
-    if os.getenv("HUGGINGFACE_API_KEY"):
+    if settings.HUGGINGFACE_API_KEY:
         return "huggingface"
     return None
 
@@ -293,7 +293,7 @@ def _analyze_with_ollama(trade: Trade, ctx: Dict[str, Any]) -> Optional[Dict[str
 
 
 def _analyze_with_huggingface(trade: Trade, ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    api_key = os.getenv("HUGGINGFACE_API_KEY")
+    api_key = settings.HUGGINGFACE_API_KEY
     if not api_key:
         return None
     prompt = _build_prompt(trade, ctx)
