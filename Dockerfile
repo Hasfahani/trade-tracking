@@ -21,6 +21,5 @@ ENV GIT_COMMIT=${GIT_COMMIT}
 
 EXPOSE 8000
 
-# Start server directly. The PORT env var is set by Railway; fall back to 8000 for local Docker usage.
-# Database initialization happens in the app lifespan (async startup context).
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# run.py reads PORT from os.environ directly — works in exec form (no shell needed).
+CMD ["python", "run.py"]

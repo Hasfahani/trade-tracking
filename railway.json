@@ -4,6 +4,7 @@
     "builder": "dockerfile"
   },
   "deploy": {
+    "startCommand": "python run.py",
     "healthcheckPath": "/healthz",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
