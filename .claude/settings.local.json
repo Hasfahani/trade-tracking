@@ -4,7 +4,11 @@
       "Bash(python -m pytest tests/ -q)",
       "Bash(venv/Scripts/python.exe --version)",
       "Bash(venv/Scripts/pip install *)",
-      "Bash(python -m pytest tests/ -x -q --tb=short)"
+      "Bash(python -m pytest tests/ -x -q --tb=short)",
+      "Bash(python -c \"import app.main; print\\('Import OK'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
