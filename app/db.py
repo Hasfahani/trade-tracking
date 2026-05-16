@@ -19,7 +19,11 @@ from app.settings import (
 logger = logging.getLogger(__name__)
 
 _is_sqlite_url = DATABASE_URL.startswith("sqlite")
-_connect_args = {"check_same_thread": False} if _is_sqlite_url else {}
+_connect_args = (
+    {"check_same_thread": False}
+    if _is_sqlite_url
+    else {"connect_timeout": 10}  # seconds; prevents indefinite hang when DB is not yet ready
+)
 _pool_kwargs = (
     {}
     if _is_sqlite_url

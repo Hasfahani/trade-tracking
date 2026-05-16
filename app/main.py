@@ -123,7 +123,16 @@ async def lifespan(app: FastAPI):
     if RETENTION_METRICS_ENABLED:
         await retention.start_drain()
 
+    logger.info("HTTP server ready; database initialising in background")
     yield
+
+    task = app.state.startup_task
+    if task and not task.done():
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
 
     if RETENTION_METRICS_ENABLED:
         await retention.stop_drain()
