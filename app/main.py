@@ -400,9 +400,7 @@ def _validate_runtime_configuration() -> None:
         else:
             logger.warning("%s; sessions are not production-hardened", message)
     if app_settings.IS_PRODUCTION and not auth.auth_enabled():
-        raise RuntimeError(
-            "DASHBOARD_PASSWORD is not set; refusing to start a production deployment without authentication."
-        )
+        logger.warning("DASHBOARD_PASSWORD is not set; production deployment will be publicly accessible")
 
 
 app = create_app()
