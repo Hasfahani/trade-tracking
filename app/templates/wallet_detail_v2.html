@@ -196,7 +196,7 @@
 <section class="card" id="ai-summary-section">
     <div class="section-head">
         <h2>AI pattern summary</h2>
-        <button type="button" class="btn btn-small" id="ai-summary-btn" onclick="loadWalletSummary('{{ wallet.address }}')">Analyse recent trades</button>
+        <button type="button" class="btn btn-small" id="ai-summary-btn" onclick="loadWalletSummary('{{ wallet.address }}')" {% if not ai_provider_configured %}disabled{% endif %}>{{ 'Analyse recent trades' if ai_provider_configured else 'AI not configured' }}</button>
     </div>
 
     <div id="ai-summary-loading" style="display:none" class="ai-loading">
@@ -209,8 +209,8 @@
         <small id="ai-summary-meta" class="subtle"></small>
     </div>
 
-    <div id="ai-summary-unavailable" style="display:none" class="subtle">
-        <p>AI unavailable — configure <code>ANTHROPIC_API_KEY</code>, run <strong>Ollama</strong> locally, or set <code>HUGGINGFACE_API_KEY</code>.</p>
+    <div id="ai-summary-unavailable" style="display:{% if ai_provider_configured %}none{% else %}block{% endif %}" class="subtle">
+        <p id="ai-summary-unavailable-message">{{ ai_unavailable_message }}</p>
     </div>
 
     <div id="ai-summary-no-trades" style="display:none" class="subtle">
@@ -225,6 +225,7 @@
         var loading = document.getElementById('ai-summary-loading');
         var result = document.getElementById('ai-summary-result');
         var unavail = document.getElementById('ai-summary-unavailable');
+        var unavailMsg = document.getElementById('ai-summary-unavailable-message');
         var noTrades = document.getElementById('ai-summary-no-trades');
 
         btn.disabled = true;
@@ -242,6 +243,9 @@
                 if (data.reason === 'no_trades') {
                     noTrades.style.display = 'block';
                 } else {
+                    if (data.message) {
+                        unavailMsg.textContent = data.message;
+                    }
                     unavail.style.display = 'block';
                 }
                 btn.disabled = false;

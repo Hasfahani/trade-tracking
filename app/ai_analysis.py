@@ -19,40 +19,60 @@ logger = logging.getLogger(__name__)
 # Provider detection with short-lived cache to avoid HTTP on every analysis
 # ---------------------------------------------------------------------------
 
-_provider_cache: Dict[str, Any] = {"provider": None, "model": None, "expires_at": 0.0}
+_provider_cache: Dict[str, Any] = {"provider": None, "model": None, "candidates": None, "expires_at": 0.0}
 _PROVIDER_TTL_SECONDS = 30.0
+
+
+def _detect_provider_candidates() -> List[tuple[str, str]]:
+    """Return ordered provider candidates as (provider_name, model_name)."""
+    now = time.monotonic()
+    cached = _provider_cache.get("candidates")
+    if now < _provider_cache["expires_at"] and isinstance(cached, list):
+        return cached
+
+    candidates: List[tuple[str, str]] = []
+
+    if settings.ANTHROPIC_API_KEY:
+        candidates.append(("anthropic", settings.ANTHROPIC_MODEL))
+
+    try:
+        with httpx.Client(timeout=2) as client:
+            resp = client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
+            if resp.status_code == 200:
+                models = resp.json().get("models", [])
+                model_names = [m.get("name") for m in models if m.get("name")]
+                if model_names:
+                    preferred = settings.OLLAMA_MODEL
+                    selected = preferred if preferred in model_names else model_names[0]
+                    candidates.append(("ollama", selected))
+    except Exception:
+        pass
+
+    if settings.HUGGINGFACE_API_KEY:
+        candidates.append(("huggingface", "mistralai/Mistral-7B-Instruct-v0.2"))
+
+    first_provider: Optional[str] = None
+    first_model: Optional[str] = None
+    if candidates:
+        first_provider, first_model = candidates[0]
+
+    _provider_cache.update(
+        {
+            "provider": first_provider,
+            "model": first_model,
+            "candidates": candidates,
+            "expires_at": now + _PROVIDER_TTL_SECONDS,
+        }
+    )
+    return candidates
 
 
 def _detect_provider() -> tuple[Optional[str], Optional[str]]:
     """Return (provider_name, model_name). Cached for _PROVIDER_TTL_SECONDS."""
-    now = time.monotonic()
-    if now < _provider_cache["expires_at"]:
-        return _provider_cache["provider"], _provider_cache["model"]
-
-    provider: Optional[str] = None
-    model: Optional[str] = None
-
-    if settings.ANTHROPIC_API_KEY:
-        provider = "anthropic"
-        model = settings.ANTHROPIC_MODEL
-    else:
-        try:
-            with httpx.Client(timeout=2) as client:
-                resp = client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
-                if resp.status_code == 200:
-                    models = resp.json().get("models", [])
-                    if models:
-                        provider = "ollama"
-                        model = models[0]["name"]
-        except Exception:
-            pass
-
-        if not provider and settings.HUGGINGFACE_API_KEY:
-            provider = "huggingface"
-            model = "mistralai/Mistral-7B-Instruct-v0.2"
-
-    _provider_cache.update({"provider": provider, "model": model, "expires_at": now + _PROVIDER_TTL_SECONDS})
-    return provider, model
+    candidates = _detect_provider_candidates()
+    if candidates:
+        return candidates[0]
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -457,21 +477,33 @@ def analyze_trade(trade: Trade, db: Session) -> Optional[Dict[str, Any]]:
         return cached
 
     ctx = build_trade_context(trade, db)
-    provider, model = _detect_provider()
+    candidates = _detect_provider_candidates()
 
-    result: Optional[Dict[str, Any]] = None
-    if provider == "anthropic" and model:
-        result = _analyze_with_anthropic(trade, ctx, model)
-    elif provider == "ollama" and model:
-        result = _analyze_with_ollama(trade, ctx, model)
-    elif provider == "huggingface" and model:
-        result = _analyze_with_huggingface(trade, ctx, model)
+    if not candidates:
+        return None
 
-    if result and "_error" not in result:
+    first_error_result: Optional[Dict[str, Any]] = None
+    for provider, model in candidates:
+        result: Optional[Dict[str, Any]] = None
+        if provider == "anthropic":
+            result = _analyze_with_anthropic(trade, ctx, model)
+        elif provider == "ollama":
+            result = _analyze_with_ollama(trade, ctx, model)
+        elif provider == "huggingface":
+            result = _analyze_with_huggingface(trade, ctx, model)
+
+        if not result:
+            continue
+
+        if result.get("_error") and first_error_result is None:
+            first_error_result = result
+            continue
+
         result["context"] = ctx
         _save_analysis_to_db(trade.trade_id, result, ctx, db)
+        return result
 
-    return result
+    return first_error_result
 
 
 def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Optional[str]:
@@ -479,8 +511,8 @@ def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Opti
     if not trades:
         return None
 
-    provider, model = _detect_provider()
-    if not provider or not model:
+    candidates = _detect_provider_candidates()
+    if not candidates:
         return None
 
     lines = [
@@ -494,51 +526,52 @@ def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Opti
         "Trades (newest first):\n" + "\n".join(lines)
     )
 
-    try:
-        if provider == "anthropic":
-            with httpx.Client(timeout=20) as client:
-                resp = client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": settings.ANTHROPIC_API_KEY,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json={
-                        "model": model,
-                        "max_tokens": 200,
-                        "temperature": 0.2,
-                        "system": system_prompt,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                )
-            if resp.status_code == 200:
-                content_blocks = resp.json().get("content", [])
-                return " ".join(b.get("text", "") for b in content_blocks if b.get("type") == "text").strip()
-        elif provider == "ollama":
-            with httpx.Client(timeout=45) as client:
-                resp = client.post(
-                    f"{settings.OLLAMA_BASE_URL}/api/generate",
-                    json={"model": model, "prompt": prompt, "stream": False},
-                )
-            if resp.status_code == 200:
-                return resp.json().get("response", "").strip()
-        elif provider == "huggingface" and settings.HUGGINGFACE_API_KEY:
-            with httpx.Client(timeout=30) as client:
-                resp = client.post(
-                    f"https://api-inference.huggingface.co/models/{model}",
-                    headers={"Authorization": f"Bearer {settings.HUGGINGFACE_API_KEY}"},
-                    json={
-                        "inputs": prompt,
-                        "parameters": {"max_new_tokens": 200, "temperature": 0.2, "return_full_text": False},
-                    },
-                )
-            if resp.status_code == 200:
-                result = resp.json()
-                if isinstance(result, list) and result:
-                    return result[0].get("generated_text", "").strip()
-    except Exception as e:
-        logger.warning("Trade summary failed: %s", e)
+    for provider, model in candidates:
+        try:
+            if provider == "anthropic":
+                with httpx.Client(timeout=20) as client:
+                    resp = client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": settings.ANTHROPIC_API_KEY,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": model,
+                            "max_tokens": 200,
+                            "temperature": 0.2,
+                            "system": system_prompt,
+                            "messages": [{"role": "user", "content": prompt}],
+                        },
+                    )
+                if resp.status_code == 200:
+                    content_blocks = resp.json().get("content", [])
+                    return " ".join(b.get("text", "") for b in content_blocks if b.get("type") == "text").strip()
+            elif provider == "ollama":
+                with httpx.Client(timeout=45) as client:
+                    resp = client.post(
+                        f"{settings.OLLAMA_BASE_URL}/api/generate",
+                        json={"model": model, "prompt": prompt, "stream": False},
+                    )
+                if resp.status_code == 200:
+                    return resp.json().get("response", "").strip()
+            elif provider == "huggingface" and settings.HUGGINGFACE_API_KEY:
+                with httpx.Client(timeout=30) as client:
+                    resp = client.post(
+                        f"https://api-inference.huggingface.co/models/{model}",
+                        headers={"Authorization": f"Bearer {settings.HUGGINGFACE_API_KEY}"},
+                        json={
+                            "inputs": prompt,
+                            "parameters": {"max_new_tokens": 200, "temperature": 0.2, "return_full_text": False},
+                        },
+                    )
+                if resp.status_code == 200:
+                    result = resp.json()
+                    if isinstance(result, list) and result:
+                        return result[0].get("generated_text", "").strip()
+        except Exception as e:
+            logger.warning("Trade summary failed via %s: %s", provider, e)
     return None
 
 

@@ -46,7 +46,7 @@
         <h2>AI Analysis</h2>
         <div style="display:flex;gap:0.5rem;align-items:center">
             <button type="button" class="btn btn-small" id="ai-reanalyze-btn" onclick="reanalyzeTrade('{{ trade.trade_id }}')" style="display:none">Re-analyze</button>
-            <button type="button" class="btn btn-small" id="ai-btn" onclick="loadTradeAnalysis('{{ trade.trade_id }}')">Analyze</button>
+            <button type="button" class="btn btn-small" id="ai-btn" onclick="loadTradeAnalysis('{{ trade.trade_id }}')" {% if not ai_provider_configured %}disabled{% endif %}>{{ 'Analyze' if ai_provider_configured else 'AI not configured' }}</button>
         </div>
     </div>
 
@@ -84,8 +84,8 @@
         <button type="button" class="btn btn-small" onclick="loadTradeAnalysis('{{ trade.trade_id }}')">Retry</button>
     </div>
 
-    <div id="ai-unavailable" style="display:none" class="subtle">
-        AI unavailable — set <code>ANTHROPIC_API_KEY</code>, run <strong>Ollama</strong> locally, or set <code>HUGGINGFACE_API_KEY</code>.
+    <div id="ai-unavailable" style="display:{% if ai_provider_configured %}none{% else %}block{% endif %}" class="subtle">
+        <span id="ai-unavailable-message">{{ ai_unavailable_message }}</span>
     </div>
 </section>
 
@@ -113,6 +113,15 @@
         document.getElementById('ai-reanalyze-btn').disabled = disabled;
     }
 
+    function showUnavailable(message) {
+        const unavailable = document.getElementById('ai-unavailable');
+        const unavailableMessage = document.getElementById('ai-unavailable-message');
+        if (message) {
+            unavailableMessage.textContent = message;
+        }
+        unavailable.style.display = 'block';
+    }
+
     window.reanalyzeTrade = async function (tradeId) {
         setButtonsDisabled(true);
         setLoading('Clearing cached analysis…');
@@ -128,6 +137,9 @@
 
         try {
             const resp = await fetch(`/api/trades/${tradeId}/ai-analysis`);
+            if (!resp.ok) {
+                throw new Error(`AI request failed with status ${resp.status}`);
+            }
             const data = await resp.json();
             document.getElementById('ai-loading').style.display = 'none';
 
@@ -137,7 +149,7 @@
                 return;
             }
             if (!data.available) {
-                document.getElementById('ai-unavailable').style.display = 'block';
+                showUnavailable(data.message);
                 setButtonsDisabled(false);
                 return;
             }
@@ -203,7 +215,7 @@
             setButtonsDisabled(false);
         } catch (err) {
             document.getElementById('ai-loading').style.display   = 'none';
-            document.getElementById('ai-unavailable').style.display = 'block';
+            showUnavailable();
             setButtonsDisabled(false);
             console.error('AI analysis error:', err);
         }

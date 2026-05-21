@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app import ai_analysis, retention as ret, view_helpers as vh
+from app import ai_analysis, retention as ret, settings, view_helpers as vh
 from app.db import get_db
 from app.models import Trade, Wallet
 from app.routes._shared import normalized_date_filters, paginated_query, resolve_wallet, sanitize_search, validated_date_preset, templates
@@ -229,6 +229,8 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
             "trade": trade,
             "related_trades": related_trades,
             "wallet_map": wallet_map,
+            "ai_provider_configured": settings.ai_provider_configured(),
+            "ai_unavailable_message": settings.ai_unavailable_message(),
             "short_address": vh.short_address,
         },
     )
@@ -255,6 +257,8 @@ def get_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
     return {
         "trade_id": trade_id,
         "available": available,
+        "reason": None if available else "no_provider",
+        "message": None if available else settings.ai_unavailable_message(),
         "signal": result.get("signal") if result else None,
         "risk": result.get("risk") if result else None,
         "price_insight": result.get("price_insight") if result else None,

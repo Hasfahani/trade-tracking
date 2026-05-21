@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, Iterable, Optional, Set, Tuple
@@ -35,7 +36,9 @@ _pool_kwargs = (
     }
 )
 engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True, **_pool_kwargs)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+_SessionFactory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+_schema_init_lock = threading.Lock()
+_schema_initialized = False
 
 ColumnSpec = Dict[str, str]
 Migration = Tuple[str, Callable[[object], None]]
@@ -335,6 +338,29 @@ def init_db() -> None:
     """Initialize database tables and apply tracked compatibility migrations."""
     Base.metadata.create_all(bind=engine)
     run_schema_migrations()
+
+
+def ensure_database_initialized() -> None:
+    """Initialize schema once per process before opening ad-hoc sessions.
+
+    This keeps direct scripts and any early request paths from failing on newly
+    added compatibility tables such as ``trade_analysis``.
+    """
+    global _schema_initialized
+    if _schema_initialized:
+        return
+
+    with _schema_init_lock:
+        if _schema_initialized:
+            return
+        init_db()
+        _schema_initialized = True
+
+
+def SessionLocal():
+    """Return a database session with lazy one-time schema initialization."""
+    ensure_database_initialized()
+    return _SessionFactory()
 
 
 def check_database_ready(target_engine: Optional[Engine] = None) -> None:

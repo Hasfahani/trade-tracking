@@ -2,6 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -123,9 +124,42 @@ RETENTION_METRICS_ENABLED: bool = os.getenv("RETENTION_METRICS_ENABLED", "true")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = _env_str("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral:latest").strip() or None
 OLLAMA_TIMEOUT_SECONDS = _env_float("OLLAMA_TIMEOUT_SECONDS", 60.0)
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 AI_CACHE_TTL_HOURS = _env_int("AI_CACHE_TTL_HOURS", 72)
+
+
+def ai_provider_configured() -> bool:
+    """Return True when config points to a likely reachable AI backend."""
+    if ANTHROPIC_API_KEY or HUGGINGFACE_API_KEY:
+        return True
+
+    if not OLLAMA_MODEL:
+        return False
+
+    parsed = urlparse(OLLAMA_BASE_URL)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+
+    if IS_PRODUCTION and host in {"localhost", "127.0.0.1", "::1"}:
+        return False
+
+    return True
+
+
+def ai_unavailable_message() -> str:
+    """Return a user-facing explanation for unavailable AI analysis."""
+    if IS_PRODUCTION and not ai_provider_configured():
+        return (
+            "AI is not configured for this deployment. Add ANTHROPIC_API_KEY, "
+            "set HUGGINGFACE_API_KEY, or point OLLAMA_BASE_URL to a reachable Ollama service."
+        )
+    return (
+        "AI unavailable — set ANTHROPIC_API_KEY, run Ollama locally, or set "
+        "HUGGINGFACE_API_KEY."
+    )
 
 
 def session_secret_is_weak(secret: Optional[str] = None) -> bool:

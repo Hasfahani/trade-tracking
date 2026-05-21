@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from sqlalchemy import case, desc, func
 from sqlalchemy.orm import Session
 
-from app import ai_analysis, alerts
+from app import ai_analysis, alerts, settings
 from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
@@ -321,6 +321,8 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
             "sync_status_class": vh.sync_status_class,
             "wallet_freshness_label": vh.wallet_freshness_label,
             "wallet_status_tone": vh.wallet_status_tone,
+            "ai_provider_configured": settings.ai_provider_configured(),
+            "ai_unavailable_message": settings.ai_unavailable_message(),
         },
     )
 
@@ -464,6 +466,11 @@ def get_wallet_ai_summary(identifier: str, db: Session = Depends(get_db)):
 
     summary = ai_analysis.get_trade_summary(recent_trades, db)
     if summary is None:
-        return {"available": False, "summary": None, "reason": "no_provider"}
+        return {
+            "available": False,
+            "summary": None,
+            "reason": "no_provider",
+            "message": settings.ai_unavailable_message(),
+        }
 
     return {"available": True, "summary": summary, "trade_count": len(recent_trades)}
