@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.pool import StaticPool
 
 from app.db import POSTGRES_COMPAT_COLUMNS, SCHEMA_MIGRATIONS, run_schema_migrations
@@ -138,17 +139,22 @@ def test_postgres_compat_migrations_add_missing_columns_once():
             }
             self.alters = []
 
-        def exec_driver_sql(self, statement, params=None):
-            if "SELECT column_name FROM information_schema.columns" in statement:
+        def execute(self, statement, params=None):
+            assert isinstance(statement, TextClause)
+            sql = str(statement)
+            if "SELECT column_name FROM information_schema.columns" in sql:
                 table_name = params["table_name"]
                 column_name = params["column_name"]
                 exists = column_name in self.columns.get(table_name, set())
                 return _FakeResult((column_name,) if exists else None)
-            if "SELECT data_type FROM information_schema.columns" in statement:
+            if "SELECT data_type FROM information_schema.columns" in sql:
                 table_name = params["table_name"]
                 column_name = params["column_name"]
                 data_type = self.types.get(table_name, {}).get(column_name)
                 return _FakeResult((data_type,) if data_type else None)
+            raise AssertionError(f"Unexpected SQLAlchemy statement: {sql}")
+
+        def exec_driver_sql(self, statement, params=None):
             if statement.startswith("ALTER TABLE"):
                 self.alters.append(statement)
                 parts = statement.split()

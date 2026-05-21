@@ -304,18 +304,22 @@ POSTGRES_INTEGER_COMPAT_COLUMNS: Tuple[Tuple[str, str], ...] = (
 
 
 def _postgres_column_exists(conn, table_name: str, column_name: str) -> bool:
-    row = conn.exec_driver_sql(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name = :table_name AND column_name = :column_name",
+    row = conn.execute(
+        text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = :table_name AND column_name = :column_name"
+        ),
         {"table_name": table_name, "column_name": column_name},
     ).first()
     return row is not None
 
 
 def _postgres_column_type(conn, table_name: str, column_name: str) -> Optional[str]:
-    row = conn.exec_driver_sql(
-        "SELECT data_type FROM information_schema.columns "
-        "WHERE table_name = :table_name AND column_name = :column_name",
+    row = conn.execute(
+        text(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_name = :table_name AND column_name = :column_name"
+        ),
         {"table_name": table_name, "column_name": column_name},
     ).first()
     return row[0] if row else None
