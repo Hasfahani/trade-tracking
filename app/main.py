@@ -85,6 +85,7 @@ def get_status_counters() -> dict:
 
 # Paths that do NOT require authentication (login page itself, static assets)
 _PUBLIC_PATHS = frozenset({"/login", "/logout", "/healthz", "/readyz"})
+_READINESS_TIMEOUT_SECONDS = 3.0
 
 
 @asynccontextmanager
@@ -301,6 +302,56 @@ async def auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+async def readiness_gate_middleware(request: Request, call_next):
+    """Avoid serving app pages until startup database initialization has settled."""
+    path = request.url.path
+    if path in _PUBLIC_PATHS or path.startswith("/static"):
+        return await call_next(request)
+
+    startup_task = getattr(request.app.state, "startup_task", None)
+    if startup_task is None or getattr(request.app.state, "ready", False):
+        return await call_next(request)
+
+    try:
+        await asyncio.wait_for(asyncio.shield(startup_task), timeout=_READINESS_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        return _not_ready_response(request, "Database initialization is still running. Try again in a moment.")
+    except Exception:
+        logger.exception("Startup task failed while serving path=%s", path)
+
+    if getattr(request.app.state, "ready", False):
+        return await call_next(request)
+
+    detail = getattr(request.app.state, "startup_error", None) or "Database initialization has not completed."
+    return _not_ready_response(request, detail)
+
+
+def _not_ready_response(request: Request, detail: str):
+    headers = {"Retry-After": "3"}
+    accept = request.headers.get("accept", "")
+    if "text/html" not in accept and "*/*" not in accept:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Application is starting", "startup_error": detail},
+            headers=headers,
+        )
+    try:
+        from app.routes._shared import templates as _templates
+        return _templates.TemplateResponse(
+            request,
+            "503.html",
+            {"request": request, "app_name": APP_NAME, "detail": detail},
+            status_code=503,
+            headers=headers,
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Application is starting", "startup_error": detail},
+            headers=headers,
+        )
+
+
 def create_app(
     *,
     lifespan_context=lifespan,
@@ -324,6 +375,7 @@ def create_app(
     app.middleware("http")(request_logging_middleware)
     app.middleware("http")(security_headers_middleware)
     app.middleware("http")(auth_middleware)
+    app.middleware("http")(readiness_gate_middleware)
     if csrf_enabled:
         app.middleware("http")(csrf_middleware)
     app.mount("/static", StaticFiles(directory="app/static"), name="static")

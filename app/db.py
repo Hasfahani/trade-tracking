@@ -292,6 +292,16 @@ POSTGRES_COMPAT_COLUMNS: Dict[str, ColumnSpec] = {
     },
 }
 
+POSTGRES_INTEGER_COMPAT_COLUMNS: Tuple[Tuple[str, str], ...] = (
+    ("wallets", "is_pinned"),
+    ("wallets", "is_archived"),
+    ("wallets", "last_refresh_count"),
+    ("trades", "alert_sent"),
+    ("sync_events", "duplicate_count"),
+    ("sync_events", "duration_ms"),
+    ("app_settings", "alerts_enabled"),
+)
+
 
 def _postgres_column_exists(conn, table_name: str, column_name: str) -> bool:
     row = conn.exec_driver_sql(
@@ -302,6 +312,26 @@ def _postgres_column_exists(conn, table_name: str, column_name: str) -> bool:
     return row is not None
 
 
+def _postgres_column_type(conn, table_name: str, column_name: str) -> Optional[str]:
+    row = conn.exec_driver_sql(
+        "SELECT data_type FROM information_schema.columns "
+        "WHERE table_name = :table_name AND column_name = :column_name",
+        {"table_name": table_name, "column_name": column_name},
+    ).first()
+    return row[0] if row else None
+
+
+def _normalize_postgres_integer_columns(conn) -> None:
+    for table_name, column_name in POSTGRES_INTEGER_COMPAT_COLUMNS:
+        if _postgres_column_type(conn, table_name, column_name) != "boolean":
+            continue
+        conn.exec_driver_sql(
+            f"ALTER TABLE {table_name} ALTER COLUMN {column_name} TYPE INTEGER "
+            f"USING CASE WHEN {column_name} THEN 1 ELSE 0 END"
+        )
+        logger.info("Migration: converted %s.%s from boolean to integer", table_name, column_name)
+
+
 def _ensure_postgres_compat_columns(target_engine: Engine) -> None:
     with target_engine.begin() as conn:
         for table_name, expected_columns in POSTGRES_COMPAT_COLUMNS.items():
@@ -310,6 +340,7 @@ def _ensure_postgres_compat_columns(target_engine: Engine) -> None:
                     continue
                 conn.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
                 logger.info("Migration: added column %s.%s (%s)", table_name, column_name, column_type)
+        _normalize_postgres_integer_columns(conn)
 
 
 def run_schema_migrations(

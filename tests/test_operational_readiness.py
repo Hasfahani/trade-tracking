@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import time
 
 from app.main import create_app, lifespan
 
@@ -46,6 +47,28 @@ def test_readyz_returns_200_after_database_check(monkeypatch):
     assert response.json()["database"] == "ok"
 
 
+def test_pages_show_503_when_startup_has_not_marked_ready():
+    import app.main as main_mod
+
+    async def no_ready_startup():
+        return None
+
+    app = create_app(lifespan_context=None, csrf_enabled=False)
+    app.state.ready = False
+    app.state.startup_task = None
+
+    @app.on_event("startup")
+    async def _start_unready_task():
+        app.state.startup_task = main_mod.asyncio.create_task(no_ready_startup())
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/wallets", headers={"accept": "text/html"})
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "3"
+    assert "Still starting" in response.text
+
+
 def test_startup_retries_transient_database_failures(monkeypatch):
     import app.main as main_mod
     import app.routes.core as core_mod
@@ -63,10 +86,15 @@ def test_startup_retries_transient_database_failures(monkeypatch):
     monkeypatch.setattr(main_mod, "check_database_ready", lambda: None)
     monkeypatch.setattr(core_mod, "check_database_ready", lambda: None)
     monkeypatch.setattr(main_mod, "_run_startup_maintenance", lambda: None)
+    monkeypatch.setattr(main_mod, "RETENTION_METRICS_ENABLED", False)
 
     app = create_app(lifespan_context=lifespan, csrf_enabled=False)
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.get("/readyz")
+        deadline = time.monotonic() + 2
+        while response.status_code != 200 and time.monotonic() < deadline:
+            time.sleep(0.01)
+            response = client.get("/readyz")
 
     assert attempts["count"] == 2
     assert response.status_code == 200
@@ -78,6 +106,7 @@ def test_startup_degrades_instead_of_crashing_after_database_failures(monkeypatc
     monkeypatch.setattr(main_mod.app_settings, "STARTUP_DB_MAX_ATTEMPTS", 2)
     monkeypatch.setattr(main_mod.app_settings, "STARTUP_DB_RETRY_SECONDS", 0)
     monkeypatch.setattr(main_mod, "init_db", lambda: (_ for _ in ()).throw(RuntimeError("database down")))
+    monkeypatch.setattr(main_mod, "RETENTION_METRICS_ENABLED", False)
 
     app = create_app(lifespan_context=lifespan, csrf_enabled=False)
     with TestClient(app, raise_server_exceptions=False) as client:

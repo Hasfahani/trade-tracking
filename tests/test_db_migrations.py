@@ -130,20 +130,35 @@ def test_postgres_compat_migrations_add_missing_columns_once():
                 "sync_events": {"status", "created_at"},
                 "app_settings": {"id"},
             }
+            self.types = {
+                "wallets": {"is_pinned": "boolean", "is_archived": "boolean"},
+                "trades": {"alert_sent": "integer"},
+                "sync_events": {"duplicate_count": "integer", "duration_ms": "integer"},
+                "app_settings": {"alerts_enabled": "boolean"},
+            }
             self.alters = []
 
         def exec_driver_sql(self, statement, params=None):
-            if "information_schema.columns" in statement:
+            if "SELECT column_name FROM information_schema.columns" in statement:
                 table_name = params["table_name"]
                 column_name = params["column_name"]
                 exists = column_name in self.columns.get(table_name, set())
                 return _FakeResult((column_name,) if exists else None)
+            if "SELECT data_type FROM information_schema.columns" in statement:
+                table_name = params["table_name"]
+                column_name = params["column_name"]
+                data_type = self.types.get(table_name, {}).get(column_name)
+                return _FakeResult((data_type,) if data_type else None)
             if statement.startswith("ALTER TABLE"):
                 self.alters.append(statement)
                 parts = statement.split()
                 table_name = parts[2]
-                column_name = parts[5]
-                self.columns.setdefault(table_name, set()).add(column_name)
+                if "ADD COLUMN" in statement:
+                    column_name = parts[5]
+                    self.columns.setdefault(table_name, set()).add(column_name)
+                if "ALTER COLUMN" in statement:
+                    column_name = parts[5]
+                    self.types.setdefault(table_name, {})[column_name] = "integer"
                 return _FakeResult(None)
             raise AssertionError(f"Unexpected SQL: {statement}")
 
@@ -171,5 +186,10 @@ def test_postgres_compat_migrations_add_missing_columns_once():
     run_schema_migrations(fake_engine, database_url="postgresql+psycopg://example")
 
     expected_column_count = sum(len(cols) for cols in POSTGRES_COMPAT_COLUMNS.values())
-    assert len(first_run_alters) == expected_column_count
-    assert len(fake_engine.conn.alters) == expected_column_count
+    expected_type_conversions = 3
+    assert len(first_run_alters) == expected_column_count + expected_type_conversions
+    assert len(fake_engine.conn.alters) == expected_column_count + expected_type_conversions
+    converted = [
+        statement for statement in fake_engine.conn.alters if "ALTER COLUMN" in statement and "TYPE INTEGER" in statement
+    ]
+    assert len(converted) == expected_type_conversions

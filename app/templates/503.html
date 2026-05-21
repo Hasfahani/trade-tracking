@@ -1,0 +1,21 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Starting Up{% endblock %}
+{% block meta_description %}The application is still starting.{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">503</p>
+        <h1>Still starting</h1>
+        <p class="subtle">{{ detail or "Database initialization is still running. Try again in a moment." }}</p>
+    </div>
+    <div class="hero-actions">
+        <div class="hero-actions-row">
+            <a href="{{ request.url.path }}" class="btn btn-primary btn-small">Try again</a>
+            <a href="/readyz" class="btn btn-small" target="_blank" rel="noreferrer">Readiness</a>
+            <a href="/healthz" class="btn btn-small" target="_blank" rel="noreferrer">Health check</a>
+        </div>
+    </div>
+</section>
+{% endblock %}
