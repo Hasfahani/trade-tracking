@@ -87,6 +87,9 @@ if (navToggle && topNav) {
         var m = document.cookie.match('(?:^|;)\\s*' + name + '=([^;]*)');
         return m ? decodeURIComponent(m[1]) : null;
     }
+    window.getCsrfToken = function () {
+        return getCookie('csrftoken');
+    };
     var token = getCookie('csrftoken');
     if (token) {
         document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function (form) {

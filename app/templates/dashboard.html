@@ -168,7 +168,14 @@
             <h2>7-day activity</h2>
             <span class="pill">Trades per day</span>
         </div>
-        <canvas id="activity-chart" style="max-height: 160px; width: 100%;" aria-label="Trades over the last 7 days" role="img"></canvas>
+        <canvas
+            id="activity-chart"
+            style="max-height: 160px; width: 100%;"
+            aria-label="Trades over the last 7 days"
+            role="img"
+            data-chart-labels="{{ activity_days | map(attribute='label') | list | tojson | e }}"
+            data-chart-counts="{{ activity_days | map(attribute='count') | list | tojson | e }}"
+        ></canvas>
     </article>
 
     <article class="card dashboard-panel">
@@ -365,7 +372,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="application/json" id="activity-chart-data">{"labels":[{% for d in activity_days %}"{{ d.label }}"{% if not loop.last %},{% endif %}{% endfor %}],"counts":[{% for d in activity_days %}{{ d.count }}{% if not loop.last %},{% endif %}{% endfor %}]}</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="/static/dashboard.js"></script>
 {% endblock %}

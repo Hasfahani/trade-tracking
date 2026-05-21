@@ -71,7 +71,8 @@ def _fetch_trade_batch(address: str, limit: int, offset: Optional[int] = None) -
         with httpx.Client(timeout=_polymarket_timeout(), verify=_polymarket_ssl_context()) as client:
             response = client.get(url, params=params)
 
-        if response.status_code == 429:
+        status_code = getattr(response, "status_code", None)
+        if status_code == 429:
             if attempt < _MAX_RETRY_ATTEMPTS:
                 retry_after = float(response.headers.get("Retry-After", backoff))
                 wait = min(retry_after, backoff)

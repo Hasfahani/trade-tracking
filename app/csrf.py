@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 _COOKIE_NAME = "csrftoken"
 _FORM_FIELD = "csrf_token"
+_HEADER_NAME = "x-csrf-token"
 _EXEMPT_PATHS = frozenset({"/login"})
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _COOKIE_MAX_AGE = 60 * 60 * 8  # 8 hours
@@ -49,29 +50,32 @@ async def csrf_middleware(request: Request, call_next: Callable) -> Response:
 
     if request.method in _MUTATING_METHODS and request.url.path not in _EXEMPT_PATHS:
         content_type = request.headers.get("content-type", "")
-        if "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+        submitted = request.headers.get(_HEADER_NAME, "")
+        if "application/x-www-form-urlencoded" in content_type:
             body = await request.body()
 
             # Parse the CSRF field from the raw URL-encoded form body.
-            # multipart forms are not validated here (they're not used by this app).
             params = parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)
-            submitted = (params.get(_FORM_FIELD) or [""])[0]
+            submitted = submitted or (params.get(_FORM_FIELD) or [""])[0]
+        elif "multipart/form-data" in content_type:
+            form = await request.form()
+            submitted = submitted or str(form.get(_FORM_FIELD) or "")
 
-            if submitted != token:
-                logger.warning("CSRF token mismatch on %s %s", request.method, request.url.path)
-                try:
-                    _tmpl = Jinja2Templates(directory="app/templates")
-                    return _tmpl.TemplateResponse(
-                        request,
-                        "403.html",
-                        {"request": request, "app_name": app_settings.APP_NAME},
-                        status_code=403,
-                    )
-                except Exception:
-                    return HTMLResponse(
-                        "<h1>403 Forbidden</h1><p>CSRF token invalid or missing. Please go back and try again.</p>",
-                        status_code=403,
-                    )
+        if not secrets.compare_digest(submitted, token):
+            logger.warning("CSRF token mismatch on %s %s", request.method, request.url.path)
+            try:
+                _tmpl = Jinja2Templates(directory="app/templates")
+                return _tmpl.TemplateResponse(
+                    request,
+                    "403.html",
+                    {"request": request, "app_name": app_settings.APP_NAME},
+                    status_code=403,
+                )
+            except Exception:
+                return HTMLResponse(
+                    "<h1>403 Forbidden</h1><p>CSRF token invalid or missing. Please go back and try again.</p>",
+                    status_code=403,
+                )
 
     response = await call_next(request)
     response.set_cookie(

@@ -66,8 +66,8 @@ DATABASE_URL = _raw_db_url
 
 # App metadata
 APP_NAME = _env_str("APP_NAME", "PolySignal")
-APP_VERSION = _env_str("APP_VERSION", "0.0.0")
 GIT_COMMIT = _read_git_commit()
+APP_VERSION = _env_str("APP_VERSION", GIT_COMMIT if GIT_COMMIT != "unknown" else "dev")
 LOG_LEVEL = _env_str("LOG_LEVEL", "INFO").upper()
 APP_ENV = _env_str("APP_ENV", os.getenv("RAILWAY_ENVIRONMENT", "development")).lower()
 IS_PRODUCTION = APP_ENV in {"production", "prod"} or bool(os.getenv("RAILWAY_ENVIRONMENT"))

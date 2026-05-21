@@ -193,10 +193,10 @@
     </article>
 </section>
 
-<section class="card" id="ai-summary-section">
+<section class="card" id="ai-summary-section" data-wallet-address="{{ wallet.address }}">
     <div class="section-head">
         <h2>AI pattern summary</h2>
-        <button type="button" class="btn btn-small" id="ai-summary-btn" onclick="loadWalletSummary('{{ wallet.address }}')" {% if not ai_provider_configured %}disabled{% endif %}>{{ 'Analyse recent trades' if ai_provider_configured else 'AI not configured' }}</button>
+        <button type="button" class="btn btn-small" id="ai-summary-btn" {% if not ai_provider_configured %}disabled{% endif %}>{{ 'Analyse recent trades' if ai_provider_configured else 'AI not configured' }}</button>
     </div>
 
     <div id="ai-summary-loading" style="display:none" class="ai-loading">
@@ -217,54 +217,6 @@
         <p>No stored trades yet. Refresh this wallet first.</p>
     </div>
 </section>
-
-<script>
-(function () {
-    window.loadWalletSummary = async function(address) {
-        var btn = document.getElementById('ai-summary-btn');
-        var loading = document.getElementById('ai-summary-loading');
-        var result = document.getElementById('ai-summary-result');
-        var unavail = document.getElementById('ai-summary-unavailable');
-        var unavailMsg = document.getElementById('ai-summary-unavailable-message');
-        var noTrades = document.getElementById('ai-summary-no-trades');
-
-        btn.disabled = true;
-        loading.style.display = 'flex';
-        result.style.display = 'none';
-        unavail.style.display = 'none';
-        noTrades.style.display = 'none';
-
-        try {
-            var resp = await fetch('/api/wallets/' + address + '/ai-summary');
-            var data = await resp.json();
-            loading.style.display = 'none';
-
-            if (!data.available) {
-                if (data.reason === 'no_trades') {
-                    noTrades.style.display = 'block';
-                } else {
-                    if (data.message) {
-                        unavailMsg.textContent = data.message;
-                    }
-                    unavail.style.display = 'block';
-                }
-                btn.disabled = false;
-                return;
-            }
-
-            document.getElementById('ai-summary-text').textContent = data.summary || '';
-            document.getElementById('ai-summary-meta').textContent = 'Based on ' + data.trade_count + ' most recent trade' + (data.trade_count !== 1 ? 's' : '');
-            result.style.display = 'block';
-            btn.textContent = 'Re-analyse';
-            btn.disabled = false;
-        } catch(err) {
-            loading.style.display = 'none';
-            unavail.style.display = 'block';
-            btn.disabled = false;
-        }
-    };
-}());
-</script>
 
 <section class="card">
     <div class="section-head">
@@ -294,4 +246,8 @@
     </div>
     {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/wallet_ai.js"></script>
 {% endblock %}

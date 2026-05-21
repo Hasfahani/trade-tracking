@@ -23,10 +23,13 @@
 (function () {
     var ctx = document.getElementById('activity-chart');
     if (!ctx) return;
-    var dataEl = document.getElementById('activity-chart-data');
-    if (!dataEl) return;
     var chartData;
-    try { chartData = JSON.parse(dataEl.textContent); } catch (_) { return; }
+    try {
+        chartData = {
+            labels: JSON.parse(ctx.getAttribute('data-chart-labels') || '[]'),
+            counts: JSON.parse(ctx.getAttribute('data-chart-counts') || '[]')
+        };
+    } catch (_) { return; }
     new Chart(ctx, {
         type: 'bar',
         data: {
