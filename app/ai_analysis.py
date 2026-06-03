@@ -10,7 +10,7 @@ import httpx
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from app.models import Trade, TradeAnalysis
+from app.models import Trade, TradeAnalysis, Wallet
 from app import settings
 
 logger = logging.getLogger(__name__)
@@ -167,12 +167,11 @@ def build_trade_context(trade: Trade, db: Session) -> Dict[str, Any]:
     else:
         wallet_bias = "balanced YES/NO history"
 
-    # Market price spread as proxy for uncertainty
     price_range = float(market_all.max_price or 0) - float(market_all.min_price or 0)
     market_conviction = "high conviction" if price_range < 0.15 else ("split" if price_range < 0.35 else "wide disagreement")
 
     return {
-        "trade_value": round(this_value, 2),
+        "trade_value": round(float(this_value), 2),
         "market_yes_pct": market_yes_pct,
         "market_sentiment": market_sentiment,
         "market_total_trades": market_total,
@@ -293,7 +292,6 @@ def _parse_response(text: str) -> Dict[str, Any]:
         elif upper.startswith("VERDICT:"):
             result["verdict"] = stripped[8:].strip()
 
-    # Fallback: if signal missing but text contains clear keywords, infer
     if result["signal"] is None and text:
         lc = text.lower()
         if "contrarian" in lc:
@@ -313,34 +311,59 @@ def _parse_response(text: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _analyze_with_anthropic(trade: Trade, ctx: Dict[str, Any], model: str) -> Optional[Dict[str, Any]]:
-    prompt = _build_prompt(trade, ctx)
+    """Call Claude via the official Anthropic SDK with prompt caching on the system prompt."""
     try:
-        with httpx.Client(timeout=30) as client:
-            resp = client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": settings.ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "max_tokens": 400,
-                    "temperature": 0.1,
-                    "system": _SYSTEM_PROMPT,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-            )
-        if resp.status_code == 200:
-            content_blocks = resp.json().get("content", [])
-            text = " ".join(b.get("text", "") for b in content_blocks if b.get("type") == "text").strip()
-            parsed = _parse_response(text)
-            parsed["provider"] = f"Claude ({model})"
-            parsed["model_version"] = model
-            return parsed
-        logger.warning("Anthropic API returned %d: %s", resp.status_code, resp.text[:200])
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model=model,
+            max_tokens=400,
+            temperature=0.1,
+            system=[
+                {
+                    "type": "text",
+                    "text": _SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": _build_prompt(trade, ctx)}],
+        )
+        text = "".join(
+            block.text for block in response.content if hasattr(block, "text")
+        ).strip()
+        parsed = _parse_response(text)
+        parsed["provider"] = f"Claude ({model})"
+        parsed["model_version"] = model
+        return parsed
     except Exception as e:
         logger.warning("Anthropic analysis failed: %s", e)
+    return None
+
+
+def _summarize_with_anthropic(prompt: str, model: str) -> Optional[str]:
+    """Call Claude for a wallet summary with prompt caching on the system instruction."""
+    _summary_system = "You are a prediction market analyst. Be concrete and analytical. No caveats or hedging."
+    try:
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model=model,
+            max_tokens=200,
+            temperature=0.2,
+            system=[
+                {
+                    "type": "text",
+                    "text": _summary_system,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return "".join(
+            block.text for block in response.content if hasattr(block, "text")
+        ).strip() or None
+    except Exception as e:
+        logger.warning("Anthropic summary failed: %s", e)
     return None
 
 
@@ -395,7 +418,7 @@ def _analyze_with_huggingface(trade: Trade, ctx: Dict[str, Any], model: str) -> 
 
 
 # ---------------------------------------------------------------------------
-# Persistent DB cache
+# Persistent DB cache — individual trade analysis
 # ---------------------------------------------------------------------------
 
 def _load_cached_analysis(trade_id: str, db: Session) -> Optional[Dict[str, Any]]:
@@ -403,7 +426,6 @@ def _load_cached_analysis(trade_id: str, db: Session) -> Optional[Dict[str, Any]
     row = db.query(TradeAnalysis).filter(TradeAnalysis.trade_id == trade_id).first()
     if row is None:
         return None
-    # Check TTL
     if row.created_at:
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=settings.AI_CACHE_TTL_HOURS)
         if row.created_at < cutoff:
@@ -463,6 +485,34 @@ def _save_analysis_to_db(trade_id: str, result: Dict[str, Any], ctx: Dict[str, A
 
 
 # ---------------------------------------------------------------------------
+# Wallet summary cache — stored on Wallet row
+# ---------------------------------------------------------------------------
+
+_WALLET_SUMMARY_TTL_HOURS = 24
+
+
+def _load_cached_wallet_summary(wallet: Wallet) -> Optional[str]:
+    if not wallet.ai_summary or not wallet.ai_summary_at:
+        return None
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=_WALLET_SUMMARY_TTL_HOURS)
+    if wallet.ai_summary_at < cutoff:
+        return None
+    return wallet.ai_summary
+
+
+def _save_wallet_summary(wallet_address: str, summary: str, db: Session) -> None:
+    try:
+        wallet = db.query(Wallet).filter(Wallet.address == wallet_address).first()
+        if wallet:
+            wallet.ai_summary = summary
+            wallet.ai_summary_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.commit()
+    except Exception:
+        logger.exception("Failed to save wallet AI summary for %s", wallet_address)
+        db.rollback()
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -507,9 +557,21 @@ def analyze_trade(trade: Trade, db: Session) -> Optional[Dict[str, Any]]:
 
 
 def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Optional[str]:
-    """Generate a plain-text summary of recent trades for wallet-level analysis."""
+    """Generate a plain-text summary of recent trades for wallet-level analysis.
+
+    Result is cached on the Wallet row for _WALLET_SUMMARY_TTL_HOURS hours.
+    """
     if not trades:
         return None
+
+    # Check wallet-level cache first
+    wallet_address = trades[0].wallet_address
+    if db:
+        wallet = db.query(Wallet).filter(Wallet.address == wallet_address).first()
+        if wallet:
+            cached = _load_cached_wallet_summary(wallet)
+            if cached:
+                return cached
 
     candidates = _detect_provider_candidates()
     if not candidates:
@@ -519,7 +581,6 @@ def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Opti
         f"- {t.side} ${t.price:.4f} × {t.size:.2f} on {(t.market_title or t.condition_id)[:50]} ({t.traded_at.strftime('%Y-%m-%d')})"
         for t in trades[:15]
     ]
-    system_prompt = "You are a prediction market analyst. Be concrete and analytical. No caveats or hedging."
     prompt = (
         "Summarize this wallet's recent trading pattern in 2-3 sentences. "
         "Focus on market concentration, directional bias, and any notable positioning.\n\n"
@@ -527,27 +588,10 @@ def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Opti
     )
 
     for provider, model in candidates:
+        summary: Optional[str] = None
         try:
             if provider == "anthropic":
-                with httpx.Client(timeout=20) as client:
-                    resp = client.post(
-                        "https://api.anthropic.com/v1/messages",
-                        headers={
-                            "x-api-key": settings.ANTHROPIC_API_KEY,
-                            "anthropic-version": "2023-06-01",
-                            "content-type": "application/json",
-                        },
-                        json={
-                            "model": model,
-                            "max_tokens": 200,
-                            "temperature": 0.2,
-                            "system": system_prompt,
-                            "messages": [{"role": "user", "content": prompt}],
-                        },
-                    )
-                if resp.status_code == 200:
-                    content_blocks = resp.json().get("content", [])
-                    return " ".join(b.get("text", "") for b in content_blocks if b.get("type") == "text").strip()
+                summary = _summarize_with_anthropic(prompt, model)
             elif provider == "ollama":
                 with httpx.Client(timeout=45) as client:
                     resp = client.post(
@@ -555,7 +599,7 @@ def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Opti
                         json={"model": model, "prompt": prompt, "stream": False},
                     )
                 if resp.status_code == 200:
-                    return resp.json().get("response", "").strip()
+                    summary = resp.json().get("response", "").strip() or None
             elif provider == "huggingface" and settings.HUGGINGFACE_API_KEY:
                 with httpx.Client(timeout=30) as client:
                     resp = client.post(
@@ -569,9 +613,16 @@ def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Opti
                 if resp.status_code == 200:
                     result = resp.json()
                     if isinstance(result, list) and result:
-                        return result[0].get("generated_text", "").strip()
+                        summary = result[0].get("generated_text", "").strip() or None
         except Exception as e:
             logger.warning("Trade summary failed via %s: %s", provider, e)
+            continue
+
+        if summary:
+            if db:
+                _save_wallet_summary(wallet_address, summary, db)
+            return summary
+
     return None
 
 
@@ -580,6 +631,17 @@ def invalidate_cache(trade_id: str, db: Session) -> bool:
     row = db.query(TradeAnalysis).filter(TradeAnalysis.trade_id == trade_id).first()
     if row:
         db.delete(row)
+        db.commit()
+        return True
+    return False
+
+
+def invalidate_wallet_summary(wallet_address: str, db: Session) -> bool:
+    """Clear the cached wallet summary so it will be regenerated next time."""
+    wallet = db.query(Wallet).filter(Wallet.address == wallet_address).first()
+    if wallet and wallet.ai_summary:
+        wallet.ai_summary = None
+        wallet.ai_summary_at = None
         db.commit()
         return True
     return False

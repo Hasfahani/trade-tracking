@@ -3,7 +3,7 @@
 SQLite compatibility changes are applied by app.db.run_schema_migrations.
 """
 
-from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
@@ -25,6 +25,8 @@ class Wallet(Base):
     last_refresh_count = Column(Integer, nullable=True)
     last_error_at = Column(DateTime, nullable=True)
     last_error_message = Column(Text, nullable=True)
+    ai_summary = Column(Text, nullable=True)
+    ai_summary_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -41,8 +43,8 @@ class Trade(Base):
     condition_id = Column(String(255), nullable=False, index=True)
     market_title = Column(Text, nullable=True)
     side = Column(String(3), nullable=False)
-    price = Column(Float, nullable=False)
-    size = Column(Float, nullable=False)
+    price = Column(Numeric(18, 6, asdecimal=False), nullable=False)
+    size = Column(Numeric(18, 6, asdecimal=False), nullable=False)
     traded_at = Column(DateTime, nullable=False)
     inserted_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

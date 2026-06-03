@@ -51,6 +51,13 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # Database
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -132,12 +139,22 @@ RETENTION_METRICS_ENABLED: bool = os.getenv("RETENTION_METRICS_ENABLED", "true")
 
 # AI Analysis — Anthropic Claude (preferred), Ollama (local), or HuggingFace
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = _env_str("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+ANTHROPIC_MODEL = _env_str("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral:latest").strip() or None
 OLLAMA_TIMEOUT_SECONDS = _env_float("OLLAMA_TIMEOUT_SECONDS", 60.0)
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 AI_CACHE_TTL_HOURS = _env_int("AI_CACHE_TTL_HOURS", 72)
+
+# Rate limiting — applied to expensive endpoints (AI analysis, wallet refresh)
+AI_RATE_LIMIT = _env_str("AI_RATE_LIMIT", "20/minute")
+REFRESH_RATE_LIMIT = _env_str("REFRESH_RATE_LIMIT", "10/minute")
+
+# Scheduled auto-refresh — set interval > 0 to enable background wallet polling
+AUTO_REFRESH_INTERVAL_MINUTES = _env_int("AUTO_REFRESH_INTERVAL_MINUTES", 0)
+AUTO_REFRESH_MAX_WALLETS = _env_int("AUTO_REFRESH_MAX_WALLETS", 50)
+AUTO_REFRESH_ALLOW_MULTI_WORKER = _env_bool("AUTO_REFRESH_ALLOW_MULTI_WORKER", False)
+WEB_CONCURRENCY = _env_int("WEB_CONCURRENCY", _env_int("UVICORN_WORKERS", 1))
 
 
 def ai_provider_configured() -> bool:

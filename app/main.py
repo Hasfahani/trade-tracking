@@ -10,6 +10,8 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -18,8 +20,13 @@ from app import retention
 from app import settings as app_settings
 from app.csrf import csrf_middleware, get_csrf_token
 from app.db import SessionLocal, check_database_ready, init_db, prune_old_sync_events
+from app.limiter import limiter
 from app.routes import router
-from app.settings import APP_NAME, APP_VERSION, GIT_COMMIT, DASHBOARD_PASSWORD, LOG_LEVEL, RETENTION_METRICS_ENABLED, SESSION_SECRET_KEY
+from app.settings import (
+    APP_NAME, APP_VERSION, GIT_COMMIT, DASHBOARD_PASSWORD, LOG_LEVEL,
+    RETENTION_METRICS_ENABLED, SESSION_SECRET_KEY,
+)
+
 
 
 _request_id_context: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
@@ -124,8 +131,35 @@ async def lifespan(app: FastAPI):
     if RETENTION_METRICS_ENABLED:
         await retention.start_drain()
 
+    scheduler = None
+    if _should_start_auto_refresh_scheduler():
+        try:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            scheduler = AsyncIOScheduler()
+            scheduler.add_job(
+                _run_auto_refresh_job,
+                "interval",
+                args=[app],
+                minutes=app_settings.AUTO_REFRESH_INTERVAL_MINUTES,
+                id="auto_refresh_wallets",
+                max_instances=1,
+                coalesce=True,
+                replace_existing=True,
+            )
+            scheduler.start()
+            logger.info(
+                "Auto-refresh scheduler started interval_minutes=%d max_wallets=%d",
+                app_settings.AUTO_REFRESH_INTERVAL_MINUTES,
+                app_settings.AUTO_REFRESH_MAX_WALLETS,
+            )
+        except Exception:
+            logger.exception("Failed to start auto-refresh scheduler — continuing without it")
+
     logger.info("HTTP server ready; database initialising in background")
     yield
+
+    if scheduler and scheduler.running:
+        scheduler.shutdown(wait=False)
 
     task = app.state.startup_task
     if task and not task.done():
@@ -137,6 +171,27 @@ async def lifespan(app: FastAPI):
 
     if RETENTION_METRICS_ENABLED:
         await retention.stop_drain()
+
+
+def _should_start_auto_refresh_scheduler() -> bool:
+    """Return whether this process should run the in-app scheduler."""
+    if app_settings.AUTO_REFRESH_INTERVAL_MINUTES <= 0:
+        return False
+    if app_settings.WEB_CONCURRENCY > 1 and not app_settings.AUTO_REFRESH_ALLOW_MULTI_WORKER:
+        logger.warning(
+            "Auto-refresh disabled because WEB_CONCURRENCY=%d. Set AUTO_REFRESH_ALLOW_MULTI_WORKER=true only if duplicate jobs are acceptable.",
+            app_settings.WEB_CONCURRENCY,
+        )
+        return False
+    return True
+
+
+async def _run_auto_refresh_job(app: FastAPI) -> None:
+    """Run auto-refresh only after startup has marked the app ready."""
+    if not getattr(app.state, "ready", False):
+        logger.info("Auto-refresh skipped; app is not ready yet")
+        return
+    await asyncio.to_thread(_auto_refresh_wallets)
 
 
 def _database_label() -> str:
@@ -174,6 +229,44 @@ def _run_startup_maintenance() -> None:
         db.close()
     except Exception:
         logger.exception("Startup maintenance failed — continuing anyway")
+
+
+def _auto_refresh_wallets() -> None:
+    """Background job: refresh active non-archived wallets up to AUTO_REFRESH_MAX_WALLETS."""
+    from app.models import Wallet
+    from app.ingest import refresh_wallet
+    from app.settings import DEFAULT_REFRESH_LIMIT
+    try:
+        db = SessionLocal()
+        wallets = (
+            db.query(Wallet)
+            .filter(Wallet.is_archived != 1)
+            .order_by(Wallet.last_checked_at.asc().nullsfirst())
+            .limit(app_settings.AUTO_REFRESH_MAX_WALLETS)
+            .all()
+        )
+        db.close()
+        if not wallets:
+            return
+        logger.info("Auto-refresh: starting for %d wallets", len(wallets))
+        for wallet in wallets:
+            db2 = None
+            try:
+                db2 = SessionLocal()
+                result = refresh_wallet(wallet.address, db2, limit=DEFAULT_REFRESH_LIMIT)
+                logger.info(
+                    "Auto-refresh: wallet=%s inserted=%d fetched=%d",
+                    wallet.address[:10],
+                    result.get("inserted_count", 0),
+                    result.get("fetched_count", 0),
+                )
+            except Exception:
+                logger.exception("Auto-refresh: failed for wallet=%s", wallet.address[:10])
+            finally:
+                if db2 is not None:
+                    db2.close()
+    except Exception:
+        logger.exception("Auto-refresh job failed")
 
 
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -363,6 +456,8 @@ def create_app(
     app = FastAPI(title=title or APP_NAME, lifespan=lifespan_context)
     app.state.ready = False
     app.state.startup_error = None
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(GZipMiddleware, minimum_size=500)
     app.middleware("http")(request_logging_middleware)
     app.middleware("http")(security_headers_middleware)

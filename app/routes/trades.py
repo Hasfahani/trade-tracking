@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 
 from app import ai_analysis, retention as ret, settings, view_helpers as vh
 from app.db import get_db
+from app.limiter import limiter
 from app.models import Trade, Wallet
 from app.routes._shared import normalized_date_filters, paginated_query, resolve_wallet, sanitize_search, validated_date_preset, templates
-from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, RETENTION_METRICS_ENABLED
+from app.settings import APP_NAME, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, RETENTION_METRICS_ENABLED, AI_RATE_LIMIT
 
 router = APIRouter()
 
@@ -237,7 +238,8 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
 
 
 @router.get("/api/trades/{trade_id}/ai-analysis")
-def get_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
+@limiter.limit(AI_RATE_LIMIT)
+def get_trade_ai_analysis(request: Request, trade_id: str, db: Session = Depends(get_db)):
     """Get AI-powered analysis of a trade. Provider priority: Claude > Ollama > HuggingFace."""
     trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
     if not trade:
@@ -272,7 +274,8 @@ def get_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/api/trades/{trade_id}/ai-analysis/invalidate")
-def invalidate_trade_ai_analysis(trade_id: str, db: Session = Depends(get_db)):
+@limiter.limit(AI_RATE_LIMIT)
+def invalidate_trade_ai_analysis(request: Request, trade_id: str, db: Session = Depends(get_db)):
     """Remove the cached AI analysis so it will be re-analyzed on next request."""
     trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
     if not trade:

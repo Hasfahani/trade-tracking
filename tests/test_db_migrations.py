@@ -127,13 +127,13 @@ def test_postgres_compat_migrations_add_missing_columns_once():
         def __init__(self):
             self.columns = {
                 "wallets": {"address", "created_at"},
-                "trades": {"trade_id", "wallet_address"},
+                "trades": {"trade_id", "wallet_address", "price", "size"},
                 "sync_events": {"status", "created_at"},
                 "app_settings": {"id"},
             }
             self.types = {
                 "wallets": {"is_pinned": "boolean", "is_archived": "boolean"},
-                "trades": {"alert_sent": "integer"},
+                "trades": {"alert_sent": "integer", "price": "double precision", "size": "double precision"},
                 "sync_events": {"duplicate_count": "integer", "duration_ms": "integer"},
                 "app_settings": {"alerts_enabled": "boolean"},
             }
@@ -164,7 +164,9 @@ def test_postgres_compat_migrations_add_missing_columns_once():
                     self.columns.setdefault(table_name, set()).add(column_name)
                 if "ALTER COLUMN" in statement:
                     column_name = parts[5]
-                    self.types.setdefault(table_name, {})[column_name] = "integer"
+                    self.types.setdefault(table_name, {})[column_name] = (
+                        "numeric" if "NUMERIC(18,6)" in statement else "integer"
+                    )
                 return _FakeResult(None)
             raise AssertionError(f"Unexpected SQL: {statement}")
 
@@ -192,10 +194,14 @@ def test_postgres_compat_migrations_add_missing_columns_once():
     run_schema_migrations(fake_engine, database_url="postgresql+psycopg://example")
 
     expected_column_count = sum(len(cols) for cols in POSTGRES_COMPAT_COLUMNS.values())
-    expected_type_conversions = 3
+    expected_type_conversions = 5
     assert len(first_run_alters) == expected_column_count + expected_type_conversions
     assert len(fake_engine.conn.alters) == expected_column_count + expected_type_conversions
     converted = [
         statement for statement in fake_engine.conn.alters if "ALTER COLUMN" in statement and "TYPE INTEGER" in statement
     ]
-    assert len(converted) == expected_type_conversions
+    numeric_upgrades = [
+        statement for statement in fake_engine.conn.alters if "ALTER COLUMN" in statement and "NUMERIC(18,6)" in statement
+    ]
+    assert len(converted) == 3
+    assert len(numeric_upgrades) == 2

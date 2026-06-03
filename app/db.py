@@ -229,6 +229,17 @@ def _migrate_trades_condition_traded_at_index(conn) -> None:
         )
 
 
+def _migrate_wallet_ai_summary_columns(conn) -> None:
+    _add_missing_columns(
+        conn,
+        "wallets",
+        {
+            "ai_summary": "TEXT",
+            "ai_summary_at": "DATETIME",
+        },
+    )
+
+
 SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("001_wallet_compat_columns", _migrate_wallet_columns),
     ("002_sync_event_columns", _migrate_sync_event_columns),
@@ -239,6 +250,7 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("007_retention_indexes", _migrate_retention_indexes),
     ("008_trade_analysis_table", _migrate_trade_analysis_table),
     ("009_trades_condition_traded_at_index", _migrate_trades_condition_traded_at_index),
+    ("010_wallet_ai_summary_columns", _migrate_wallet_ai_summary_columns),
 )
 
 
@@ -274,6 +286,8 @@ POSTGRES_COMPAT_COLUMNS: Dict[str, ColumnSpec] = {
         "last_error_at": "TIMESTAMP",
         "last_error_message": "TEXT",
         "updated_at": "TIMESTAMP",
+        "ai_summary": "TEXT",
+        "ai_summary_at": "TIMESTAMP",
     },
     "trades": {
         "alert_sent": "INTEGER NOT NULL DEFAULT 0",
@@ -336,6 +350,17 @@ def _normalize_postgres_integer_columns(conn) -> None:
         logger.info("Migration: converted %s.%s from boolean to integer", table_name, column_name)
 
 
+def _upgrade_postgres_numeric_columns(conn) -> None:
+    """Upgrade price and size columns from DOUBLE PRECISION to NUMERIC(18,6) on PostgreSQL."""
+    for col in ("price", "size"):
+        current_type = _postgres_column_type(conn, "trades", col)
+        if current_type and current_type.lower() in ("double precision", "real", "float"):
+            conn.exec_driver_sql(
+                f"ALTER TABLE trades ALTER COLUMN {col} TYPE NUMERIC(18,6) USING {col}::NUMERIC(18,6)"
+            )
+            logger.info("Migration: upgraded trades.%s from %s to NUMERIC(18,6)", col, current_type)
+
+
 def _ensure_postgres_compat_columns(target_engine: Engine) -> None:
     with target_engine.begin() as conn:
         for table_name, expected_columns in POSTGRES_COMPAT_COLUMNS.items():
@@ -345,6 +370,7 @@ def _ensure_postgres_compat_columns(target_engine: Engine) -> None:
                 conn.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
                 logger.info("Migration: added column %s.%s (%s)", table_name, column_name, column_type)
         _normalize_postgres_integer_columns(conn)
+        _upgrade_postgres_numeric_columns(conn)
 
 
 def run_schema_migrations(

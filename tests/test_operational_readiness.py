@@ -159,6 +159,33 @@ def test_auth_enabled_protected_route_redirects_without_session_error(monkeypatc
     assert response.headers["location"] == "/login?next=/wallets"
 
 
+def test_auto_refresh_scheduler_disabled_with_multiple_workers(monkeypatch):
+    import app.main as main_mod
+
+    monkeypatch.setattr(main_mod.app_settings, "AUTO_REFRESH_INTERVAL_MINUTES", 30)
+    monkeypatch.setattr(main_mod.app_settings, "WEB_CONCURRENCY", 2)
+    monkeypatch.setattr(main_mod.app_settings, "AUTO_REFRESH_ALLOW_MULTI_WORKER", False)
+
+    assert main_mod._should_start_auto_refresh_scheduler() is False
+
+
+def test_auto_refresh_job_skips_until_app_ready(monkeypatch):
+    import app.main as main_mod
+
+    called = {"value": False}
+
+    def fake_refresh():
+        called["value"] = True
+
+    monkeypatch.setattr(main_mod, "_auto_refresh_wallets", fake_refresh)
+    app = create_app(lifespan_context=None, csrf_enabled=False)
+    app.state.ready = False
+
+    main_mod.asyncio.run(main_mod._run_auto_refresh_job(app))
+
+    assert called["value"] is False
+
+
 def test_production_auth_with_weak_session_secret_raises():
     import app.auth as auth_mod
     import app.main as main_mod
