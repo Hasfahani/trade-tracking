@@ -17,6 +17,10 @@ from app.models import AppSettings, Base, SyncEvent, Trade, Wallet
 
 @pytest.fixture()
 def client_and_session():
+    return _build_client_and_session()
+
+
+def _build_client_and_session():
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -238,3 +242,44 @@ class TestFullJSONBackup:
         assert payload["counts"]["app_settings"] == 1
         assert payload["tables"]["wallets"][0]["address"] == address
         assert payload["tables"]["trades"][0]["trade_id"] == "exp-yes"
+
+
+class TestFullJSONImport:
+    def test_import_page_renders(self, client_and_session):
+        client, _ = client_and_session
+
+        resp = client.get("/admin/import-backup")
+
+        assert resp.status_code == 200
+        assert "Import Backup" in resp.text
+        assert "Upload JSON Backup" in resp.text
+
+    def test_import_backup_inserts_rows_and_skips_duplicates(self, client_and_session):
+        client, sf = client_and_session
+        _seed(sf)
+        payload = client.get("/admin/backup.json").json()
+
+        empty_client, empty_sf = _build_client_and_session()
+        upload = {
+            "backup_file": (
+                "backup.json",
+                json.dumps(payload).encode("utf-8"),
+                "application/json",
+            )
+        }
+
+        first = empty_client.post("/admin/import-backup", files=upload)
+        second = empty_client.post("/admin/import-backup", files=upload)
+
+        assert first.status_code == 200
+        assert "Inserted 5 new rows" in first.text
+        assert second.status_code == 200
+        assert "Inserted 0 new rows" in second.text
+        db = empty_sf()
+        try:
+            assert db.query(Wallet).count() == 1
+            assert db.query(Trade).count() == 2
+            assert db.query(SyncEvent).count() == 1
+            assert db.query(AppSettings).count() == 1
+        finally:
+            db.close()

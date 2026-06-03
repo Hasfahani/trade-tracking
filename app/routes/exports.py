@@ -6,18 +6,55 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.backup import build_backup
+from app.backup import build_backup, import_backup_payload
 from app import view_helpers as vh
 from app.db import get_db
 from app.models import Trade, Wallet
+from app.settings import APP_NAME
 from app.routes._shared import normalized_date_filters, resolve_wallet
+from app.routes._shared import templates
 
 _BOM = "\ufeff"
 router = APIRouter()
+
+
+@router.get("/admin/import-backup", summary="Import full JSON backup", tags=["exports"])
+async def import_backup_form(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "import_backup.html",
+        {"request": request, "app_name": APP_NAME, "summary": None, "error": None},
+    )
+
+
+@router.post("/admin/import-backup", summary="Import full JSON backup", tags=["exports"])
+async def import_full_backup(
+    request: Request,
+    backup_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        raw = await backup_file.read()
+        if len(raw) > 25 * 1024 * 1024:
+            raise ValueError("Backup file is too large.")
+        payload = json.loads(raw.decode("utf-8"))
+        summary = import_backup_payload(db, payload)
+        error = None
+    except Exception as exc:
+        db.rollback()
+        summary = None
+        error = str(exc)
+
+    return templates.TemplateResponse(
+        request,
+        "import_backup.html",
+        {"request": request, "app_name": APP_NAME, "summary": summary, "error": error},
+        status_code=400 if error else 200,
+    )
 
 
 @router.get("/admin/backup.json", summary="Export full JSON backup", tags=["exports"])

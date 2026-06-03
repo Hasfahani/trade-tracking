@@ -5,27 +5,16 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, datetime
 from pathlib import Path
 
-from sqlalchemy import Date, DateTime, create_engine
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.backup import BACKUP_FORMAT_VERSION, BACKUP_MODELS  # noqa: E402
+from app.backup import BACKUP_MODELS, import_backup_payload, validate_backup_payload  # noqa: E402
 from app.models import Base  # noqa: E402
 from app.settings import DATABASE_URL  # noqa: E402
-
-IMPORT_BATCH_SIZE = 250
-
-CONFLICT_KEYS = {
-    "wallets": ["address"],
-    "trades": ["trade_id"],
-    "trade_analysis": ["trade_id"],
-}
-
 
 def _engine(url: str):
     if url.startswith("sqlite"):
@@ -35,45 +24,6 @@ def _engine(url: str):
     elif url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     return create_engine(url)
-
-
-def _parse_value(column, value):
-    if value is None:
-        return None
-    if isinstance(column.type, DateTime):
-        return datetime.fromisoformat(value)
-    if isinstance(column.type, Date):
-        return date.fromisoformat(value)
-    return value
-
-
-def _prepare_rows(model, rows):
-    columns = {column.name: column for column in model.__table__.columns}
-    prepared = []
-    for row in rows:
-        prepared.append(
-            {
-                name: _parse_value(columns[name], value)
-                for name, value in row.items()
-                if name in columns
-            }
-        )
-    return prepared
-
-
-def _conflict_keys(model):
-    return CONFLICT_KEYS.get(
-        model.__tablename__,
-        [column.name for column in model.__table__.primary_key.columns],
-    )
-
-
-def _insert_statement(engine, model, rows):
-    if engine.dialect.name == "postgresql":
-        return pg_insert(model).values(rows).on_conflict_do_nothing(index_elements=_conflict_keys(model))
-    if engine.dialect.name == "sqlite":
-        return sqlite_insert(model).values(rows).on_conflict_do_nothing(index_elements=_conflict_keys(model))
-    raise RuntimeError(f"Unsupported database dialect: {engine.dialect.name}")
 
 
 def main() -> None:
@@ -89,12 +39,10 @@ def main() -> None:
     args = parser.parse_args()
 
     payload = json.loads(Path(args.backup).read_text(encoding="utf-8"))
-    if payload.get("format") != "polysignal.backup":
-        raise SystemExit("Not a PolySignal backup file.")
-    if payload.get("format_version") != BACKUP_FORMAT_VERSION:
-        raise SystemExit(f"Unsupported backup format version: {payload.get('format_version')}")
-
-    tables = payload.get("tables") or {}
+    try:
+        tables = validate_backup_payload(payload)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
     counts = {model.__tablename__: len(tables.get(model.__tablename__, [])) for model in BACKUP_MODELS}
     print(f"Backup: {args.backup}")
     print(f"Target: {args.database_url}")
@@ -109,24 +57,18 @@ def main() -> None:
 
     engine = _engine(args.database_url)
     Base.metadata.create_all(bind=engine)
+    session = sessionmaker(bind=engine)()
 
-    inserted_total = 0
-    with engine.begin() as conn:
-        for model in BACKUP_MODELS:
-            table_name = model.__tablename__
-            rows = _prepare_rows(model, tables.get(table_name, []))
-            if not rows:
-                print(f"{table_name}: 0 rows")
-                continue
-            inserted = 0
-            for index in range(0, len(rows), IMPORT_BATCH_SIZE):
-                batch = rows[index : index + IMPORT_BATCH_SIZE]
-                result = conn.execute(_insert_statement(engine, model, batch))
-                inserted += result.rowcount or 0
-            inserted_total += inserted
-            print(f"{table_name}: {len(rows)} read, {inserted} inserted, {len(rows) - inserted} skipped")
+    try:
+        summary = import_backup_payload(session, payload)
+    finally:
+        session.close()
 
-    print(f"Done. Inserted {inserted_total} rows.")
+    for table_name, count in summary.table_counts.items():
+        inserted = summary.inserted_counts.get(table_name, 0)
+        print(f"{table_name}: {count} read, {inserted} inserted, {count - inserted} skipped")
+
+    print(f"Done. Inserted {summary.inserted_total} rows.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,75 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Import Backup{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Admin</p>
+        <h1>Import Backup</h1>
+        <p class="subtle">Restore wallets, trades, sync history, settings, retention data, and AI cache rows from a PolySignal JSON backup.</p>
+    </div>
+    <div class="hero-actions">
+        <a href="/admin/backup.json" class="btn btn-small">Download backup</a>
+        <a href="/admin/ops-ui" class="btn btn-small">Ops</a>
+    </div>
+</section>
+
+{% if error %}
+<section class="flash flash-danger">
+    <strong>Import failed.</strong> {{ error }}
+</section>
+{% endif %}
+
+{% if summary %}
+<section class="flash flash-success">
+    <strong>Import complete.</strong> Inserted {{ summary.inserted_total }} new rows. Existing rows were skipped.
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Import Summary</h2>
+        <span class="pill success">{{ summary.inserted_total }} inserted</span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Table</th>
+                    <th>Read</th>
+                    <th>Inserted</th>
+                    <th>Skipped</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for table, count in summary.table_counts.items() %}
+                {% set inserted = summary.inserted_counts.get(table, 0) %}
+                <tr>
+                    <td>{{ table }}</td>
+                    <td>{{ count }}</td>
+                    <td>{{ inserted }}</td>
+                    <td>{{ count - inserted }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="section-head">
+        <h2>Upload JSON Backup</h2>
+        <span class="pill">Duplicates skipped</span>
+    </div>
+    <form method="post" action="/admin/import-backup" enctype="multipart/form-data" class="grid-form">
+        <label>
+            Backup file
+            <input type="file" name="backup_file" accept="application/json,.json" required>
+        </label>
+        <div class="form-actions">
+            <button type="submit" class="btn">Import backup</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
