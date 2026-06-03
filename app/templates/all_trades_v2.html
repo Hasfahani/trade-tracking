@@ -3,11 +3,11 @@
 {% block title %}All Trades{% endblock %}
 
 {% block content %}
-<section class="hero-card">
+<section class="hero-card hero-trades">
     <div class="hero-copy">
         <p class="eyebrow">Global view</p>
         <h1>All stored trades</h1>
-        <p class="subtle">Unified search across all tracked wallets from local SQLite data.</p>
+        <p class="subtle">Search the full trade archive, isolate market exposure, and export filtered views in seconds.</p>
     </div>
     <div class="hero-actions">
         <a href="/all-trades/export?side={{ side or '' }}&market_search={{ market_search or '' }}&date_from={{ date_from or '' }}&date_to={{ date_to or '' }}&date_preset={{ date_preset or '' }}&wallet_search={{ wallet_search or '' }}&sort_by={{ sort_by or 'time_desc' }}" class="btn btn-primary" target="_blank" rel="noreferrer">Export CSV</a>

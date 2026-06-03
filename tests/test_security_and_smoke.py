@@ -102,6 +102,8 @@ def test_admin_ops_returns_200_with_expected_keys():
     assert "build" in data
     assert "version" in data["build"]
     assert "commit" in data["build"]
+    assert "table_counts" in data
+    assert "wallets" in data["table_counts"]
 
 
 def test_admin_schema_version_returns_applied_list():
@@ -147,6 +149,18 @@ def test_weak_session_secret_in_production_with_auth_raises():
         create_app(lifespan_context=None, csrf_enabled=False)
 
     monkeypatch.undo()
+
+
+def test_production_without_dashboard_password_raises(monkeypatch):
+    import app.auth as auth_mod
+    import app.main as main_mod
+
+    monkeypatch.setattr(auth_mod, "DASHBOARD_PASSWORD", None)
+    monkeypatch.setattr(main_mod.app_settings, "IS_PRODUCTION", True)
+    monkeypatch.setattr(main_mod.app_settings, "SESSION_SECRET_KEY", "x" * 40)
+
+    with pytest.raises(RuntimeError, match="DASHBOARD_PASSWORD must be set"):
+        create_app(lifespan_context=None, csrf_enabled=False)
 
 
 def test_strong_session_secret_in_production_starts_without_error(monkeypatch):

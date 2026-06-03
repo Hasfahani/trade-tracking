@@ -83,10 +83,31 @@ python scripts/init_db.py
 PowerShell:
 - ./start_dev.ps1
 - ./start_server.ps1
+- ./start_public_free.ps1
 
 Batch:
 - ./start_dev.bat
 - ./start_server.bat
+- ./start_public_free.bat
+
+Free public access after Railway trial:
+- See [FREE_HOSTING.md](FREE_HOSTING.md)
+- Recommended no-payment option: run locally and expose via a Cloudflare Tunnel
+- This preserves the default local SQLite database in `data/app.db`
+
+Render deployment:
+- See [RENDER_DEPLOY.md](RENDER_DEPLOY.md)
+- Use the included `render.yaml` Blueprint with Render Postgres
+- Do not rely on SQLite storage on Render free web services
+
+Docker deployment:
+- See [DOCKER_DEPLOY.md](DOCKER_DEPLOY.md)
+- Use `docker compose up --build` for a local Postgres-backed stack
+
+Full JSON backup:
+- Download `/admin/backup.json` while logged in
+- Or run `python scripts/export_backup.py`
+- Restore with `python scripts/import_backup.py backups/YOUR_BACKUP.json --dry-run`, then re-run with `--yes`
 
 Direct uvicorn:
 
@@ -143,9 +164,10 @@ All configuration is read from environment variables at startup.
 | APP_NAME | PolySignal | App title in UI. |
 | APP_ENV | development | Environment label. production enables production-oriented cookie defaults. |
 | LOG_LEVEL | INFO | Python log level. |
+| PUBLIC_BASE_URL | Render external URL when available | Canonical external app URL used for sitemap links. |
 | HOST | 0.0.0.0 | Server bind address. |
 | PORT | 8000 | Server port. |
-| DATABASE_URL | sqlite:///./data/trades.db | SQLAlchemy URL. SQLite and PostgreSQL are supported. |
+| DATABASE_URL | sqlite:///./data/app.db | SQLAlchemy URL. SQLite and PostgreSQL are supported. |
 | STARTUP_DB_MAX_ATTEMPTS | 3 | Startup DB retry attempts before degraded readiness. |
 | STARTUP_DB_RETRY_SECONDS | 1.0 | Delay between startup DB retries. |
 

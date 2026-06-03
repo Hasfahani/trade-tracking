@@ -128,6 +128,37 @@ def test_request_id_is_returned_and_preserved_from_header():
     assert response.headers["X-Request-ID"] == "test-request-123"
 
 
+def test_public_base_url_drives_robots_and_sitemap(monkeypatch):
+    import app.routes.core as core_mod
+
+    monkeypatch.setattr(core_mod, "PUBLIC_BASE_URL", "https://polysignal.onrender.com")
+    app = create_app(lifespan_context=None, csrf_enabled=False)
+    client = TestClient(app, raise_server_exceptions=False)
+
+    robots = client.get("/robots.txt")
+    sitemap = client.get("/sitemap.xml")
+
+    assert robots.status_code == 200
+    assert "Sitemap: https://polysignal.onrender.com/sitemap.xml" in robots.text
+    assert "<loc>https://polysignal.onrender.com/wallets</loc>" in sitemap.text
+
+
+def test_auth_enabled_protected_route_redirects_without_session_error(monkeypatch):
+    import app.auth as auth_mod
+    import app.routes.auth as auth_route_mod
+
+    monkeypatch.setattr(auth_mod, "DASHBOARD_PASSWORD", "correct-password")
+    monkeypatch.setattr(auth_route_mod, "DASHBOARD_PASSWORD", "correct-password")
+    app = create_app(lifespan_context=None, csrf_enabled=False)
+    app.state.ready = True
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/wallets", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/login?next=/wallets"
+
+
 def test_production_auth_with_weak_session_secret_raises():
     import app.auth as auth_mod
     import app.main as main_mod

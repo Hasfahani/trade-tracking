@@ -84,7 +84,7 @@ def get_status_counters() -> dict:
 
 
 # Paths that do NOT require authentication (login page itself, static assets)
-_PUBLIC_PATHS = frozenset({"/login", "/logout", "/healthz", "/readyz"})
+_PUBLIC_PATHS = frozenset({"/login", "/logout", "/healthz", "/readyz", "/robots.txt", "/sitemap.xml"})
 _READINESS_TIMEOUT_SECONDS = 3.0
 
 
@@ -363,6 +363,13 @@ def create_app(
     app = FastAPI(title=title or APP_NAME, lifespan=lifespan_context)
     app.state.ready = False
     app.state.startup_error = None
+    app.add_middleware(GZipMiddleware, minimum_size=500)
+    app.middleware("http")(request_logging_middleware)
+    app.middleware("http")(security_headers_middleware)
+    app.middleware("http")(auth_middleware)
+    app.middleware("http")(readiness_gate_middleware)
+    if csrf_enabled:
+        app.middleware("http")(csrf_middleware)
     app.add_middleware(
         SessionMiddleware,
         secret_key=SESSION_SECRET_KEY,
@@ -371,13 +378,6 @@ def create_app(
         https_only=app_settings.SESSION_COOKIE_SECURE,
         max_age=60 * 60 * 8,
     )
-    app.add_middleware(GZipMiddleware, minimum_size=500)
-    app.middleware("http")(request_logging_middleware)
-    app.middleware("http")(security_headers_middleware)
-    app.middleware("http")(auth_middleware)
-    app.middleware("http")(readiness_gate_middleware)
-    if csrf_enabled:
-        app.middleware("http")(csrf_middleware)
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
     app.include_router(router)
     app.add_exception_handler(HTTPException, http_exception_handler)
@@ -400,7 +400,7 @@ def _validate_runtime_configuration() -> None:
         else:
             logger.warning("%s; sessions are not production-hardened", message)
     if app_settings.IS_PRODUCTION and not auth.auth_enabled():
-        logger.warning("DASHBOARD_PASSWORD is not set; production deployment will be publicly accessible")
+        raise RuntimeError("DASHBOARD_PASSWORD must be set before starting a production deployment.")
 
 
 app = create_app()

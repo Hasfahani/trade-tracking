@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 def _read_git_commit() -> str:
     """Return the current git commit SHA, preferring the env var set at build/deploy time."""
-    commit = os.getenv("GIT_COMMIT", "").strip()
+    commit = (os.getenv("GIT_COMMIT") or os.getenv("RENDER_GIT_COMMIT") or "").strip()
     if commit:
         return commit
     try:
@@ -69,8 +69,18 @@ APP_NAME = _env_str("APP_NAME", "PolySignal")
 GIT_COMMIT = _read_git_commit()
 APP_VERSION = _env_str("APP_VERSION", GIT_COMMIT if GIT_COMMIT != "unknown" else "dev")
 LOG_LEVEL = _env_str("LOG_LEVEL", "INFO").upper()
-APP_ENV = _env_str("APP_ENV", os.getenv("RAILWAY_ENVIRONMENT", "development")).lower()
-IS_PRODUCTION = APP_ENV in {"production", "prod"} or bool(os.getenv("RAILWAY_ENVIRONMENT"))
+_platform_env_default = "production" if (os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT")) else "development"
+APP_ENV = _env_str("APP_ENV", _platform_env_default).lower()
+IS_PRODUCTION = APP_ENV in {"production", "prod"} or bool(os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT"))
+PUBLIC_BASE_URL = (
+    os.getenv("PUBLIC_BASE_URL")
+    or os.getenv("RENDER_EXTERNAL_URL")
+    or ""
+).rstrip("/")
+RUNTIME_PLATFORM = _env_str(
+    "RUNTIME_PLATFORM",
+    "render" if os.getenv("RENDER") else "railway" if os.getenv("RAILWAY_ENVIRONMENT") else "docker" if os.getenv("DOCKER_CONTAINER") else "local",
+)
 
 # Server runtime
 HOST = os.getenv("HOST", "0.0.0.0")
@@ -94,8 +104,8 @@ DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip() or None
 DEFAULT_SESSION_SECRET_KEY = "change-me-in-production-use-a-long-random-secret"
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", DEFAULT_SESSION_SECRET_KEY)
 
-# Cookie/security behavior. Railway terminates TLS before forwarding to the app,
-# so production defaults should emit Secure cookies even though uvicorn sees HTTP.
+# Cookie/security behavior. Hosted platforms terminate TLS before forwarding to
+# the app, so production defaults should emit Secure cookies even if uvicorn sees HTTP.
 SESSION_COOKIE_NAME = _env_str("SESSION_COOKIE_NAME", "polysignal_session")
 SESSION_COOKIE_SECURE = _env_str(
     "SESSION_COOKIE_SECURE",

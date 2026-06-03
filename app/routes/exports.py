@@ -1,6 +1,7 @@
 """CSV export routes."""
 import csv
 import io
+import json
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.backup import build_backup
 from app import view_helpers as vh
 from app.db import get_db
 from app.models import Trade, Wallet
@@ -16,6 +18,21 @@ from app.routes._shared import normalized_date_filters, resolve_wallet
 
 _BOM = "\ufeff"
 router = APIRouter()
+
+
+@router.get("/admin/backup.json", summary="Export full JSON backup", tags=["exports"])
+async def export_full_backup(db: Session = Depends(get_db)):
+    payload = build_backup(db)
+    body = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    filename = f"polysignal_backup_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    return StreamingResponse(
+        iter([body]),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Backup-Checksum-SHA256": payload["checksum_sha256"],
+        },
+    )
 
 
 @router.get("/wallets/export", summary="Export wallets as CSV", tags=["exports"])

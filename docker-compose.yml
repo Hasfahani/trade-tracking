@@ -1,38 +1,73 @@
-version: '3.8'
-
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        PYTHON_VERSION: "3.11"
+        GIT_COMMIT: ${GIT_COMMIT:-local}
+    image: polysignal:local
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"
     environment:
-      - DATABASE_URL=sqlite:///./data/trades.db
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-admin}
-      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY:-dev-secret-key-change-in-prod}
-      # AI provider — set one of these for AI analysis
-      # Claude (recommended — fastest, highest quality):
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
-      # Hugging Face (alternative cloud provider):
-      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY:-}
-      # Tuning
-      - AI_CACHE_TTL_HOURS=${AI_CACHE_TTL_HOURS:-72}
-      - OLLAMA_TIMEOUT_SECONDS=${OLLAMA_TIMEOUT_SECONDS:-60}
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PORT: 8000
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://polysignal:polysignal@db:5432/polysignal}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-change-this-password}
+      SESSION_SECRET_KEY: ${SESSION_SECRET_KEY:-change-this-session-secret-to-32-plus-characters}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      STARTUP_DB_MAX_ATTEMPTS: ${STARTUP_DB_MAX_ATTEMPTS:-20}
+      STARTUP_DB_RETRY_SECONDS: ${STARTUP_DB_RETRY_SECONDS:-2}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      AI_CACHE_TTL_HOURS: ${AI_CACHE_TTL_HOURS:-72}
     depends_on:
-      - ollama
+      db:
+        condition: service_healthy
     volumes:
-      - ./data:/app/data
-      - ./app:/app/app
+      - app-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "scripts/container_healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-polysignal}
+      POSTGRES_USER: ${POSTGRES_USER:-polysignal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-polysignal}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   ollama:
     image: ollama/ollama:latest
+    profiles:
+      - ai-local
+    restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama-data:/root/.ollama
     environment:
-      - OLLAMA_HOST=0.0.0.0:11434
+      OLLAMA_HOST: 0.0.0.0:11434
 
 volumes:
+  app-data:
+  postgres-data:
   ollama-data:

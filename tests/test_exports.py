@@ -1,6 +1,7 @@
 """Tests for CSV export routes in app/routes/exports.py."""
 import csv
 import io
+import json
 from datetime import datetime, timezone
 
 import pytest
@@ -11,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db import get_db
 from app.main import create_app
-from app.models import Base, Trade, Wallet
+from app.models import AppSettings, Base, SyncEvent, Trade, Wallet
 
 
 @pytest.fixture()
@@ -71,6 +72,17 @@ def _seed(session_factory):
         ),
     ]
     db.add_all(trades)
+    db.add(
+        SyncEvent(
+            wallet_address=wallet.address,
+            status="success",
+            fetched_count=2,
+            inserted_count=2,
+            duplicate_count=0,
+            duration_ms=123,
+        )
+    )
+    db.add(AppSettings(id=1, telegram_chat_id="123", alert_min_size=10.0, alerts_enabled=1))
     db.commit()
     address = wallet.address
     db.close()
@@ -198,3 +210,31 @@ class TestAllTradesCSVExport:
         assert resp.status_code == 200
         lines = [l for l in resp.text.lstrip("﻿").splitlines() if l]
         assert len(lines) == 1
+
+
+class TestFullJSONBackup:
+    def test_backup_returns_downloadable_json_with_checksum(self, client_and_session):
+        client, sf = client_and_session
+        _seed(sf)
+
+        resp = client.get("/admin/backup.json")
+
+        assert resp.status_code == 200
+        assert "application/json" in resp.headers["content-type"]
+        assert "attachment" in resp.headers["content-disposition"]
+        assert len(resp.headers["X-Backup-Checksum-SHA256"]) == 64
+
+    def test_backup_contains_all_core_tables_and_counts(self, client_and_session):
+        client, sf = client_and_session
+        address = _seed(sf)
+
+        payload = json.loads(client.get("/admin/backup.json").text)
+
+        assert payload["format"] == "polysignal.backup"
+        assert payload["format_version"] == 1
+        assert payload["counts"]["wallets"] == 1
+        assert payload["counts"]["trades"] == 2
+        assert payload["counts"]["sync_events"] == 1
+        assert payload["counts"]["app_settings"] == 1
+        assert payload["tables"]["wallets"][0]["address"] == address
+        assert payload["tables"]["trades"][0]["trade_id"] == "exp-yes"

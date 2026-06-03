@@ -35,8 +35,11 @@
     <header class="site-header">
         <div class="nav-shell">
             <div class="brand-block">
-                <a href="/wallets" class="brand">{{ app_name or "PolySignal" }}</a>
-                <p class="brand-subtitle">Manual refresh watchlist. Pages read from local {{ db_backend | upper }} only.</p>
+                <a href="/dashboard" class="brand">
+                    <span class="brand-mark" aria-hidden="true"></span>
+                    <span>{{ app_name or "PolySignal" }}</span>
+                </a>
+                <p class="brand-subtitle">Polymarket wallet intelligence from your {{ db_backend | upper }} store.</p>
             </div>
             <button class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="top-nav">
                 <span></span>
@@ -45,12 +48,12 @@
             </button>
             <nav class="top-nav" id="top-nav">
                 {% set _path = request.url.path if request is defined else '' %}
-                <a href="/dashboard" {% if _path == '/dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
-                <a href="/wallets" {% if _path.startswith('/wallets') %}class="active" aria-current="page"{% endif %}>Wallets</a>
-                <a href="/all-trades" {% if _path.startswith('/all-trades') or _path.startswith('/trades/') %}class="active" aria-current="page"{% endif %}>All Trades</a>
-                <a href="/admin/sync-status" {% if _path.startswith('/admin/sync') %}class="active" aria-current="page"{% endif %}>Sync</a>
-                <a href="/admin/ops-ui" {% if _path.startswith('/admin/ops') %}class="active" aria-current="page"{% endif %}>Ops</a>
-                <a href="/settings" {% if _path == '/settings' %}class="active" aria-current="page"{% endif %}>Settings</a>
+                <a href="/dashboard" {% if _path == '/dashboard' %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">D</span>Dashboard</a>
+                <a href="/wallets" {% if _path.startswith('/wallets') %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">W</span>Wallets</a>
+                <a href="/all-trades" {% if _path.startswith('/all-trades') or _path.startswith('/trades/') %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">T</span>Trades</a>
+                <a href="/admin/sync-status" {% if _path.startswith('/admin/sync') %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">S</span>Sync</a>
+                <a href="/admin/ops-ui" {% if _path.startswith('/admin/ops') %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">O</span>Ops</a>
+                <a href="/settings" {% if _path == '/settings' %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">G</span>Settings</a>
             </nav>
         </div>
     </header>

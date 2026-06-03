@@ -3,11 +3,11 @@
 {% block title %}Wallets{% endblock %}
 
 {% block content %}
-<section class="hero-card">
+<section class="hero-card hero-wallets">
     <div class="hero-copy">
         <p class="eyebrow">Watchlist</p>
         <h1>Tracked wallets</h1>
-        <p class="subtle">A focused wallet trade watchlist for manual refresh, local storage, and fast review.</p>
+        <p class="subtle">Refresh, inspect, tag, and triage every wallet without leaving the watchlist workflow.</p>
     </div>
     <div class="hero-actions">
         <div class="stats-strip">
@@ -57,7 +57,7 @@
         <h2>Add wallet</h2>
         <span class="pill">Address format: 0x + 40 hex characters</span>
     </div>
-    <form method="post" action="/wallets" class="grid-form">
+    <form method="post" action="/wallets" class="grid-form add-wallet-form">
         <label>
             Wallet address
             <input type="text" name="address" required placeholder="0x1234..." value="{{ form_address or '' }}" autocomplete="off" spellcheck="false">

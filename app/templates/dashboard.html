@@ -3,13 +3,16 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<section class="hero-card">
+<section class="hero-card hero-dashboard">
     <div class="hero-copy">
         <p class="eyebrow">Overview</p>
-        <h1>Dashboard</h1>
-        <p class="subtle">Status, value, and recent activity in one place. Start here before refreshing or drilling into trades.</p>
+        <h1>Command center</h1>
+        <p class="subtle">Monitor watchlist health, trade flow, value concentration, and the next move from one fast console.</p>
     </div>
     <div class="hero-actions">
+        <div class="market-pulse" aria-label="Stored trade pulse">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
         <div class="hero-actions-row">
             <a href="/wallets" class="btn btn-small">Manage wallets</a>
             <a href="/all-trades" class="btn btn-small">Open all trades</a>
@@ -22,7 +25,7 @@
     </div>
 </section>
 
-<section class="metrics-grid dashboard-metrics">
+<section class="metrics-grid dashboard-metrics executive-strip">
     <article class="metric-card">
         <span class="metric-label">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align:middle;margin-right:5px;opacity:0.6"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.5"/><circle cx="6" cy="6" r="2" fill="currentColor"/></svg>
@@ -173,8 +176,8 @@
             style="max-height: 160px; width: 100%;"
             aria-label="Trades over the last 7 days"
             role="img"
-            data-chart-labels="{{ activity_days | map(attribute='label') | list | tojson | e }}"
-            data-chart-counts="{{ activity_days | map(attribute='count') | list | tojson | e }}"
+            data-chart-labels='{{ activity_days | map(attribute="label") | list | tojson | e }}'
+            data-chart-counts='{{ activity_days | map(attribute="count") | list | tojson | e }}'
         ></canvas>
     </article>
 

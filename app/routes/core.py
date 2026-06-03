@@ -8,10 +8,11 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app import retention as ret
+from app.backup import BACKUP_MODELS
 from app.db import check_database_ready, get_db, get_applied_migration_versions
 from app.models import SyncEvent, Trade, Wallet
 from app.queries import get_dashboard_stats
-from app.settings import APP_NAME, APP_ENV, APP_VERSION, GIT_COMMIT, IS_PRODUCTION, RETENTION_METRICS_ENABLED
+from app.settings import APP_NAME, APP_ENV, APP_VERSION, GIT_COMMIT, IS_PRODUCTION, PUBLIC_BASE_URL, RETENTION_METRICS_ENABLED, RUNTIME_PLATFORM
 from app import view_helpers as vh
 from app.routes._shared import templates
 
@@ -39,6 +40,9 @@ async def healthz(request: Request):
             "app": APP_NAME,
             "env": APP_ENV,
             "production": IS_PRODUCTION,
+            "platform": RUNTIME_PLATFORM,
+            "version": APP_VERSION,
+            "commit": GIT_COMMIT,
             "ready": bool(getattr(request.app.state, "ready", False)),
         },
         status_code=200,
@@ -104,6 +108,16 @@ def _get_ai_cache_stats(db) -> dict:
         return {"cached_analyses": 0}
 
 
+def _get_table_counts(db) -> dict:
+    counts = {}
+    for model in BACKUP_MODELS:
+        try:
+            counts[model.__tablename__] = int(db.query(model).count())
+        except Exception:
+            counts[model.__tablename__] = None
+    return counts
+
+
 @router.get("/admin/ops")
 async def ops_diagnostics(request: Request, db: Session = Depends(get_db)):
     """One-click operational diagnostics: db ping, migration status, last sync, build info, AI status."""
@@ -145,9 +159,10 @@ async def ops_diagnostics(request: Request, db: Session = Depends(get_db)):
         "migrations_applied": len(applied_migrations),
         "migrations_pending": pending,
         "last_sync": last_sync,
-        "build": {"version": APP_VERSION, "commit": GIT_COMMIT, "env": APP_ENV},
+        "build": {"version": APP_VERSION, "commit": GIT_COMMIT, "env": APP_ENV, "platform": RUNTIME_PLATFORM},
         "ready": bool(getattr(request.app.state, "ready", False)),
         "counters": _get_status_counters(),
+        "table_counts": _get_table_counts(db),
         "ai": {**ai_info, **ai_cache},
     })
 
@@ -232,6 +247,7 @@ async def ops_ui(request: Request):
 
 @router.get("/robots.txt")
 async def robots_txt():
+    sitemap_base_url = PUBLIC_BASE_URL.rstrip("/")
     return PlainTextResponse(
         "\n".join(
             [
@@ -239,7 +255,7 @@ async def robots_txt():
                 "Allow: /",
                 "Disallow: /admin/",
                 "Disallow: /settings",
-                "Sitemap: https://trade-tracking-production.up.railway.app/sitemap.xml",
+                f"Sitemap: {sitemap_base_url}/sitemap.xml" if sitemap_base_url else "Sitemap: /sitemap.xml",
             ]
         )
         + "\n"
@@ -248,7 +264,7 @@ async def robots_txt():
 
 @router.get("/sitemap.xml")
 async def sitemap_xml(request: Request):
-    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    base_url = PUBLIC_BASE_URL or f"{request.url.scheme}://{request.url.netloc}"
     urls = [
         "/",
         "/dashboard",
