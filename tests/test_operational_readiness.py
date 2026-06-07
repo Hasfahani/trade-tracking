@@ -100,6 +100,33 @@ def test_startup_retries_transient_database_failures(monkeypatch):
     assert response.status_code == 200
 
 
+def test_startup_maintenance_seeds_wallets_when_enabled(monkeypatch):
+    import app.main as main_mod
+
+    called = {"seed": False, "prune": False}
+
+    class FakeDb:
+        def close(self):
+            pass
+
+    def fake_seed(db):
+        called["seed"] = True
+        return {"added": 8, "updated": 0, "total": 8}
+
+    def fake_prune(db, keep_days):
+        called["prune"] = True
+        return 0
+
+    monkeypatch.setattr(main_mod.app_settings, "STARTUP_SEED_WALLETS", True)
+    monkeypatch.setattr(main_mod, "SessionLocal", lambda: FakeDb())
+    monkeypatch.setattr(main_mod, "prune_old_sync_events", fake_prune)
+    monkeypatch.setattr("app.watchlist_seed.seed_watchlist_wallets", fake_seed)
+
+    main_mod._run_startup_maintenance()
+
+    assert called == {"seed": True, "prune": True}
+
+
 def test_startup_degrades_instead_of_crashing_after_database_failures(monkeypatch):
     import app.main as main_mod
 

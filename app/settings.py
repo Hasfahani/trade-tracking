@@ -126,6 +126,7 @@ CSRF_COOKIE_SECURE = _env_str(
 # Startup/readiness tuning
 STARTUP_DB_MAX_ATTEMPTS = _env_int("STARTUP_DB_MAX_ATTEMPTS", 3)
 STARTUP_DB_RETRY_SECONDS = _env_float("STARTUP_DB_RETRY_SECONDS", 1.0)
+STARTUP_SEED_WALLETS = _env_bool("STARTUP_SEED_WALLETS", True)
 
 # Connection pool tuning (PostgreSQL only; SQLite uses StaticPool/NullPool)
 DB_POOL_SIZE = _env_int("DB_POOL_SIZE", 5)

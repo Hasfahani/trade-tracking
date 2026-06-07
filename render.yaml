@@ -18,6 +18,8 @@ services:
         value: "10"
       - key: STARTUP_DB_RETRY_SECONDS
         value: "2"
+      - key: STARTUP_SEED_WALLETS
+        value: "true"
       - key: SESSION_SECRET_KEY
         generateValue: true
       - key: DASHBOARD_PASSWORD

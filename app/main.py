@@ -223,6 +223,17 @@ def _run_startup_maintenance() -> None:
     """Run lightweight once-per-startup housekeeping tasks."""
     try:
         db = SessionLocal()
+        if app_settings.STARTUP_SEED_WALLETS:
+            from app.watchlist_seed import seed_watchlist_wallets
+
+            seed_result = seed_watchlist_wallets(db)
+            if seed_result["added"] or seed_result["updated"]:
+                logger.info(
+                    "Startup maintenance: seeded wallets added=%d updated=%d total=%d",
+                    seed_result["added"],
+                    seed_result["updated"],
+                    seed_result["total"],
+                )
         removed = prune_old_sync_events(db, keep_days=90)
         if removed:
             logger.info("Startup maintenance: pruned %d old sync events", removed)
