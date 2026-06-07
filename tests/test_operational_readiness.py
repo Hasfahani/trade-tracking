@@ -103,11 +103,17 @@ def test_startup_retries_transient_database_failures(monkeypatch):
 def test_startup_maintenance_seeds_wallets_when_enabled(monkeypatch):
     import app.main as main_mod
 
-    called = {"seed": False, "prune": False}
+    called = {"seed": False, "prune": False, "commit": False, "rollback": False, "close": False}
 
     class FakeDb:
+        def commit(self):
+            called["commit"] = True
+
+        def rollback(self):
+            called["rollback"] = True
+
         def close(self):
-            pass
+            called["close"] = True
 
     def fake_seed(db):
         called["seed"] = True
@@ -124,7 +130,7 @@ def test_startup_maintenance_seeds_wallets_when_enabled(monkeypatch):
 
     main_mod._run_startup_maintenance()
 
-    assert called == {"seed": True, "prune": True}
+    assert called == {"seed": True, "prune": True, "commit": True, "rollback": False, "close": True}
 
 
 def test_startup_degrades_instead_of_crashing_after_database_failures(monkeypatch):

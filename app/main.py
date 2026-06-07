@@ -221,6 +221,7 @@ def _initialize_database_with_retries() -> bool:
 
 def _run_startup_maintenance() -> None:
     """Run lightweight once-per-startup housekeeping tasks."""
+    db = None
     try:
         db = SessionLocal()
         if app_settings.STARTUP_SEED_WALLETS:
@@ -237,9 +238,14 @@ def _run_startup_maintenance() -> None:
         removed = prune_old_sync_events(db, keep_days=90)
         if removed:
             logger.info("Startup maintenance: pruned %d old sync events", removed)
-        db.close()
+        db.commit()
     except Exception:
+        if db is not None:
+            db.rollback()
         logger.exception("Startup maintenance failed — continuing anyway")
+    finally:
+        if db is not None:
+            db.close()
 
 
 def _auto_refresh_wallets() -> None:
