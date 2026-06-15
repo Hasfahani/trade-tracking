@@ -1,3 +1,4 @@
+// Adds browser behavior for the login page.
 document.querySelector('form').addEventListener('submit', function () {
     var btn = this.querySelector('.login-submit');
     if (btn && !btn.disabled) {

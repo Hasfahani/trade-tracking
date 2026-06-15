@@ -1,64 +1,66 @@
+<!-- Introduces PolySignal and explains how to run it. -->
 # PolySignal
 
-PolySignal is a focused FastAPI dashboard for tracking Polymarket wallet activity.
-It stores watched wallets and fetched trades locally, then gives you fast
-server-rendered views for wallet review, trade filtering, alerts, exports, and
-operational diagnostics.
+PolySignal is a private FastAPI dashboard for tracking Polymarket wallet
+activity. It keeps a watchlist of wallets, imports their public trades into a
+local database, and gives you fast server-rendered pages for review, filtering,
+alerts, exports, backups, operational checks, and optional AI-assisted analysis.
 
-The app is designed for a simple operating model:
+It is built for a simple workflow:
 
-- Add Polymarket wallet addresses to a watchlist.
-- Refresh one wallet, all active wallets, or a full trade history on demand.
-- Review the stored data from SQLite or PostgreSQL-backed pages.
-- Optionally enable scheduled refreshes, Telegram alerts, and AI-assisted trade
-  analysis.
+1. Add wallets you want to monitor.
+2. Refresh one wallet, all active wallets, or historical data on demand.
+3. Review trades, wallet behavior, market exposure, and signal scores.
+4. Export, back up, or alert on the data you care about.
 
-## What It Does
+## Highlights
 
 - Wallet watchlist with labels, tags, notes, pinning, archiving, editing, and
   deletion.
-- Wallet import/export through CSV.
-- Manual wallet refresh from the Polymarket public data API.
-- Optional background auto-refresh scheduler controlled by environment
-  variables.
-- Dashboard with activity, top wallets, top markets, recent trades, refresh
-  health, and retention summaries.
-- Wallet detail pages with trade statistics, activity timelines, market
-  breakdowns, and optional AI wallet summaries.
-- Wallet-specific and global trade views with pagination, sorting, filtering,
-  date presets, side filters, market search, wallet search, and CSV export.
-- Trade detail pages with related trades and optional AI trade analysis.
-- Telegram alert settings, alert test action, and alert dispatch for newly
-  imported trades.
-- Sync status history, duplicate detection, and duplicate cleanup tooling.
-- Full JSON backup export/import for moving or restoring app data.
-- Health, readiness, schema, and operations endpoints for deployment checks.
+- CSV wallet import/export.
+- Manual and optional scheduled refreshes from the Polymarket public data API.
+- Dashboard summaries for activity, top wallets, top markets, recent trades,
+  refresh health, retention, and signal model stats.
+- Wallet detail pages with statistics, timelines, market breakdowns, trade
+  history, and optional AI summaries.
+- Global and wallet-specific trade views with pagination, sorting, filtering,
+  date presets, side filters, wallet search, market search, and CSV export.
+- Trade detail pages with related trades, signal model context, and optional AI
+  analysis.
+- Local notable-trade scoring model with numpy-only inference in the running
+  app.
+- Admin model-training UI and scripts for local-only TensorFlow training.
+- Telegram alert settings, test alerts, and notifications for newly imported
+  trades.
+- Sync status history, duplicate detection, duplicate cleanup, and operational
+  diagnostics.
+- Full JSON backup export/import for database moves and restores.
+- Health, readiness, schema, sitemap, robots, and operations endpoints.
 - Optional password protection, CSRF protection, rate limiting, security
   headers, request IDs, and structured production logging.
-- Lightweight built-in schema compatibility migrations for SQLite and
-  PostgreSQL.
+- SQLite by default, PostgreSQL supported for hosted or multi-user deployments.
 
 ## What It Is Not
 
-- It is not a copy-trading bot.
-- It does not execute trades.
+- It is not a trading bot.
+- It does not execute, recommend, or automate trades.
 - It does not call external APIs while rendering normal pages.
-- It does not require a separate frontend build step.
-- It is not a full accounting system; trade values and simple YES/NO summaries
-  are review aids, not financial statements.
+- It does not require a frontend build pipeline.
+- It is not an accounting system. Trade values and YES/NO summaries are review
+  aids, not financial statements.
 
 ## Tech Stack
 
 - Python 3.10+
-- FastAPI
+- FastAPI, Starlette, Jinja2
 - SQLAlchemy
 - SQLite by default, PostgreSQL supported
-- Jinja2 templates
-- Server-rendered HTML, CSS, and small JavaScript helpers
-- httpx for Polymarket API access
-- SlowAPI for selected rate limits
+- Server-rendered HTML, CSS, and lightweight JavaScript
+- httpx for Polymarket and provider API calls
+- SlowAPI for selected route limits
 - APScheduler for optional auto-refresh
-- Anthropic, Ollama, or HuggingFace for optional AI analysis
+- numpy for local signal inference
+- Optional Anthropic, Ollama, or Hugging Face analysis providers
 
 ## Quick Start
 
@@ -83,43 +85,86 @@ Open:
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### Command Line Refresh
+### Refresh From the Command Line
 
 ```powershell
 python refresh_now.py
 ```
 
-This refreshes all wallets from the command line without using the web UI.
+This refreshes all watched wallets without using the web UI.
 
-## First-Run Workflow
+## First Run
 
 1. Open `/wallets`.
 2. Add a Polymarket wallet address.
 3. Click `Refresh` for that wallet.
-4. Open the wallet or trade views to inspect stored activity.
-5. Check `/admin/sync-status` for refresh results and errors.
+4. Open the wallet detail page or `/all-trades` to inspect stored activity.
+5. Check `/admin/sync-status` for fetched, inserted, duplicate, skipped, and
+   error counts.
 
-## Launch Scripts
+## Common Commands
 
-PowerShell:
+```powershell
+# Start the development server
+.\start_dev.ps1
 
-- `.\start_dev.ps1`
-- `.\start_server.ps1`
-- `.\start_public_free.ps1`
+# Start with another port
+$env:PORT = "8010"
+.\start_dev.ps1
 
-Batch:
+# Initialize or migrate the database
+python scripts/init_db.py
 
-- `start_dev.bat`
-- `start_server.bat`
-- `start_public_free.bat`
+# Refresh all wallets
+python refresh_now.py
 
-Notes:
+# Export a JSON backup
+python scripts/export_backup.py
 
-- Launch scripts resolve Python from `venv`, `.venv`, or the active
-  interpreter.
-- Launch scripts respect the `PORT` environment variable.
-- The development launcher watches app and test files while excluding common
-  virtual environment and data directories.
+# Import a backup with a dry run first
+python scripts/import_backup.py backups/YOUR_BACKUP.json --dry-run
+python scripts/import_backup.py backups/YOUR_BACKUP.json --yes
+
+# Run tests
+pytest -q
+```
+
+## Project Structure
+
+```text
+app/
+  main.py              FastAPI app creation, middleware, lifespan, scheduler
+  settings.py          Environment configuration
+  db.py                Engine, sessions, schema initialization, migrations
+  models.py            SQLAlchemy models
+  ingest.py            Polymarket fetch, normalization, refresh, deduplication
+  ai_analysis.py       Local signal and optional LLM analysis integration
+  alerts.py            Telegram alert formatting and delivery
+  analytics.py         Dashboard and wallet analytics helpers
+  retention.py         Retention event logging and metrics
+  formatting.py        Template-safe formatting helpers
+  queries.py           Reusable trade and wallet query builders
+  ml/
+    features.py        Leakage-safe feature engineering
+    model.py           numpy-only model loading and inference
+    scoring.py         On-demand scoring for existing trades
+    train.py           Local-only training orchestration
+  routes/
+    auth.py            Login and logout
+    core.py            Dashboard, health, readiness, ops, sitemap
+    wallets.py         Wallet CRUD, refresh, import, AI wallet summary
+    trades.py          Trade lists, trade detail, AI trade analysis
+    exports.py         CSV exports and JSON backup import/export
+    alerts.py          Settings, sync status, admin refresh
+    retention.py       Retention metrics endpoint
+    _shared.py         Shared route helpers
+  templates/           Jinja2 pages
+  static/              CSS, JavaScript, favicon
+scripts/               Database, backup, migration, model, and utility scripts
+tests/                 Pytest coverage
+data/                  Local SQLite database and exported model weights
+backups/               Generated JSON backups
+```
 
 ## Runtime Configuration
 
@@ -134,8 +179,8 @@ All configuration is read from environment variables at startup.
 | `APP_ENV` | `development`, or hosted-platform production default | Runtime environment. |
 | `LOG_LEVEL` | `INFO` | Python log level. |
 | `PUBLIC_BASE_URL` | `RENDER_EXTERNAL_URL` or empty | Canonical external URL for sitemap output. |
-| `RUNTIME_PLATFORM` | auto-detected | `local`, `render`, `railway`, or `docker` style platform label. |
-| `HOST` | `0.0.0.0` | Server bind address used by scripts/deployment. |
+| `RUNTIME_PLATFORM` | auto-detected | Runtime label such as `local`, `render`, `railway`, or `docker`. |
+| `HOST` | `0.0.0.0` | Server bind address used by scripts and deployment. |
 | `PORT` | `8000` | Server port. |
 | `DATABASE_URL` | `sqlite:///./data/app.db` | SQLAlchemy database URL. SQLite and PostgreSQL are supported. |
 
@@ -156,14 +201,15 @@ All configuration is read from environment variables at startup.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `DASHBOARD_PASSWORD` | unset | Enables password login when set. Required in production. |
-| `SESSION_SECRET_KEY` | development default | Session signing secret. Change for any deployment. |
+| `SESSION_SECRET_KEY` | development default | Session signing secret. Set a strong value for deployment. |
 | `SESSION_COOKIE_NAME` | `polysignal_session` | Session cookie name. |
-| `SESSION_COOKIE_SECURE` | `true` in production, else `false` | Secure flag for session cookie. |
-| `CSRF_COOKIE_SECURE` | `true` in production, else `false` | Secure flag for CSRF cookie. |
+| `SESSION_COOKIE_SECURE` | `true` in production, else `false` | Secure flag for the session cookie. |
+| `CSRF_COOKIE_SECURE` | `true` in production, else `false` | Secure flag for the CSRF cookie. |
 
-Security behavior includes session middleware, CSRF middleware for forms,
-security headers, no-store caching for HTML, static asset caching, selected
-endpoint rate limits, login attempt throttling, and request ID headers.
+Security behavior includes session middleware, CSRF middleware for form posts,
+security headers, no-store caching for HTML, static asset caching, request IDs,
+selected endpoint rate limits, login throttling, and production-safe readiness
+checks.
 
 ### Pagination and Refresh
 
@@ -194,10 +240,17 @@ the in-app scheduler.
 | `AUTO_REFRESH_ALLOW_MULTI_WORKER` | `false` | Allow scheduler when multiple web workers are running. |
 | `WEB_CONCURRENCY` | `UVICORN_WORKERS` or `1` | Worker count used to guard duplicate scheduled jobs. |
 
-### AI Analysis
+## AI and Signal Model
 
-AI features are optional. Provider priority is Claude, then Ollama, then
-HuggingFace.
+PolySignal can explain trades in two ways:
+
+- A local notable-trade model scores trades from wallet history using
+  leakage-safe features and numpy-only inference.
+- Optional external providers can generate natural-language analysis when
+  configured.
+
+Provider priority for optional external analysis is Claude, then Ollama, then
+Hugging Face.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -206,7 +259,7 @@ HuggingFace.
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL. |
 | `OLLAMA_MODEL` | `mistral:latest` | Ollama model name. |
 | `OLLAMA_TIMEOUT_SECONDS` | `60.0` | Ollama request timeout. |
-| `HUGGINGFACE_API_KEY` | unset | Enables HuggingFace-backed analysis. |
+| `HUGGINGFACE_API_KEY` | unset | Enables Hugging Face-backed analysis. |
 | `AI_CACHE_TTL_HOURS` | `72` | AI cache freshness window. |
 | `AI_RATE_LIMIT` | `20/minute` | Rate limit for AI endpoints. |
 | `REFRESH_RATE_LIMIT` | `10/minute` | Configured refresh rate-limit value. |
@@ -214,7 +267,20 @@ HuggingFace.
 See [AI_SETUP.md](AI_SETUP.md) for provider setup notes and
 [AI_EXAMPLES.py](AI_EXAMPLES.py) for examples.
 
-### Telegram Alerts
+### Training the Local Model
+
+The running app does not import TensorFlow. Training is local-only and exports
+lightweight weights to `data/model_weights.json`.
+
+```powershell
+python scripts/train_model.py
+python scripts/score_all_trades.py
+```
+
+Use `/admin/train-model` to run training from the admin UI when local training
+dependencies are available.
+
+## Telegram Alerts
 
 Telegram settings are configured in `/settings` and stored in the
 `app_settings` database table:
@@ -222,19 +288,10 @@ Telegram settings are configured in `/settings` and stored in the
 - Bot token
 - Chat ID
 - Minimum trade size
-- Alerts enabled/disabled
+- Alerts enabled or disabled
 
-Alert credentials are stored in the database, so protect database access and
-filesystem permissions in deployments.
-
-### Retention Metrics
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `RETENTION_METRICS_ENABLED` | `true` | Enables event logging and retention metric endpoints. |
-
-Use `python scripts/backfill_retention.py` to compute daily/weekly retention
-summary tables from the raw event log.
+Alert credentials live in the database. Protect database access, backup files,
+and filesystem permissions in any deployment.
 
 ## Main Routes
 
@@ -256,6 +313,7 @@ summary tables from the raw event log.
 - `GET /admin/sync-status`
 - `GET /admin/ops-ui`
 - `GET /admin/import-backup`
+- `GET /admin/train-model`
 
 ### Actions and APIs
 
@@ -275,6 +333,7 @@ summary tables from the raw event log.
 - `POST /admin/refresh-all`
 - `POST /admin/sync-status/cleanup`
 - `POST /admin/import-backup`
+- `POST /admin/train-model`
 - `GET /api/last-sync`
 - `GET /api/wallets/{identifier}/ai-summary`
 - `GET /api/trades/{trade_id}/ai-analysis`
@@ -302,7 +361,7 @@ summary tables from the raw event log.
 
 Main tables:
 
-- `wallets`: watched wallet metadata and latest refresh state.
+- `wallets`: watched wallet metadata and refresh state.
 - `trades`: normalized Polymarket trade records keyed by unique `trade_id`.
 - `sync_events`: refresh status history, counts, duplicates, duration, and
   errors.
@@ -312,43 +371,16 @@ Main tables:
 - `retention_daily` and `retention_weekly`: precomputed retention summaries.
 - `schema_migrations`: applied lightweight migration versions.
 
-Important implementation notes:
+Important behavior:
 
-- Normal page rendering reads from the database.
+- Normal page rendering reads from the database only.
 - External Polymarket API calls happen in refresh flows and scheduler jobs.
-- Trade deduplication is based on `trade_id`; duplicate cleanup can also remove
+- Trade deduplication is based on `trade_id`; cleanup tooling can also remove
   semantic duplicates.
 - Startup applies compatibility migrations automatically.
 - Old sync events are pruned during startup maintenance.
 
-## Project Structure
-
-```text
-app/
-  main.py              FastAPI app factory, middleware, lifespan, scheduler
-  settings.py          Environment configuration
-  db.py                Engine, sessions, schema initialization, migrations
-  models.py            SQLAlchemy models
-  ingest.py            Polymarket fetch, normalization, refresh, duplicates
-  ai_analysis.py       Optional AI provider integration and cache logic
-  alerts.py            Telegram alert logic
-  analytics.py         Dashboard query helpers
-  retention.py         Retention event logging and summaries
-  routes/
-    auth.py            Login/logout
-    core.py            Dashboard, health, readiness, ops, sitemap
-    wallets.py         Wallet CRUD, refresh, import, AI summary
-    trades.py          Trade lists, detail, AI analysis
-    exports.py         CSV and JSON backup import/export
-    alerts.py          Settings, sync status, admin refresh
-    retention.py       Retention metrics endpoint
-  templates/           Jinja2 pages
-  static/              CSS, JavaScript, favicon
-scripts/               Database, backup, migration, retention, utility scripts
-tests/                 Pytest coverage
-```
-
-## Backups
+## Backups and Restore
 
 Export a full JSON backup while logged in:
 
@@ -356,7 +388,7 @@ Export a full JSON backup while logged in:
 /admin/backup.json
 ```
 
-Or from the command line:
+Or export from the command line:
 
 ```powershell
 python scripts/export_backup.py
@@ -384,20 +416,31 @@ local PostgreSQL-backed stack.
 
 ### Render
 
-See [RENDER_DEPLOY.md](RENDER_DEPLOY.md) and `render.yaml`.
+See [RENDER_DEPLOY.md](RENDER_DEPLOY.md) and [render.yaml](render.yaml).
 
 Use Render Postgres for persistent data. Do not rely on SQLite storage on Render
 free web services.
 
 ### Railway
 
-See [RAILWAY_SETUP.md](RAILWAY_SETUP.md) and `railway.json`.
+See [RAILWAY_SETUP.md](RAILWAY_SETUP.md) and [railway.json](railway.json).
 
 ### Free Public Access
 
 See [FREE_HOSTING.md](FREE_HOSTING.md). A simple no-payment option is running
 locally with the default SQLite database and exposing it through a Cloudflare
 Tunnel.
+
+## Production Checklist
+
+- Set `APP_ENV=production`.
+- Set `DASHBOARD_PASSWORD`.
+- Set a strong `SESSION_SECRET_KEY` with at least 32 characters.
+- Use PostgreSQL for hosted deployments.
+- Confirm `DATABASE_URL` is reachable.
+- Keep `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` behind HTTPS.
+- Protect `data/`, `backups/`, logs, and environment variables.
+- Check `/readyz`, `/healthz`, and `/admin/ops` after deploy.
 
 ## Testing
 
@@ -409,12 +452,14 @@ pytest -q
 
 Coverage includes:
 
-- App factory and middleware behavior
-- Authentication, CSRF, security headers, and smoke checks
+- App factory, lifespan, middleware, and readiness behavior
+- Authentication, CSRF, security headers, and rate-limit contracts
 - Wallet and trade route behavior
 - CSV export and backup behavior
 - Refresh, ingestion, sync status, duplicate handling, and alerts
-- AI analysis availability and caching behavior
+- AI analysis availability and caching
+- Local signal model feature engineering and numpy inference
+- Admin model-training guardrails
 - Retention metrics
 - Database migration idempotency
 - Guardrails that normal page renders do not trigger ingestion side effects
@@ -436,7 +481,8 @@ $env:PORT = "8010"
 ### No New Trades After Refresh
 
 - This can be valid when the upstream wallet has no new trade records.
-- Check `/admin/sync-status` for fetched, inserted, duplicate, and error counts.
+- Check `/admin/sync-status` for fetched, inserted, duplicate, skipped, and
+  error counts.
 
 ### Archived Wallets Missing
 
@@ -446,12 +492,18 @@ $env:PORT = "8010"
 
 - Verify outbound access to `https://data-api.polymarket.com`.
 - Check `/admin/sync-status` for timeout, rate-limit, or API errors.
-- Try a lower `limit` query value if refreshes are slow.
+- Try a lower refresh `limit` if refreshes are slow.
+
+### AI Analysis Is Unavailable
+
+- The local model requires `data/model_weights.json` before it can score.
+- External analysis requires at least one configured provider.
+- Use `debug_ollama.py` to check local Ollama reachability.
 
 ### Production Startup Fails
 
 - Set `DASHBOARD_PASSWORD`.
-- Set a strong `SESSION_SECRET_KEY` with at least 32 characters.
+- Set a strong `SESSION_SECRET_KEY`.
 - Confirm `DATABASE_URL` is reachable.
 - Check `/readyz` and `/admin/ops`.
 
@@ -466,4 +518,6 @@ Run PowerShell as Administrator to create or update the task.
 - Keep ordinary page rendering database-only.
 - Keep route helpers in `app/routes/_shared.py` when multiple route modules need
   the same behavior.
-- Prefer focused tests for route, migration, security, and ingestion changes.
+- Keep TensorFlow out of application imports and deployment requirements.
+- Prefer focused tests for route, migration, security, model, and ingestion
+  changes.

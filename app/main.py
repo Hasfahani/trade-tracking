@@ -1,3 +1,4 @@
+# Builds and starts the FastAPI app.
 import contextvars
 import asyncio
 import json
@@ -21,6 +22,7 @@ from app import settings as app_settings
 from app.csrf import csrf_middleware, get_csrf_token
 from app.db import SessionLocal, check_database_ready, init_db, prune_old_sync_events
 from app.limiter import limiter
+from app.ml.model import get_signal_model
 from app.routes import router
 from app.settings import (
     APP_NAME, APP_VERSION, GIT_COMMIT, DASHBOARD_PASSWORD, LOG_LEVEL,
@@ -101,6 +103,16 @@ async def lifespan(app: FastAPI):
     app.state.ready = False
     app.state.startup_error = None
     app.state.startup_task = None
+
+    # Optional ML scoring model â€” same pattern as the AI providers: load if
+    # the exported weights exist, otherwise run without scoring.
+    signal_model = get_signal_model()
+    app.state.signal_model = signal_model
+    if signal_model is not None:
+        logger.info("Signal model loaded trained_at=%s", signal_model.trained_at)
+    else:
+        logger.info("Signal model not available â€” notable_score scoring disabled")
+
     logger.info(
         "Application startup beginning env=%s production=%s database=%s auth_enabled=%s version=%s commit=%s",
         app_settings.APP_ENV,
@@ -153,7 +165,7 @@ async def lifespan(app: FastAPI):
                 app_settings.AUTO_REFRESH_MAX_WALLETS,
             )
         except Exception:
-            logger.exception("Failed to start auto-refresh scheduler — continuing without it")
+            logger.exception("Failed to start auto-refresh scheduler â€” continuing without it")
 
     logger.info("HTTP server ready; database initialising in background")
     yield
@@ -242,7 +254,7 @@ def _run_startup_maintenance() -> None:
     except Exception:
         if db is not None:
             db.rollback()
-        logger.exception("Startup maintenance failed — continuing anyway")
+        logger.exception("Startup maintenance failed â€” continuing anyway")
     finally:
         if db is not None:
             db.close()
@@ -270,12 +282,12 @@ def _auto_refresh_wallets() -> None:
             db2 = None
             try:
                 db2 = SessionLocal()
-                result = refresh_wallet(wallet.address, db2, limit=DEFAULT_REFRESH_LIMIT)
+                result = refresh_wallet(db2, wallet, limit=DEFAULT_REFRESH_LIMIT)
                 logger.info(
                     "Auto-refresh: wallet=%s inserted=%d fetched=%d",
                     wallet.address[:10],
-                    result.get("inserted_count", 0),
-                    result.get("fetched_count", 0),
+                    result.get("inserted", 0),
+                    result.get("fetched", 0),
                 )
             except Exception:
                 logger.exception("Auto-refresh: failed for wallet=%s", wallet.address[:10])
@@ -473,6 +485,7 @@ def create_app(
     app = FastAPI(title=title or APP_NAME, lifespan=lifespan_context)
     app.state.ready = False
     app.state.startup_error = None
+    app.state.signal_model = None
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -503,16 +516,19 @@ def create_app(
 
 
 def _validate_runtime_configuration() -> None:
+    if app_settings.IS_PRODUCTION and not auth.auth_enabled():
+        raise RuntimeError("DASHBOARD_PASSWORD must be set before starting a production deployment.")
+
     if app_settings.session_secret_is_weak():
         message = "SESSION_SECRET_KEY is weak or using the default value"
-        if app_settings.IS_PRODUCTION and auth.auth_enabled():
+        if app_settings.IS_PRODUCTION:
             raise RuntimeError(
                 f"{message}; set SESSION_SECRET_KEY to a random 32+ character string before starting production with authentication enabled."
             )
-        else:
+        if auth.auth_enabled():
             logger.warning("%s; sessions are not production-hardened", message)
-    if app_settings.IS_PRODUCTION and not auth.auth_enabled():
-        raise RuntimeError("DASHBOARD_PASSWORD must be set before starting a production deployment.")
+        else:
+            logger.debug("%s; local sessions are development-only", message)
 
 
 app = create_app()

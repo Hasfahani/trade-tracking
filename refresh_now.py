@@ -1,4 +1,5 @@
-﻿from app.db import SessionLocal
+# Refreshes trades for all saved wallets.
+from app.db import SessionLocal
 from app.models import Wallet
 from app.ingest import ingest_trades
 

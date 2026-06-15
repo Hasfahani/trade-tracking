@@ -1,4 +1,12 @@
-"""AI trade analysis — Claude (Anthropic), Ollama, or Hugging Face."""
+# Creates AI summaries and trade explanations.
+"""AI trade analysis.
+
+The app's own locally trained model (app/ml) is the default analyst: it
+needs no API keys and produces a structured, explainable analysis from the
+trade's signal score plus statistical context. External LLM providers
+(Claude, Ollama, Hugging Face) are an optional fallback for trades the
+local model cannot score.
+"""
 
 import json
 import logging
@@ -12,6 +20,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Trade, TradeAnalysis, Wallet
 from app import settings
+from app.ml.features import FEATURE_LABELS, MIN_PRIOR_TRADES
+from app.ml.model import effective_signal_threshold, get_signal_model
+from app.ml.scoring import prior_trade_count, score_trade
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +154,7 @@ def build_trade_context(trade: Trade, db: Session) -> Dict[str, Any]:
         elif diff_pct < -8:
             price_vs_consensus = f"{abs(diff_pct)}% below {trade.side} avg (got discount)"
         else:
-            price_vs_consensus = f"near {trade.side} market average (±{abs(diff_pct)}%)"
+            price_vs_consensus = f"near {trade.side} market average (Â±{abs(diff_pct)}%)"
 
     if market_yes_pct >= 65:
         market_sentiment = "strongly bullish"
@@ -172,6 +183,8 @@ def build_trade_context(trade: Trade, db: Session) -> Dict[str, Any]:
 
     return {
         "trade_value": round(float(this_value), 2),
+        "model_signal_score": round(float(trade.notable_score), 4) if trade.notable_score is not None else None,
+        "model_signal_threshold": effective_signal_threshold(),
         "market_yes_pct": market_yes_pct,
         "market_sentiment": market_sentiment,
         "market_total_trades": market_total,
@@ -205,50 +218,56 @@ _SYSTEM_PROMPT = (
 def _build_prompt(trade: Trade, ctx: Dict[str, Any]) -> str:
     """Build the user-facing analysis prompt (system prompt is kept separate)."""
     implied_prob = round(trade.price * 100)
+    model_signal_line = ""
+    if ctx.get("model_signal_score") is not None:
+        model_signal_line = (
+            f"\nLOCAL TRAINED MODEL: signal score {ctx['model_signal_score']:.2f}; "
+            f"scores >= {ctx['model_signal_threshold']:.1f} are unusual-trade flags."
+        )
 
     stance_note = ""
     if trade.side == "YES" and ctx["market_yes_pct"] < 40:
-        stance_note = f"CONTRARIAN: only {ctx['market_yes_pct']}% of tracked market trades are YES — this wallet goes against the grain."
+        stance_note = f"CONTRARIAN: only {ctx['market_yes_pct']}% of tracked market trades are YES â€” this wallet goes against the grain."
     elif trade.side == "NO" and ctx["market_yes_pct"] > 60:
-        stance_note = f"CONTRARIAN: {ctx['market_yes_pct']}% of market trades are YES — this wallet is shorting the majority view."
+        stance_note = f"CONTRARIAN: {ctx['market_yes_pct']}% of market trades are YES â€” this wallet is shorting the majority view."
     elif trade.side == "YES" and ctx["market_yes_pct"] > 70:
-        stance_note = f"MOMENTUM: {ctx['market_yes_pct']}% of market trades are YES — wallet aligns with strong crowd consensus."
+        stance_note = f"MOMENTUM: {ctx['market_yes_pct']}% of market trades are YES â€” wallet aligns with strong crowd consensus."
     elif trade.side == "NO" and ctx["market_yes_pct"] < 30:
-        stance_note = f"MOMENTUM: only {ctx['market_yes_pct']}% YES — wallet piles onto an already bearish market."
+        stance_note = f"MOMENTUM: only {ctx['market_yes_pct']}% YES â€” wallet piles onto an already bearish market."
 
     if ctx["size_vs_wallet_avg"] >= 2.5:
-        size_note = f"HIGH CONVICTION: this trade is {ctx['size_vs_wallet_avg']}x the wallet's average size — a significantly oversized bet."
+        size_note = f"HIGH CONVICTION: this trade is {ctx['size_vs_wallet_avg']}x the wallet's average size â€” a significantly oversized bet."
     elif ctx["size_vs_wallet_avg"] <= 0.4:
-        size_note = f"PROBE TRADE: {ctx['size_vs_wallet_avg']}x wallet average — testing a position or scaling out."
+        size_note = f"PROBE TRADE: {ctx['size_vs_wallet_avg']}x wallet average â€” testing a position or scaling out."
     else:
         size_note = f"Typical position size: {ctx['size_vs_wallet_avg']}x wallet average of ${ctx['wallet_avg_trade_value']}."
 
     first_trade_line = (
-        "This is the wallet's FIRST entry on this market — new position initiation."
+        "This is the wallet's FIRST entry on this market â€” new position initiation."
         if ctx["is_first_trade_on_market"]
         else f"The wallet has {ctx['wallet_trades_on_this_market']} prior trades on this market (accumulating / scaling)."
     )
 
     return f"""Analyze this Polymarket trade.
 
-RESPOND IN EXACTLY THIS FORMAT — 5 labeled lines, no preamble, no explanation, nothing else:
+RESPOND IN EXACTLY THIS FORMAT â€” 5 labeled lines, no preamble, no explanation, nothing else:
 
 SIGNAL: [CONTRARIAN | CONSENSUS | CONVICTION | SPECULATIVE]
 RISK: [LOW | MEDIUM | HIGH]
 PRICE_INSIGHT: [1 crisp sentence about what the entry price implies about the trader's probability view]
 BEHAVIOR: [1 crisp sentence about what this trade reveals about the wallet's strategy or pattern]
-VERDICT: [1 sharp, insightful sentence — the single most important takeaway about this trade]
+VERDICT: [1 sharp, insightful sentence â€” the single most important takeaway about this trade]
 
 === TRADE ===
 Market: {trade.market_title}
 Side: {trade.side}
-Price: ${trade.price:.4f} → trader implies {implied_prob}% probability of YES outcome
-Trade value: ${ctx['trade_value']:.2f} (price × size)
+Price: ${trade.price:.4f} â†’ trader implies {implied_prob}% probability of YES outcome
+Trade value: ${ctx['trade_value']:.2f} (price Ã— size)
 Timestamp: {trade.traded_at.strftime('%Y-%m-%d %H:%M UTC')}
 
 === MARKET CONTEXT (all tracked wallets in this market) ===
 Tracked trade volume: {ctx['market_total_trades']} trades across {ctx['market_unique_wallets']} wallets
-YES vs NO distribution: {ctx['market_yes_pct']}% YES — overall market is {ctx['market_sentiment']}
+YES vs NO distribution: {ctx['market_yes_pct']}% YES â€” overall market is {ctx['market_sentiment']}
 Market price spread: {ctx['market_conviction']}
 Avg YES entry: ${ctx['market_yes_avg_price']:.4f} | Avg NO entry: ${ctx['market_no_avg_price']:.4f}
 This entry vs peer consensus: {ctx['price_vs_consensus']}
@@ -258,7 +277,7 @@ This entry vs peer consensus: {ctx['price_vs_consensus']}
 Portfolio: {ctx['wallet_total_trades']} total trades across {ctx['wallet_total_markets']} markets
 Historical bias: {ctx['wallet_bias']} ({ctx['wallet_yes_bias_pct']}% YES across all trades)
 {first_trade_line}
-{size_note}"""
+{size_note}{model_signal_line}"""
 
 
 # ---------------------------------------------------------------------------
@@ -418,7 +437,170 @@ def _analyze_with_huggingface(trade: Trade, ctx: Dict[str, Any], model: str) -> 
 
 
 # ---------------------------------------------------------------------------
-# Persistent DB cache — individual trade analysis
+# Local trained-model analysis (default â€” no API keys required)
+# ---------------------------------------------------------------------------
+
+_LOCAL_PROVIDER_NAME = "Local signal model"
+
+
+def _describe_factor(name: str, contribution: float) -> str:
+    label = FEATURE_LABELS.get(name, name.replace("_", " "))
+    direction = "pushed the score up" if contribution > 0 else "pulled the score down"
+    return f"{label} ({direction})"
+
+
+def _local_model_analysis(trade: Trade, ctx: Dict[str, Any], db: Session) -> Optional[Dict[str, Any]]:
+    """Deterministic, explainable analysis from the locally trained model.
+
+    Prefers a live score (computed from the wallet's history with the
+    currently loaded weights) so explanations match the model; falls back
+    to a previously stored notable_score when the model file is absent.
+    Returns None when the trade cannot be scored at all.
+    """
+    model = get_signal_model()
+    score: Optional[float] = None
+    contributions: List = []
+
+    if model is not None:
+        live = score_trade(trade, db)
+        if live is not None:
+            score = live.score
+            contributions = live.contributions
+            if trade.notable_score is None or abs(float(trade.notable_score) - score) > 1e-6:
+                try:
+                    trade.notable_score = score
+                    db.commit()
+                except Exception:
+                    logger.exception("Failed to persist live notable_score for %s", trade.trade_id)
+                    db.rollback()
+
+    if score is None and trade.notable_score is not None:
+        score = float(trade.notable_score)
+    if score is None:
+        return None
+
+    ctx["model_signal_score"] = round(score, 4)
+    threshold = effective_signal_threshold()
+    ctx["model_signal_threshold"] = threshold
+    pct = round(score * 100)
+    threshold_pct = round(threshold * 100)
+    flagged = score >= threshold
+    model_version = (
+        f"trained {model.trained_at}" if model is not None and model.trained_at else "stored notable_score"
+    )
+
+    # --- Signal taxonomy from model score + market/wallet context ---
+    yes_pct = ctx["market_yes_pct"]
+    size_vs_avg = float(ctx["size_vs_wallet_avg"])
+    market_depth = int(ctx.get("market_total_trades") or 0)
+    contrarian = market_depth >= 5 and (
+        (trade.side == "YES" and yes_pct < 40) or (trade.side == "NO" and yes_pct > 60)
+    )
+    with_crowd = market_depth >= 5 and (
+        (trade.side == "YES" and yes_pct >= 60) or (trade.side == "NO" and yes_pct <= 40)
+    )
+    oversized = size_vs_avg >= 2.5
+    probe = size_vs_avg <= 0.4
+
+    if contrarian:
+        signal = "CONTRARIAN"
+    elif flagged or oversized:
+        signal = "CONVICTION"
+    elif with_crowd:
+        signal = "CONSENSUS"
+    else:
+        signal = "SPECULATIVE"
+
+    # --- Risk from how many independent warning signs stack up ---
+    longshot = float(trade.price) <= 0.15
+    risk_points = sum((flagged, oversized, contrarian, longshot))
+    risk = "HIGH" if risk_points >= 2 else ("MEDIUM" if risk_points == 1 else "LOW")
+
+    # --- Explanation: which features drove the model score ---
+    top_factors = [_describe_factor(name, value) for name, value in contributions[:3] if abs(value) > 1e-9]
+    if top_factors:
+        reason = (
+            f"The model scored this trade {pct}% against a {threshold_pct}% flag line. "
+            f"Strongest factors: {'; '.join(top_factors)}."
+        )
+    else:
+        reason = (
+            f"Stored model score is {pct}% against a {threshold_pct}% flag line "
+            f"({'flagged as unusual' if flagged else 'within normal range'} for this wallet)."
+        )
+
+    # --- Narrative fields ---
+    if oversized:
+        size_note = f"the actual position is {size_vs_avg}x the wallet's average â€” heavily oversized"
+    elif probe:
+        size_note = f"the actual position is only {size_vs_avg}x the wallet's average â€” probe-sized"
+    else:
+        size_note = f"the position size is routine for this wallet ({size_vs_avg}x its average)"
+
+    behavior = (
+        f"The local model puts this context at {pct}% notability, "
+        f"{'above' if flagged else 'below'} the {threshold_pct}% flag line, and {size_note}."
+    )
+    if ctx.get("is_first_trade_on_market"):
+        behavior += " This is also the wallet's first entry on this market."
+
+    price_insight = (
+        f"The entry price implies roughly {round(float(trade.price) * 100)}% YES probability; "
+        f"tracked peer flow is {ctx['market_yes_pct']}% YES and the entry is {ctx['price_vs_consensus']}."
+    )
+
+    if signal == "CONTRARIAN":
+        verdict = (
+            f"This wallet is taking the other side of a {yes_pct}% YES market"
+            + (" with model-flagged unusual context â€” the strongest kind of signal here."
+               if flagged else " â€” the stance, not the size, is what stands out.")
+        )
+    elif signal == "CONVICTION":
+        verdict = (
+            "Model-flagged trade: review it ahead of ordinary flow."
+            if flagged
+            else "Oversized position against this wallet's own history â€” conviction sizing without a model flag."
+        )
+    elif signal == "CONSENSUS":
+        verdict = "Rides the prevailing market direction with nothing unusual in the wallet's pattern."
+    else:
+        verdict = (
+            "Slightly elevated model score â€” keep it in context with nearby wallet activity."
+            if score >= 0.45 and not flagged
+            else "Nothing unusual under the trained wallet-behavior model."
+        )
+
+    return {
+        "signal": signal,
+        "risk": risk,
+        "score": round(score, 4),
+        "threshold": round(threshold, 4),
+        "reason": reason,
+        "top_factors": top_factors,
+        "price_insight": price_insight,
+        "behavior": behavior,
+        "verdict": verdict,
+        "provider": _LOCAL_PROVIDER_NAME,
+        "model_version": model_version,
+    }
+
+
+def local_unavailable_reason(trade: Trade, db: Session) -> str:
+    """User-facing explanation for why the local model cannot analyze a trade."""
+    if get_signal_model() is None:
+        return (
+            "The local model is not trained yet â€” run scripts/train_model.py "
+            "(or the admin Train Model page) and deploy data/model_weights.json."
+        )
+    prior = prior_trade_count(trade, db)
+    return (
+        f"The local model needs at least {MIN_PRIOR_TRADES} prior trades from this wallet "
+        f"to score a trade; this one has {prior}. It becomes scorable as more wallet history is ingested."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Persistent DB cache â€” individual trade analysis
 # ---------------------------------------------------------------------------
 
 def _load_cached_analysis(trade_id: str, db: Session) -> Optional[Dict[str, Any]]:
@@ -438,7 +620,7 @@ def _load_cached_analysis(trade_id: str, db: Session) -> Optional[Dict[str, Any]
             ctx = json.loads(row.context_json)
         except Exception:
             pass
-    return {
+    result = {
         "signal": row.signal,
         "risk": row.risk,
         "price_insight": row.price_insight,
@@ -449,6 +631,16 @@ def _load_cached_analysis(trade_id: str, db: Session) -> Optional[Dict[str, Any]
         "context": ctx,
         "_from_cache": True,
     }
+    # Local-model fields are persisted inside context_json; lift them back up.
+    for key, ctx_key in (
+        ("score", "local_score"),
+        ("threshold", "local_threshold"),
+        ("reason", "local_reason"),
+        ("top_factors", "local_top_factors"),
+    ):
+        if ctx_key in ctx:
+            result[key] = ctx[ctx_key]
+    return result
 
 
 def _save_analysis_to_db(trade_id: str, result: Dict[str, Any], ctx: Dict[str, Any], db: Session) -> None:
@@ -485,7 +677,7 @@ def _save_analysis_to_db(trade_id: str, result: Dict[str, Any], ctx: Dict[str, A
 
 
 # ---------------------------------------------------------------------------
-# Wallet summary cache — stored on Wallet row
+# Wallet summary cache â€” stored on Wallet row
 # ---------------------------------------------------------------------------
 
 _WALLET_SUMMARY_TTL_HOURS = 24
@@ -517,24 +709,40 @@ def _save_wallet_summary(wallet_address: str, summary: str, db: Session) -> None
 # ---------------------------------------------------------------------------
 
 def analyze_trade(trade: Trade, db: Session) -> Optional[Dict[str, Any]]:
-    """Analyze a trade with AI. Returns structured dict or None if no provider available.
+    """Analyze a trade. Returns a structured dict, or None when nothing can analyze it.
 
-    Results are persisted to the trade_analysis table with a configurable TTL.
-    Provider selection order: Anthropic Claude → Ollama → Hugging Face.
+    The locally trained model is the default analyst â€” it requires no API
+    keys and is tried first. External providers (Anthropic Claude â†’ Ollama â†’
+    Hugging Face) are only consulted when the local model cannot score the
+    trade. Results are persisted to the trade_analysis table with a
+    configurable TTL.
     """
     cached = _load_cached_analysis(trade.trade_id, db)
     if cached:
         return cached
 
     ctx = build_trade_context(trade, db)
+
+    result = _local_model_analysis(trade, ctx, db)
+    if result:
+        # Persist the local-only fields inside the context JSON so cached
+        # responses round-trip them (the cache table has no columns for them).
+        ctx_with_local = {
+            **ctx,
+            "local_score": result["score"],
+            "local_threshold": result["threshold"],
+            "local_reason": result["reason"],
+            "local_top_factors": result["top_factors"],
+        }
+        result["context"] = ctx_with_local
+        _save_analysis_to_db(trade.trade_id, result, ctx_with_local, db)
+        return result
+
+    # Local model unavailable for this trade â€” fall back to external providers.
     candidates = _detect_provider_candidates()
-
-    if not candidates:
-        return None
-
     first_error_result: Optional[Dict[str, Any]] = None
     for provider, model in candidates:
-        result: Optional[Dict[str, Any]] = None
+        result = None
         if provider == "anthropic":
             result = _analyze_with_anthropic(trade, ctx, model)
         elif provider == "ollama":
@@ -578,7 +786,7 @@ def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Opti
         return None
 
     lines = [
-        f"- {t.side} ${t.price:.4f} × {t.size:.2f} on {(t.market_title or t.condition_id)[:50]} ({t.traded_at.strftime('%Y-%m-%d')})"
+        f"- {t.side} ${t.price:.4f} Ã— {t.size:.2f} on {(t.market_title or t.condition_id)[:50]} ({t.traded_at.strftime('%Y-%m-%d')})"
         for t in trades[:15]
     ]
     prompt = (

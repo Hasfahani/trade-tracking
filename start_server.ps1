@@ -1,4 +1,4 @@
-# PolySignal - PowerShell Launcher
+# Starts the app server on Windows.
 # This script ensures only one server instance runs at a time
 # Usage: powershell -ExecutionPolicy Bypass -File start_server.ps1
 

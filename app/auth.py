@@ -1,3 +1,4 @@
+# Handles login and session checks.
 """Session-based authentication helpers.
 
 When DASHBOARD_PASSWORD is set the app requires a login before any route.

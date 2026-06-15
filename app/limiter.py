@@ -1,3 +1,4 @@
+# Limits repeated requests from the same user.
 """Shared rate-limiter instance, imported by main.py and route modules."""
 
 from slowapi import Limiter

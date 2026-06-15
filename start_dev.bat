@@ -1,4 +1,5 @@
 @echo off
+@REM Starts the app in development mode on Windows.
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
 

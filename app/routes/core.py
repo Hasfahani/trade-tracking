@@ -1,4 +1,7 @@
+# Handles dashboard and health check pages.
 """Root redirect and dashboard routes."""
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
@@ -311,7 +314,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "wallet": wallet_map.get(row.wallet_address),
             "address": row.wallet_address,
             "trade_count": row.trade_count,
-            "bar_pct": round((row.trade_count / top_wallets_rows[0].trade_count) * 100) if top_wallets_rows else 0,
+            "bar_pct": round((row.trade_count / top_wallets_rows[0].trade_count) * 100),
         }
         for row in top_wallets_rows
     ]
@@ -359,6 +362,16 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 
     retention_stats = ret.get_retention_summary(db) if RETENTION_METRICS_ENABLED else None
 
+    from app.ml.model import effective_signal_threshold
+    recent_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    model_flagged_24h = int(
+        db.query(func.count(Trade.id))
+        .filter(Trade.traded_at >= recent_cutoff)
+        .filter(Trade.notable_score >= effective_signal_threshold())
+        .scalar()
+        or 0
+    )
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -377,5 +390,6 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "sync_status_class": vh.sync_status_class,
             "interesting_activity": interesting_activity,
             "retention": retention_stats,
+            "model_flagged_24h": model_flagged_24h,
         },
     )

@@ -1,4 +1,4 @@
-// Count-up animation for metric cards
+// Adds dashboard browser behavior.
 (function () {
     var els = document.querySelectorAll('[data-countup]');
     if (!els.length || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;

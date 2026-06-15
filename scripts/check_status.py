@@ -1,3 +1,4 @@
+# Prints basic wallet and trade counts.
 import sys
 sys.path.insert(0, '.')
 from app.db import SessionLocal

@@ -1,3 +1,4 @@
+<!-- Explains how to deploy PolySignal on Render. -->
 # Render Deployment
 
 Render is a good fit for this app if you deploy it with Postgres. Do not use SQLite on Render free web services for real data: Render's service filesystem is ephemeral unless you attach a paid persistent disk.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Adds or updates saved watchlist wallets.
 """Seed the curated Polymarket wallet watchlist.
 
 This script is idempotent:

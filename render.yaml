@@ -1,3 +1,4 @@
+# Configures Render deployment for PolySignal.
 services:
   - type: web
     name: polysignal

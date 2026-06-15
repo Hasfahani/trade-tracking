@@ -1,3 +1,4 @@
+# Explains which files Docker should ignore.
 .git
 .gitignore
 .pytest_cache

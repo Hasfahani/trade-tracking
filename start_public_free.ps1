@@ -1,4 +1,4 @@
-# PolySignal free public launcher using Cloudflare Tunnel quick tunnels.
+# Starts the app for free public tunnel access.
 # Usage: powershell -ExecutionPolicy Bypass -File .\start_public_free.ps1
 
 $ErrorActionPreference = "Stop"

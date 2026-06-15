@@ -1,3 +1,4 @@
+# Sends Telegram alerts for new trades.
 """Telegram alert helpers for trade notifications."""
 
 import logging
@@ -28,7 +29,7 @@ def get_app_settings(db: Session) -> AppSettings:
 
 def _short_address(address: str) -> str:
     if len(address) >= 10:
-        return f"{address[:6]}…{address[-4:]}"
+        return f"{address[:6]}â€¦{address[-4:]}"
     return address
 
 
@@ -39,7 +40,7 @@ def _build_message(trade: Trade, wallet: Wallet) -> str:
     market = trade.market_title or trade.condition_id
     time_str = trade.traded_at.strftime("%Y-%m-%d %H:%M UTC")
     return (
-        f"🔔 <b>Trade Alert</b>\n\n"
+        f"ðŸ”” <b>Trade Alert</b>\n\n"
         f"<b>Wallet:</b> {label}\n"
         f"<b>Market:</b> {market}\n"
         f"<b>Direction:</b> {direction}\n"
@@ -139,7 +140,7 @@ def fire_alerts_for_new_trades(db: Session, wallet: Wallet) -> int:
             logger.info("fire_alerts: sent alert for trade id=%d value=%.2f", trade.id, trade.price * trade.size)
             sent += 1
         else:
-            logger.warning("fire_alerts: failed to send alert for trade id=%d — will retry next refresh", trade.id)
+            logger.warning("fire_alerts: failed to send alert for trade id=%d â€” will retry next refresh", trade.id)
 
     db.commit()
     return sent

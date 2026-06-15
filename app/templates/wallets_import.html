@@ -1,3 +1,4 @@
+{# Renders the wallet import page. #}
 {% extends "base_v2.html" %}
 
 {% block title %}Import Wallets{% endblock %}
@@ -14,6 +15,12 @@
         <a href="/wallets/export" class="btn btn-primary">Export wallets CSV</a>
     </div>
 </section>
+
+{% if error %}
+<section class="flash flash-danger">
+    <strong>Import failed.</strong> {{ error }}
+</section>
+{% endif %}
 
 {% if result %}
 <section class="flash flash-{% if result.added > 0 %}success{% else %}info{% endif %}">

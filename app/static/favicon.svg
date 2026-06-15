@@ -1,3 +1,4 @@
+<!-- Draws the PolySignal browser tab icon. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="7" fill="#0b1420"/>
   <polyline points="4,24 10,16 17,19 28,7" fill="none" stroke="#76e4d6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>

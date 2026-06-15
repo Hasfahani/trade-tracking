@@ -1,3 +1,4 @@
+# Builds the Ollama helper Docker image.
 FROM ollama/ollama:latest
 
 # Pull a model during build (optional - can also be done at runtime)

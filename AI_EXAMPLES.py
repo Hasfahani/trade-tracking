@@ -1,3 +1,4 @@
+# Shows examples of using AI trade analysis.
 """Example usage of AI analysis - customize for your needs."""
 
 from app.ai_analysis import analyze_trade, get_trade_summary

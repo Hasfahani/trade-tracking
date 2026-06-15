@@ -1,0 +1,83 @@
+{# Renders the model training page. #}
+{% extends "base_v2.html" %}
+
+{% block title %}Train Model{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Admin</p>
+        <h1>Notable-trade model</h1>
+        <p class="subtle">Train the notable-trade scoring model and export fresh weights. New trades are scored automatically during refreshes.</p>
+    </div>
+</section>
+
+{% if flash %}
+<section class="flash flash-{{ flash_level }}">
+    <strong>{{ flash }}</strong>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="section-head">
+        <h2>Current model</h2>
+        {% if model_status %}
+        <span class="pill success">Model loaded</span>
+        {% else %}
+        <span class="pill">No model yet</span>
+        {% endif %}
+    </div>
+    {% if model_status %}
+    <dl class="grid-form">
+        <div><dt>Trained at</dt><dd>{{ model_status.trained_at }}</dd></div>
+        <div><dt>Mode</dt><dd>{{ model_status.mode or "legacy" }}</dd></div>
+        <div><dt>Operating threshold</dt><dd>{{ "%.4f" | format(model_status.threshold) if model_status.threshold is not none else "default 0.7" }}</dd></div>
+        <div><dt>Rows</dt><dd>{{ model_status.n_train }} train / {{ model_status.n_test }} test</dd></div>
+        <div><dt>Test base rate</dt><dd>{{ "%.4f" | format(model_status.base_rate) if model_status.base_rate is not none else "—" }}</dd></div>
+        <div><dt>Test ROC-AUC</dt><dd>{{ "%.4f" | format(model_status.roc_auc) if model_status.roc_auc is not none else "—" }}</dd></div>
+        <div><dt>Test PR-AUC</dt><dd>{{ "%.4f" | format(model_status.pr_auc) if model_status.pr_auc is not none else "—" }}</dd></div>
+        <div><dt>Test precision</dt><dd>{{ "%.4f" | format(model_status.precision) if model_status.precision is not none else "—" }}</dd></div>
+        <div><dt>Test recall</dt><dd>{{ "%.4f" | format(model_status.recall) if model_status.recall is not none else "—" }}</dd></div>
+        <div><dt>Test F1</dt><dd>{{ "%.4f" | format(model_status.f1) if model_status.f1 is not none else "—" }}</dd></div>
+    </dl>
+    {% else %}
+    <p class="subtle">No model yet — train one below to start scoring trades.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Training</h2>
+        {% if training.state == "running" %}
+        <span class="pill">Running</span>
+        {% endif %}
+    </div>
+    <p class="subtle">Dataset size: <strong>{{ scorable_trades }}</strong> scorable trades (trades with at least 10 prior trades in their wallet).</p>
+
+    {% if tf_available %}
+    <form method="post" action="/admin/train-model">
+        <button type="submit" class="btn btn-primary" {% if training.state == "running" %}disabled{% endif %}>Train model</button>
+    </form>
+    {% else %}
+    <p class="subtle"><strong>Training unavailable on this server — run locally</strong> (<code>python scripts/train_model.py</code>) and deploy the exported <code>data/model_weights.json</code>.</p>
+    <button type="button" class="btn btn-primary" disabled>Train model</button>
+    {% endif %}
+
+    <div id="train-progress" data-state="{{ training.state }}" style="margin-top: 18px;">
+        {% if training.state == "running" %}
+        <p id="train-status-line">Training… epoch {{ training.epoch }}/{{ training.total_epochs }}{% if training.train_mse is not none %} — train loss {{ "%.6f" | format(training.train_mse) }}{% endif %}</p>
+        {% elif training.state == "error" %}
+        <p id="train-status-line" class="flash flash-error">Training failed: {{ training.error }}</p>
+        {% elif training.state == "done" and training.result %}
+        <p id="train-status-line">Training complete ({{ training.result.n_train }} train / {{ training.result.n_test }} test rows).</p>
+        {% else %}
+        <p id="train-status-line" class="subtle"></p>
+        {% endif %}
+        <p id="train-metrics" class="subtle"></p>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/train_model.js"></script>
+{% endblock %}

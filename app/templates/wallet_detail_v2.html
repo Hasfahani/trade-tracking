@@ -1,3 +1,4 @@
+{# Renders the wallet detail page. #}
 {% extends "base_v2.html" %}
 
 {% block title %}{{ wallet.label or short_address(wallet.address) }} - Wallet{% endblock %}
@@ -216,6 +217,48 @@
     <div id="ai-summary-no-trades" style="display:none" class="subtle">
         <p>No stored trades yet. Refresh this wallet first.</p>
     </div>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Signal Model</h2>
+        <span class="pill {% if signal_flagged_count %}info{% endif %}">{{ signal_flagged_count }} flagged trade{{ 's' if signal_flagged_count != 1 else '' }}</span>
+    </div>
+    {% if signal_recent_flagged %}
+    <p class="subtle">Most recent trades the model flagged as unusually large for this wallet (score &ge; {{ '%.1f'|format(signal_threshold) }}).</p>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date (UTC)</th>
+                    <th>Market</th>
+                    <th>Side</th>
+                    <th>Value</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trade in signal_recent_flagged %}
+                <tr>
+                    <td>{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
+                    <td><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
+                    <td>${{ '%.2f'|format(trade.price * trade.size) }}</td>
+                    <td><span class="pill info">Signal {{ '%.2f'|format(trade.notable_score) }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state compact-empty">
+        {% if signal_model_loaded %}
+        <p>No flagged trades yet. Trades scoring &ge; {{ '%.1f'|format(signal_threshold) }} appear here after refreshes.</p>
+        {% else %}
+        <p>Signal model not available &mdash; train it locally and deploy the exported weights to enable scoring.</p>
+        {% endif %}
+    </div>
+    {% endif %}
 </section>
 
 <section class="card">

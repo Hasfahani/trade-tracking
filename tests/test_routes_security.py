@@ -1,3 +1,4 @@
+# Tests login and form security.
 """Tests for authentication and CSRF protection."""
 import pytest
 from fastapi.testclient import TestClient

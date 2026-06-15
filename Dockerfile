@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# Builds the main PolySignal Docker image.
 
 ARG PYTHON_VERSION=3.11
 

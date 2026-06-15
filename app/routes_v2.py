@@ -1,3 +1,4 @@
+# Keeps old route imports working.
 """Legacy route-module compatibility shim.
 
 The active route implementation lives in :mod:`app.routes`. This module remains

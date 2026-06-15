@@ -1,3 +1,4 @@
+# Formats text, dates, and numbers for pages.
 """Pure formatting helpers with no database dependencies.
 
 All functions here are side-effect-free and safe to call from templates or
@@ -18,7 +19,7 @@ def short_address(address: str) -> str:
         address: Full 0x-prefixed hex address.
 
     Returns:
-        Original address if ≤14 chars, otherwise ``0x123456...abcdef`` form.
+        Original address if â‰¤14 chars, otherwise ``0x123456...abcdef`` form.
     """
     if len(address) <= 14:
         return address

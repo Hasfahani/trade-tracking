@@ -1,3 +1,4 @@
+# Protects forms from fake POST requests.
 """Simple double-submit cookie CSRF protection.
 
 A random token is placed in a cookie and also injected into every HTML form as

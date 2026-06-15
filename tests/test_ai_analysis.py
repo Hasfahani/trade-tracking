@@ -1,4 +1,5 @@
-"""Tests for app/ai_analysis.py — provider detection, parsing, caching, and DB persistence."""
+# Tests AI trade analysis.
+"""Tests for app/ai_analysis.py â€” provider detection, parsing, caching, and DB persistence."""
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 from unittest.mock import MagicMock, patch
@@ -64,6 +65,7 @@ def _trade(
     address=_ADDR,
     market_title="Will it rain?",
     hours_ago=0,
+    notable_score=None,
 ):
     t = Trade(
         wallet_address=address,
@@ -74,6 +76,7 @@ def _trade(
         price=price,
         size=size,
         traded_at=_NOW - timedelta(hours=hours_ago),
+        notable_score=notable_score,
     )
     db.add(t)
     db.flush()
@@ -139,7 +142,7 @@ class TestParseResponse:
 
 
 # ---------------------------------------------------------------------------
-# DB cache — trade analysis
+# DB cache â€” trade analysis
 # ---------------------------------------------------------------------------
 
 class TestTradeAnalysisCache:
@@ -210,7 +213,7 @@ class TestTradeAnalysisCache:
 
 
 # ---------------------------------------------------------------------------
-# DB cache — wallet summary
+# DB cache â€” wallet summary
 # ---------------------------------------------------------------------------
 
 class TestWalletSummaryCache:
@@ -295,7 +298,7 @@ class TestBuildTradeContext:
 
 
 # ---------------------------------------------------------------------------
-# analyze_trade — mock provider
+# analyze_trade â€” mock provider
 # ---------------------------------------------------------------------------
 
 class TestAnalyzeTrade:
@@ -305,6 +308,23 @@ class TestAnalyzeTrade:
         with patch("app.ai_analysis._detect_provider_candidates", return_value=[]):
             result = analyze_trade(trade, db)
         assert result is None
+
+    def test_uses_local_model_analysis_when_no_provider_but_trade_is_scored(self, db):
+        _wallet(db)
+        trade = _trade(db, notable_score=0.84)
+        with patch("app.ai_analysis._detect_provider_candidates", return_value=[]), \
+             patch("app.ai_analysis.get_signal_model", return_value=None):
+            result = analyze_trade(trade, db)
+
+        assert result is not None
+        assert result["provider"] == "Local signal model"
+        assert result["signal"] == "CONVICTION"
+        assert result["risk"] == "MEDIUM"
+        assert result["context"]["model_signal_score"] == 0.84
+
+        row = db.query(TradeAnalysis).filter(TradeAnalysis.trade_id == "t1").first()
+        assert row is not None
+        assert row.provider == "Local signal model"
 
     def test_returns_cached_result_on_second_call(self, db):
         _wallet(db)
@@ -359,7 +379,7 @@ class TestAnalyzeTrade:
 
 
 # ---------------------------------------------------------------------------
-# get_trade_summary — mock provider
+# get_trade_summary â€” mock provider
 # ---------------------------------------------------------------------------
 
 class TestGetTradeSummary:

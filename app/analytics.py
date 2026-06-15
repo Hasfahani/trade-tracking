@@ -1,3 +1,4 @@
+# Builds dashboard charts and stats.
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -16,7 +17,7 @@ def detect_interesting_activity(db: Session) -> List[Dict[str, Any]]:
     """Return up to 10 notable trade events from the last 24 hours.
 
     Categories:
-    - large_trade: single trade whose price × size >= _LARGE_TRADE_THRESHOLD.
+    - large_trade: single trade whose price Ã— size >= _LARGE_TRADE_THRESHOLD.
     - activity_spike: wallet with _SPIKE_COUNT+ trades within _SPIKE_WINDOW_MINUTES.
     - new_market: wallet's first-ever trade on a condition entered within the window.
 
@@ -156,7 +157,7 @@ def get_wallet_intelligence_summary(db: Session, wallet_address: str) -> Dict[st
         intelligence_text = "This wallet is currently inactive."
     elif trades_last_24h <= 2:
         activity_level, activity_tone = "Low", "info"
-        intelligence_text = "Low recent activity — minimal trade volume in the last day."
+        intelligence_text = "Low recent activity â€” minimal trade volume in the last day."
     elif trades_last_24h >= 10:
         activity_level, activity_tone = "High", "success"
         intelligence_text = f"Highly active: {trades_last_24h} trades in 24h across {markets_traded_last_24h} market{'s' if markets_traded_last_24h != 1 else ''}. Worth monitoring."

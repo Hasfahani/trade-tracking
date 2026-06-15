@@ -1,3 +1,4 @@
+# Tests usage and retention tracking.
 """Unit and integration tests for retention signal tracking."""
 import asyncio
 import json
@@ -93,7 +94,7 @@ class TestGetWau:
         assert result["wau"] == 2
 
     def test_previous_period_trend(self, db_session):
-        # 2 users this week, 1 last week → trend +1
+        # 2 users this week, 1 last week â†’ trend +1
         _insert_events(db_session, [
             {"tracker_id": "user1", "event_name": "page_view", "event_ts": _days_ago(2), "route": "dashboard"},
             {"tracker_id": "user2", "event_name": "page_view", "event_ts": _days_ago(3), "route": "dashboard"},
@@ -170,8 +171,8 @@ class TestGetRepeatUsage:
         assert result["d7_return_rate"] is None
 
     def test_d1_return_rate(self, db_session):
-        # user1 active day 0 and day 1 → 100% D1
-        # user2 active day 0 only → 0% D1
+        # user1 active day 0 and day 1 â†’ 100% D1
+        # user2 active day 0 only â†’ 0% D1
         day0 = _days_ago(8)
         day1 = _days_ago(7)
         _insert_events(db_session, [
@@ -281,7 +282,7 @@ class TestDashboardRetentionSection:
         with patch("app.routes.core.RETENTION_METRICS_ENABLED", False):
             r = client.get("/dashboard")
         assert r.status_code == 200
-        # No retention summary passed → {% if retention %} block skipped
+        # No retention summary passed â†’ {% if retention %} block skipped
         # The heading text won't appear in the Interesting-activity context
         # Just verify the page still renders correctly
         assert b"Interesting activity" in r.content

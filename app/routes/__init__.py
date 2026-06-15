@@ -1,3 +1,4 @@
+# Combines all app routes.
 """Route package aggregate."""
 from fastapi import APIRouter
 

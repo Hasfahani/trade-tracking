@@ -1,3 +1,4 @@
+{# Renders the dashboard page. #}
 {% extends "base_v2.html" %}
 
 {% block title %}Dashboard{% endblock %}
@@ -69,6 +70,14 @@
         {% set stored_value_display = '${:,.2f}'.format(total_trade_value) %}
         {% endif %}
         <strong title="${{ '{:,.2f}'.format(total_trade_value) }}">{{ stored_value_display }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align:middle;margin-right:5px;opacity:0.6"><path d="M6.5 1L2 7H6L5.5 11L10 5H6L6.5 1Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            Model-flagged (24h)
+        </span>
+        <strong data-countup="{{ model_flagged_24h }}">{{ model_flagged_24h }}</strong>
+        <small class="subtle"><a href="/all-trades">Open all trades</a></small>
     </article>
 </section>
 
@@ -352,7 +361,12 @@
                             {% if w and w.label %}{{ w.label }}{% else %}{{ short_address(trade.wallet_address) }}{% endif %}
                         </a>
                     </td>
-                    <td data-label="Market"><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
+                    <td data-label="Market">
+                        <a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a>
+                        {% if trade.notable_score is not none and trade.notable_score >= signal_threshold %}
+                        <span class="pill info">Signal {{ '%.2f'|format(trade.notable_score) }}</span>
+                        {% endif %}
+                    </td>
                     <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
                     <td data-label="Price">${{ '%.4f'|format(trade.price) }}</td>
                     <td data-label="Size">{{ '%.2f'|format(trade.size) }}</td>

@@ -1,3 +1,4 @@
+# Downloads and saves Polymarket trades.
 import hashlib
 import logging
 import ssl
@@ -297,6 +298,42 @@ def _create_sync_event(
     )
 
 
+def _score_unscored_trades(db: Session, wallet_address: str) -> int:
+    """Compute notable_score for the wallet's trades that have none yet.
+
+    No-op when the model weights are not available. Returns the number of
+    trades updated.
+    """
+    from app.ml.features import build_features_for_wallet
+    from app.ml.model import get_signal_model
+
+    model = get_signal_model()
+    if model is None:
+        return 0
+
+    trades = (
+        db.query(Trade)
+        .filter(Trade.wallet_address == wallet_address)
+        .order_by(Trade.traded_at.asc(), Trade.id.asc())
+        .all()
+    )
+    X, _, trade_ids = build_features_for_wallet(trades)
+    if not trade_ids:
+        return 0
+
+    scores = model.predict(X)
+    trades_by_id = {trade.trade_id: trade for trade in trades}
+    updated = 0
+    for trade_id, score in zip(trade_ids, scores):
+        trade = trades_by_id[trade_id]
+        if trade.notable_score is None:
+            trade.notable_score = float(score)
+            updated += 1
+    if updated:
+        db.commit()
+    return updated
+
+
 def refresh_wallet(
     db: Session,
     wallet: Wallet,
@@ -356,6 +393,18 @@ def refresh_wallet(
         )
         db.commit()
 
+        if inserted:
+            try:
+                _score_unscored_trades(db, wallet.address)
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                logger.warning(
+                    "Notable scoring failed for wallet=%s â€” refresh unaffected", wallet.address, exc_info=True
+                )
+
         stats = calculate_wallet_stats_snapshot(db, wallet.address)
         return {
             "wallet": wallet.address,
@@ -368,12 +417,12 @@ def refresh_wallet(
             "error": None,
         }
     except httpx.TimeoutException as exc:
-        error_msg = "API unreachable — connection timed out"
+        error_msg = "API unreachable â€” connection timed out"
         logger.warning("Wallet refresh timeout for %s: %s", wallet.address, exc)
         return _handle_refresh_error(db, wallet, started_at, error_msg)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 429:
-            error_msg = "Rate limited — try again later"
+            error_msg = "Rate limited â€” try again later"
         else:
             error_msg = f"API error {exc.response.status_code}"
         logger.warning("Wallet refresh HTTP error for %s: %s", wallet.address, exc)

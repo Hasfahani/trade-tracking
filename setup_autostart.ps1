@@ -1,4 +1,4 @@
-# PolySignal - Auto-Start Setup
+# Sets up PolySignal to start automatically on Windows.
 # This script sets up the server to start automatically with Windows
 
 Write-Host ""

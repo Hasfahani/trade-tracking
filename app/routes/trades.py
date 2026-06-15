@@ -1,3 +1,4 @@
+# Handles trade list and trade detail pages.
 """Trade listing and detail routes."""
 from typing import Optional
 
@@ -162,7 +163,7 @@ async def all_trades(  # noqa: PLR0913
         {
             "label": "Largest trade",
             "value": f"${(largest_trade.price * largest_trade.size):,.2f}" if largest_trade else "$0.00",
-            "detail": largest_trade.market_title or largest_trade.condition_id if largest_trade else "No matching trades",
+            "detail": (largest_trade.market_title or largest_trade.condition_id) if largest_trade else "No matching trades",
             "tone": "success" if largest_trade else "info",
         },
     ]
@@ -221,6 +222,19 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
     )
     related_addresses = {t.wallet_address for t in related_trades}
     wallet_map = {w.address: w for w in db.query(Wallet).filter(Wallet.address.in_(related_addresses)).all()}
+
+    from app.ml.model import get_signal_model
+
+    local_model_loaded = get_signal_model() is not None
+    ai_analysis_available = (
+        local_model_loaded or trade.notable_score is not None or settings.ai_provider_configured()
+    )
+    if ai_analysis_available:
+        ai_unavailable_message = ""
+    elif settings.ai_provider_configured():
+        ai_unavailable_message = settings.ai_unavailable_message()
+    else:
+        ai_unavailable_message = ai_analysis.local_unavailable_reason(trade, db)
     return templates.TemplateResponse(
         request,
         "trade_detail_v2.html",
@@ -231,7 +245,9 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
             "related_trades": related_trades,
             "wallet_map": wallet_map,
             "ai_provider_configured": settings.ai_provider_configured(),
-            "ai_unavailable_message": settings.ai_unavailable_message(),
+            "local_model_loaded": local_model_loaded,
+            "ai_analysis_available": ai_analysis_available,
+            "ai_unavailable_message": ai_unavailable_message,
             "short_address": vh.short_address,
         },
     )
@@ -240,7 +256,7 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
 @router.get("/api/trades/{trade_id}/ai-analysis")
 @limiter.limit(AI_RATE_LIMIT)
 def get_trade_ai_analysis(request: Request, trade_id: str, db: Session = Depends(get_db)):
-    """Get AI-powered analysis of a trade. Provider priority: Claude > Ollama > HuggingFace."""
+    """Analyze a trade â€” local trained model first, external providers as fallback."""
     trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
@@ -256,13 +272,23 @@ def get_trade_ai_analysis(request: Request, trade_id: str, db: Session = Depends
         }
 
     available = result is not None and "_error" not in result
+    if available:
+        unavailable_message = None
+    elif settings.ai_provider_configured():
+        unavailable_message = settings.ai_unavailable_message()
+    else:
+        unavailable_message = ai_analysis.local_unavailable_reason(trade, db)
     return {
         "trade_id": trade_id,
         "available": available,
-        "reason": None if available else "no_provider",
-        "message": None if available else settings.ai_unavailable_message(),
+        "reason": None if available else "no_local_score_or_provider",
+        "message": unavailable_message,
         "signal": result.get("signal") if result else None,
         "risk": result.get("risk") if result else None,
+        "score": result.get("score") if result else None,
+        "threshold": result.get("threshold") if result else None,
+        "analysis_reason": result.get("reason") if result else None,
+        "top_factors": result.get("top_factors") if result else None,
         "price_insight": result.get("price_insight") if result else None,
         "behavior": result.get("behavior") if result else None,
         "verdict": result.get("verdict") if result else None,

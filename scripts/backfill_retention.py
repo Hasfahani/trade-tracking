@@ -1,8 +1,9 @@
 #!/usr/bin/env python
+# Rebuilds saved retention stats.
 """Backfill retention_daily and retention_weekly from event_log.
 
 Computes and upserts pre-aggregated retention snapshots for the last N days.
-Safe to re-run — rows are replaced if they already exist.
+Safe to re-run â€” rows are replaced if they already exist.
 
 Usage:
     python scripts/backfill_retention.py [--days 30]
@@ -46,7 +47,7 @@ def backfill(days: int = 30) -> None:
         db.commit()
         logger.info("Backfill complete.")
     except Exception:
-        logger.exception("Backfill failed — rolling back")
+        logger.exception("Backfill failed â€” rolling back")
         db.rollback()
         raise
     finally:

@@ -1,3 +1,4 @@
+# Defines the local Docker Compose app stack.
 services:
   app:
     build:

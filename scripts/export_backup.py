@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Exports app data to a backup file.
 """Export a full PolySignal JSON backup."""
 
 import argparse

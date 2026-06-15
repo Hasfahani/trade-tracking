@@ -1,3 +1,4 @@
+<!-- Explains how to deploy PolySignal on Railway. -->
 # Railway Deployment Setup
 
 ## Services to Deploy

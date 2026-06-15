@@ -1,3 +1,4 @@
+<!-- Explains free hosting options for PolySignal. -->
 # Free Hosting After Railway Trial
 
 Railway ending does not mean the app is gone. For this project, the safest no-payment option is to run PolySignal on this PC and expose it with a free Cloudflare Tunnel quick tunnel.

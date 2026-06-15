@@ -1,4 +1,5 @@
 {
+  "_comment": "Configures local Claude helper permissions.",
   "permissions": {
     "allow": [
       "Bash(python -m pytest tests/ -q)",

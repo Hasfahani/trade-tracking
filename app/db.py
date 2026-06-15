@@ -1,3 +1,4 @@
+# Connects to the database and updates tables.
 import logging
 import threading
 from contextlib import contextmanager
@@ -229,6 +230,16 @@ def _migrate_trades_condition_traded_at_index(conn) -> None:
         )
 
 
+def _migrate_trade_notable_score(conn) -> None:
+    _add_missing_columns(
+        conn,
+        "trades",
+        {
+            "notable_score": "REAL",
+        },
+    )
+
+
 def _migrate_wallet_ai_summary_columns(conn) -> None:
     _add_missing_columns(
         conn,
@@ -251,6 +262,7 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("008_trade_analysis_table", _migrate_trade_analysis_table),
     ("009_trades_condition_traded_at_index", _migrate_trades_condition_traded_at_index),
     ("010_wallet_ai_summary_columns", _migrate_wallet_ai_summary_columns),
+    ("011_trade_notable_score", _migrate_trade_notable_score),
 )
 
 
@@ -292,6 +304,7 @@ POSTGRES_COMPAT_COLUMNS: Dict[str, ColumnSpec] = {
     "trades": {
         "alert_sent": "INTEGER NOT NULL DEFAULT 0",
         "updated_at": "TIMESTAMP",
+        "notable_score": "DOUBLE PRECISION",
     },
     "sync_events": {
         "duplicate_count": "INTEGER",

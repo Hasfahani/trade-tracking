@@ -1,5 +1,5 @@
 @echo off
-REM PolySignal - Server Launcher
+@REM Starts the app server on Windows.
 REM This script starts the FastAPI server persistently
 
 title PolySignal Server

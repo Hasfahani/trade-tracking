@@ -1,3 +1,4 @@
+# Shares helper functions with pages and routes.
 """Re-exports for backwards compatibility. Import from the focused sub-modules directly."""
 from app.analytics import (  # noqa: F401
     build_activity_heatmap,

@@ -1,4 +1,5 @@
-"""Tests for app/ingest.py — normalize, deduplicate, and insert pipeline."""
+# Tests trade downloading and saving.
+"""Tests for app/ingest.py â€” normalize, deduplicate, and insert pipeline."""
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -177,6 +178,57 @@ class TestRefreshWalletPipeline:
         db.refresh(wallet)
         assert wallet.last_refresh_status == "error"
         assert "API down" in (wallet.last_error_message or "")
+
+
+class TestRefreshWalletScoring:
+    def _make_wallet(self, db):
+        w = Wallet(address=_ADDR)
+        db.add(w)
+        db.commit()
+        db.refresh(w)
+        return w
+
+    def test_scoring_failure_does_not_break_refresh(self, db):
+        wallet = self._make_wallet(db)
+        with patch("app.ingest.fetch_trades_for_wallet", return_value=[_RAW_TRADE]), \
+             patch("app.ml.model.get_signal_model", return_value=object()), \
+             patch("app.ml.features.build_features_for_wallet", side_effect=RuntimeError("scoring boom")):
+            result = refresh_wallet(db, wallet)
+        assert result["status"] == "success"
+        assert result["inserted"] == 1
+        assert result["error"] is None
+        assert db.query(Trade).count() == 1
+
+    def test_refresh_writes_notable_scores_when_model_loaded(self, db):
+        import numpy as np
+
+        wallet = self._make_wallet(db)
+        raw_trades = [
+            {**_RAW_TRADE, "id": f"scored-{i}", "timestamp": _RAW_TRADE["timestamp"] + i * 3600}
+            for i in range(12)
+        ]
+
+        class _FakeModel:
+            def predict(self, X):
+                return np.full(len(X), 0.42)
+
+        with patch("app.ingest.fetch_trades_for_wallet", return_value=raw_trades), \
+             patch("app.ml.model.get_signal_model", return_value=_FakeModel()):
+            result = refresh_wallet(db, wallet)
+
+        assert result["inserted"] == 12
+        scored = db.query(Trade).filter(Trade.notable_score.isnot(None)).all()
+        # Only trades with >= 10 prior trades are scorable: the 11th and 12th.
+        assert {t.trade_id for t in scored} == {"scored-10", "scored-11"}
+        assert all(t.notable_score == pytest.approx(0.42) for t in scored)
+
+    def test_refresh_skips_scoring_when_model_missing(self, db):
+        wallet = self._make_wallet(db)
+        with patch("app.ingest.fetch_trades_for_wallet", return_value=[_RAW_TRADE]), \
+             patch("app.ml.model.get_signal_model", return_value=None):
+            result = refresh_wallet(db, wallet)
+        assert result["status"] == "success"
+        assert db.query(Trade).filter(Trade.notable_score.isnot(None)).count() == 0
 
 
 class TestFindDuplicateGroups:

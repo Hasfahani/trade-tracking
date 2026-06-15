@@ -1,3 +1,4 @@
+// Adds wallet AI summary browser behavior.
 (function () {
     var section = document.getElementById('ai-summary-section');
     if (!section) return;

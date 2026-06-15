@@ -1,0 +1,11 @@
+{
+  "_comment": "Configures allowed Claude helper commands.",
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/test_ai_analysis.py -v)",
+      "Bash(python -m pytest --tb=short -q)",
+      "Bash(.venv313\\\\Scripts\\\\pip install *)",
+      "Bash(python -m pip install slowapi anthropic apscheduler -q)"
+    ]
+  }
+}

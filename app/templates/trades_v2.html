@@ -1,3 +1,4 @@
+{# Renders a wallet trade list page. #}
 {% extends "base_v2.html" %}
 
 {% block title %}Wallet Trades{% endblock %}
@@ -162,7 +163,7 @@
 
     {% if trades %}
     <div class="table-wrap">
-        <table class="trade-table">
+        <table class="trade-table wallet-trades-table">
             <thead>
                 <tr>
                     <th>Timestamp (UTC)</th>
@@ -178,7 +179,12 @@
                 {% for trade in trades %}
                 <tr>
                     <td data-label="Timestamp">{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                    <td data-label="Market"><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or 'Unknown Market' }}</a></td>
+                    <td data-label="Market">
+                        <a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or 'Unknown Market' }}</a>
+                        {% if trade.notable_score is not none and trade.notable_score >= signal_threshold %}
+                        <span class="pill info">Signal {{ '%.2f'|format(trade.notable_score) }}</span>
+                        {% endif %}
+                    </td>
                     <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
                     <td data-label="Price">${{ '%.4f'|format(trade.price) }}</td>
                     <td data-label="Size">{{ '%.2f'|format(trade.size) }}</td>

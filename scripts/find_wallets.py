@@ -1,3 +1,4 @@
+# Finds active Polymarket wallets.
 """
 Find active Polymarket wallets from recent trades
 """
@@ -52,7 +53,7 @@ def find_active_wallets(limit=100):
             print(f"   Markets: {len(stats['markets'])}")
             
         print("\n" + "=" * 80)
-        print("\n💡 TIP: Copy any wallet address above and add it to your watchlist!")
+        print("\nðŸ’¡ TIP: Copy any wallet address above and add it to your watchlist!")
         print("   Example: 0xc8d2e6d8380501ef0db5ed84a9aeb6926b95f1c9\n")
         
     except Exception as e:

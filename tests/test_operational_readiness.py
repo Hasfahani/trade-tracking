@@ -1,3 +1,4 @@
+# Tests app health and readiness.
 from fastapi.testclient import TestClient
 import time
 

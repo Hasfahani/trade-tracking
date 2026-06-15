@@ -1,3 +1,4 @@
+{# Renders the all-trades page. #}
 {% extends "base_v2.html" %}
 
 {% block title %}All Trades{% endblock %}
@@ -196,7 +197,7 @@
 
     {% if trades %}
     <div class="table-wrap">
-        <table class="trade-table">
+        <table class="trade-table all-trades-table">
             <thead>
                 <tr>
                     <th>Date (UTC)</th>
@@ -212,7 +213,12 @@
                 <tr>
                     <td data-label="Date">{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                     <td data-label="Wallet"><a href="/wallets/{{ trade.wallet_address }}/trades">{{ wallet.label if wallet and wallet.label else short_address(trade.wallet_address) }}</a></td>
-                    <td data-label="Market"><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
+                    <td data-label="Market">
+                        <a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a>
+                        {% if trade.notable_score is not none and trade.notable_score >= signal_threshold %}
+                        <span class="pill info">Signal {{ '%.2f'|format(trade.notable_score) }}</span>
+                        {% endif %}
+                    </td>
                     <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
                     <td data-label="Value">${{ '%.2f'|format(trade.price * trade.size) }}</td>
                 </tr>

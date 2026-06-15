@@ -1,4 +1,10 @@
+# Tests security headers and basic app startup.
 """Security headers audit, deployment smoke tests, and rate limiting contract."""
+import logging
+import re
+from pathlib import Path
+from datetime import datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -8,7 +14,9 @@ from sqlalchemy.pool import StaticPool
 from app.db import get_db
 from app.main import create_app
 from app.models import Base, Trade, Wallet
-from datetime import datetime, timezone
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _build_client():
@@ -173,3 +181,34 @@ def test_strong_session_secret_in_production_starts_without_error(monkeypatch):
 
     app = create_app(lifespan_context=None, csrf_enabled=False)
     assert app is not None
+
+
+def test_default_session_secret_is_quiet_when_auth_is_disabled_locally(monkeypatch, caplog):
+    import app.auth as auth_mod
+    import app.main as main_mod
+
+    monkeypatch.setattr(auth_mod, "DASHBOARD_PASSWORD", None)
+    monkeypatch.setattr(main_mod.app_settings, "IS_PRODUCTION", False)
+    monkeypatch.setattr(main_mod.app_settings, "SESSION_SECRET_KEY", main_mod.app_settings.DEFAULT_SESSION_SECRET_KEY)
+
+    with caplog.at_level(logging.WARNING):
+        create_app(lifespan_context=None, csrf_enabled=False)
+
+    assert "SESSION_SECRET_KEY is weak" not in caplog.text
+
+
+# --- Frontend regression guards ---
+
+def test_trade_tables_have_non_sticky_header_contract():
+    css = (PROJECT_ROOT / "app" / "static" / "style_v2.css").read_text(encoding="utf-8")
+    all_trades_template = (PROJECT_ROOT / "app" / "templates" / "all_trades_v2.html").read_text(encoding="utf-8")
+    wallet_trades_template = (PROJECT_ROOT / "app" / "templates" / "trades_v2.html").read_text(encoding="utf-8")
+
+    table_header_block_start = css.index(".table-wrap th")
+    table_header_block = css[table_header_block_start:css.index("}", table_header_block_start)]
+
+    assert "position: static;" in table_header_block
+    assert "backdrop-filter: none;" in table_header_block
+    assert not re.search(r"(?ms)^th\s*{[^}]*position:\s*sticky", css)
+    assert 'class="trade-table all-trades-table"' in all_trades_template
+    assert 'class="trade-table wallet-trades-table"' in wallet_trades_template

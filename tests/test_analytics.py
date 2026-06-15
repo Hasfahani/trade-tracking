@@ -1,3 +1,4 @@
+# Tests dashboard stats.
 """Tests for app/analytics.py functions with known inputs."""
 from datetime import datetime, timedelta, timezone
 

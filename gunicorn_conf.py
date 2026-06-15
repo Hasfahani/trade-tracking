@@ -1,3 +1,4 @@
+# Sets Gunicorn options for deployment.
 """Gunicorn configuration for container deployments."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-// Copy-to-clipboard buttons
+// Adds shared browser behavior for app pages.
 document.querySelectorAll('[data-copy]').forEach(function (button) {
     button.addEventListener('click', async function () {
         var text = button.getAttribute('data-copy');

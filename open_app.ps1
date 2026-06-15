@@ -1,3 +1,4 @@
+# Opens the local PolySignal app in a browser.
 $port = if ($env:PORT) { [int]$env:PORT } else { 8000 }
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $startScript = Join-Path $scriptDir "start_dev.ps1"

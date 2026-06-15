@@ -1,3 +1,4 @@
+// Adds trade AI analysis browser behavior.
 (function () {
     var section = document.getElementById('ai-section');
     if (!section) return;
@@ -22,7 +23,7 @@
 
     function setLoading(msg) {
         var loadingMsg = document.getElementById('ai-loading-msg');
-        if (loadingMsg) loadingMsg.textContent = msg || 'Analyzing trade with AI...';
+        if (loadingMsg) loadingMsg.textContent = msg || 'Analyzing trade...';
         setDisplay('ai-loading', 'flex');
         setDisplay('ai-result', 'none');
         setDisplay('ai-model-loading', 'none');
@@ -77,7 +78,7 @@
 
     async function loadTradeAnalysis() {
         setButtonsDisabled(true);
-        setLoading('Analyzing trade with AI...');
+        setLoading('Analyzing trade...');
 
         try {
             var resp = await fetch('/api/trades/' + encodeURIComponent(tradeId) + '/ai-analysis');
@@ -112,6 +113,21 @@
                 riskEl.style.color = '#070b12';
             }
 
+            var scoreEl = document.getElementById('ai-score-badge');
+            if (scoreEl) {
+                if (typeof data.score === 'number') {
+                    scoreEl.textContent = 'MODEL ' + Math.round(data.score * 100) + '%';
+                    scoreEl.style.background = '#1f2937';
+                    scoreEl.style.color = '#e5e7eb';
+                    if (typeof data.threshold === 'number') {
+                        scoreEl.title = 'Flag line: ' + Math.round(data.threshold * 100) + '%';
+                    }
+                    scoreEl.style.display = 'inline-flex';
+                } else {
+                    scoreEl.style.display = 'none';
+                }
+            }
+
             var cacheEl = document.getElementById('ai-cache-badge');
             if (cacheEl) {
                 if (data.from_cache) {
@@ -134,6 +150,17 @@
             document.getElementById('ai-price-insight').textContent = data.price_insight || '';
             document.getElementById('ai-behavior').textContent = data.behavior || '';
 
+            var reasonBlock = document.getElementById('ai-reason-block');
+            var reasonEl = document.getElementById('ai-reason');
+            if (reasonBlock && reasonEl) {
+                if (data.analysis_reason) {
+                    reasonEl.textContent = data.analysis_reason;
+                    reasonBlock.style.display = 'block';
+                } else {
+                    reasonBlock.style.display = 'none';
+                }
+            }
+
             var ctx = data.context;
             var grid = document.getElementById('ai-context-grid');
             if (ctx && grid) {
@@ -144,6 +171,9 @@
                 addContextItem(grid, 'Market depth', ctx.market_total_trades + ' trades / ' + ctx.market_unique_wallets + ' wallets');
                 addContextItem(grid, 'Price vs consensus', ctx.price_vs_consensus);
                 addContextItem(grid, 'Position size', '$' + ctx.trade_value + ' - ' + sizeLabel);
+                if (typeof ctx.model_signal_score === 'number') {
+                    addContextItem(grid, 'Local model score', Math.round(ctx.model_signal_score * 100) + '% signal');
+                }
                 addContextItem(grid, 'Market history', firstBadge);
                 addContextItem(grid, 'Wallet bias', ctx.wallet_bias + ' (' + ctx.wallet_yes_bias_pct + '% YES overall)');
             }

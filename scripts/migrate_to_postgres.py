@@ -1,3 +1,4 @@
+# Copies SQLite data into PostgreSQL.
 """
 Migrate data from a local SQLite database to a PostgreSQL database.
 

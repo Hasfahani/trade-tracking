@@ -1,3 +1,4 @@
+# Lists the Python packages needed by the app.
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 gunicorn==22.0.0
@@ -11,3 +12,4 @@ itsdangerous>=2.1.2
 anthropic>=0.40.0
 slowapi>=0.1.9
 apscheduler>=3.10.4
+numpy>=1.26

@@ -1,4 +1,5 @@
 @echo off
+@REM Opens the local PolySignal app in a browser.
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
 

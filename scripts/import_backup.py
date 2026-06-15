@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Imports app data from a backup file.
 """Import a PolySignal JSON backup into SQLite or PostgreSQL."""
 
 import argparse

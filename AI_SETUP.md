@@ -1,3 +1,4 @@
+<!-- Explains how to set up AI analysis providers. -->
 # AI Analysis Setup Guide
 
 Your trade tracking app now has AI-powered trade analysis built in!

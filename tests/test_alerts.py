@@ -1,3 +1,4 @@
+# Tests Telegram alerts.
 """Tests for Telegram alert logic in app/alerts.py."""
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch

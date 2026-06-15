@@ -1,7 +1,10 @@
+# Handles alert settings and refresh status pages.
 """Settings and refresh/status routes."""
+import json
 import logging
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 _TELEGRAM_TOKEN_RE = re.compile(r'^\d+:[\w\-]+$')
@@ -9,7 +12,7 @@ _TELEGRAM_CHAT_ID_RE = re.compile(r'^-?\d+$')
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app import alerts
@@ -17,7 +20,7 @@ from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
 from app.ingest import cleanup_duplicate_trades, find_duplicate_groups, refresh_wallet
-from app.models import SyncEvent
+from app.models import SyncEvent, Trade
 from app.routes._shared import _flash_redirect_to, resolve_wallet, sanitize_search, templates
 from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT, RETENTION_METRICS_ENABLED
 
@@ -78,7 +81,7 @@ async def save_settings(
         return _flash_redirect_to("/settings", "Settings saved.", "success")
     except Exception:
         logger.exception("Failed to save settings")
-        return _flash_redirect_to("/settings", "Failed to save settings — please try again.", "error")
+        return _flash_redirect_to("/settings", "Failed to save settings â€” please try again.", "error")
 
 
 @router.post("/settings/test-alert")
@@ -162,6 +165,91 @@ def cleanup_sync_duplicates(db: Session = Depends(get_db)):
     msg = f"Removed {removed} duplicate trade{'s' if removed != 1 else ''}." if removed else "No duplicate trades found."
     level = "success" if removed else "info"
     return _flash_redirect_to("/admin/sync-status", msg, level)
+
+
+def _model_weights_status() -> Optional[Dict[str, Any]]:
+    """Summarize data/model_weights.json for the admin page, or None if absent/invalid."""
+    from app.ml.model import DEFAULT_WEIGHTS_PATH
+
+    try:
+        payload = json.loads(Path(DEFAULT_WEIGHTS_PATH).read_text(encoding="utf-8"))
+        metrics = payload.get("test_metrics") or {}
+        return {
+            "trained_at": payload.get("trained_at"),
+            "mode": payload.get("mode"),
+            "threshold": payload.get("threshold"),
+            "n_train": payload.get("n_train"),
+            "n_test": payload.get("n_test"),
+            "base_rate": metrics.get("base_rate"),
+            "roc_auc": metrics.get("roc_auc"),
+            "pr_auc": metrics.get("pr_auc"),
+            # At the chosen operating threshold; older weight files only have
+            # the fixed-0.5 numbers.
+            "precision": metrics.get("precision_at_threshold", metrics.get("precision_at_0_5")),
+            "recall": metrics.get("recall_at_threshold", metrics.get("recall_at_0_5")),
+            "f1": metrics.get("f1_at_threshold", metrics.get("f1_at_0_5")),
+        }
+    except Exception:
+        return None
+
+
+@router.get("/admin/train-model")
+async def train_model_page(request: Request, db: Session = Depends(get_db)):
+    from app.ml import train as ml_train
+    from app.ml.features import MIN_PRIOR_TRADES
+
+    wallet_counts = (
+        db.query(func.count(Trade.id)).group_by(Trade.wallet_address).all()
+    )
+    scorable_trades = sum(max(count - MIN_PRIOR_TRADES, 0) for (count,) in wallet_counts)
+
+    return templates.TemplateResponse(
+        request,
+        "train_model_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "model_status": _model_weights_status(),
+            "scorable_trades": scorable_trades,
+            "tf_available": ml_train.tensorflow_available(),
+            "training": ml_train.get_training_status(),
+            "flash": request.query_params.get("flash"),
+            "flash_level": request.query_params.get("level", "info"),
+        },
+    )
+
+
+@router.post(
+    "/admin/train-model",
+    summary="Train the notable-trade model",
+    description="Run training in a background thread and export new model weights. Only one run at a time.",
+    tags=["admin"],
+)
+async def start_train_model(request: Request):
+    from app.ml import train as ml_train
+
+    if not ml_train.tensorflow_available():
+        return _flash_redirect_to("/admin/train-model", "Training unavailable on this server â€” run locally.", "error")
+
+    app = request.app
+
+    def _reload_model(_result: Dict[str, Any]) -> None:
+        from app.ml.model import get_signal_model, reset_signal_model_cache
+
+        reset_signal_model_cache()
+        app.state.signal_model = get_signal_model()
+        logger.info("Signal model reloaded after training")
+
+    if not ml_train.start_training_in_background(on_success=_reload_model):
+        return _flash_redirect_to("/admin/train-model", "A training run is already in progress.", "error")
+    return _flash_redirect_to("/admin/train-model", "Training started.", "success")
+
+
+@router.get("/admin/train-model/status")
+async def train_model_status():
+    from app.ml import train as ml_train
+
+    return JSONResponse(ml_train.get_training_status())
 
 
 @router.post(

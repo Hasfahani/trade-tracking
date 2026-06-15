@@ -1,3 +1,4 @@
+# Tests database updates.
 from sqlalchemy import create_engine
 from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.pool import StaticPool

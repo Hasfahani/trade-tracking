@@ -1,3 +1,4 @@
+# Tests exports and backups.
 """Tests for CSV export routes in app/routes/exports.py."""
 import csv
 import io
@@ -111,7 +112,7 @@ class TestWalletCSVExport:
         client, sf = client_and_session
         _seed(sf)
         resp = client.get("/wallets/export")
-        reader = csv.reader(io.StringIO(resp.text.lstrip("﻿")))
+        reader = csv.reader(io.StringIO(resp.text.lstrip("\ufeff")))
         headers = next(reader)
         assert headers == ["address", "label", "tags", "notes", "is_pinned", "is_archived", "created_at"]
 
@@ -127,7 +128,7 @@ class TestWalletCSVExport:
         client, _ = client_and_session
         resp = client.get("/wallets/export")
         assert resp.status_code == 200
-        lines = [l for l in resp.text.lstrip("﻿").splitlines() if l]
+        lines = [l for l in resp.text.lstrip("\ufeff").splitlines() if l]
         assert len(lines) == 1  # header only
 
 
@@ -137,7 +138,7 @@ class TestWalletTradesCSVExport:
         address = _seed(sf)
         resp = client.get(f"/wallets/{address}/trades/export")
         assert resp.status_code == 200
-        reader = csv.reader(io.StringIO(resp.text.lstrip("﻿")))
+        reader = csv.reader(io.StringIO(resp.text.lstrip("\ufeff")))
         headers = next(reader)
         assert "Trade ID" in headers
         assert "Side" in headers
@@ -173,7 +174,7 @@ class TestWalletTradesCSVExport:
         db.close()
         resp = client.get(f"/wallets/{empty_address}/trades/export")
         assert resp.status_code == 200
-        lines = [l for l in resp.text.lstrip("﻿").splitlines() if l]
+        lines = [l for l in resp.text.lstrip("\ufeff").splitlines() if l]
         assert len(lines) == 1  # header only
 
 
@@ -189,7 +190,7 @@ class TestAllTradesCSVExport:
         client, sf = client_and_session
         _seed(sf)
         resp = client.get("/all-trades/export")
-        reader = csv.reader(io.StringIO(resp.text.lstrip("﻿")))
+        reader = csv.reader(io.StringIO(resp.text.lstrip("\ufeff")))
         headers = next(reader)
         assert "Trade ID" in headers
         assert "Wallet" in headers
@@ -212,7 +213,7 @@ class TestAllTradesCSVExport:
         client, _ = client_and_session
         resp = client.get("/all-trades/export")
         assert resp.status_code == 200
-        lines = [l for l in resp.text.lstrip("﻿").splitlines() if l]
+        lines = [l for l in resp.text.lstrip("\ufeff").splitlines() if l]
         assert len(lines) == 1
 
 

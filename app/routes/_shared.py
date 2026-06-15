@@ -1,3 +1,4 @@
+# Shares route helper code.
 """Shared helpers used across all route modules."""
 import logging
 import re
@@ -14,9 +15,13 @@ from sqlalchemy.orm import Query, Session
 from app import view_helpers as vh
 from app.models import Wallet
 
+from app.ml.model import effective_signal_threshold
 from app.settings import DATABASE_URL as _DATABASE_URL
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["db_backend"] = "postgresql" if _DATABASE_URL.startswith("postgresql") else "sqlite"
+# Snapshot of the model's operating threshold for template pills; refreshed on
+# process start (weights deploy with the app, so this matches the live model).
+templates.env.globals["signal_threshold"] = effective_signal_threshold()
 DATE_PRESETS = frozenset({"today", "7d", "30d"})
 
 _MAX_SEARCH_LEN = 255

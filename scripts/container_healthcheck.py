@@ -1,3 +1,4 @@
+# Checks if the app is healthy in Docker.
 """Container liveness probe.
 
 Uses only the Python standard library so the runtime image does not need curl.

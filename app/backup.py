@@ -1,3 +1,4 @@
+# Backs up and restores app data.
 """Portable JSON backup helpers for all application-owned tables."""
 
 from __future__ import annotations

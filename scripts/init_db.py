@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Creates the database tables.
 """
 Initialize the database schema.
 Run this script once before starting the application.

@@ -1,3 +1,4 @@
+# Adds the default wallet watchlist.
 from dataclasses import dataclass
 from typing import Iterable, List
 
@@ -18,43 +19,43 @@ class SeedWallet:
 WATCHLIST_SEED_WALLETS: List[SeedWallet] = [
     SeedWallet(
         address="0x56687bf447db6ffa42ffe2204a05edaa20f55839",
-        label="Theo4 — All-Time Whale / Election-Event Specialist",
+        label="Theo4 â€” All-Time Whale / Election-Event Specialist",
         tags="all_time_whale, politics, election, legacy_elite",
         notes="Official Polymarket all-time leaderboard standout with major 2024 election-related wins.",
     ),
     SeedWallet(
         address="0x6a72f61820b26b1fe4d956e17b6dc2a1ea3033ee",
-        label="kch123 — Sports Elite / High-PnL Specialist",
+        label="kch123 â€” Sports Elite / High-PnL Specialist",
         tags="sports_specialist, elite",
         notes="Near the top of Polymarket sports all-time PnL leaderboard.",
     ),
     SeedWallet(
         address="0x204f72f35326db932158cba6adff0b9a1da95e14",
-        label="swisstony — Sports Specialist / High-Volume Consistency",
+        label="swisstony â€” Sports Specialist / High-Volume Consistency",
         tags="sports_specialist, active_elite, high_volume",
         notes="Strong sports all-time wallet and also appears on recent monthly leaderboard.",
     ),
     SeedWallet(
         address="0x07bdcabf60da99be8fad11092bf4e8412cffe993",
-        label="imnotawizard — Current Monthly Heater / Sports Momentum",
+        label="imnotawizard â€” Current Monthly Heater / Sports Momentum",
         tags="monthly_heater, sports_momentum",
         notes="Official Polymarket monthly leaderboard standout.",
     ),
     SeedWallet(
         address="0x492442eab586f242b53bda933fd5de859c8a3782",
-        label="0x4924…3782 — Anonymous Monthly Breakout / Momentum Trader",
+        label="0x4924â€¦3782 â€” Anonymous Monthly Breakout / Momentum Trader",
         tags="anonymous_breakout, monthly_momentum",
         notes="Address-form monthly leaderboard performer; treat as anonymous active breakout wallet.",
     ),
     SeedWallet(
         address="0x2005d16a84ceefa912d4e380cd32e7ff827875ea",
-        label="RN1 — Sports Shark / Large-Scale Specialist",
+        label="RN1 â€” Sports Shark / Large-Scale Specialist",
         tags="sports_shark, large_scale",
         notes="Official Polymarket sports all-time leaderboard wallet.",
     ),
     SeedWallet(
         address="0x507e52ef684ca2dd91f90a9d26d149dd3288beae",
-        label="GamblingIsAllYouNeed — Sports Grinder / Specialist",
+        label="GamblingIsAllYouNeed â€” Sports Grinder / Specialist",
         tags="sports_grinder, sports_specialist",
         notes="Official Polymarket sports leaderboard wallet.",
     ),

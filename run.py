@@ -1,3 +1,4 @@
+# Starts the PolySignal app.
 """Application entrypoint.
 
 Reads PORT from the environment so the process works whether a host runs this

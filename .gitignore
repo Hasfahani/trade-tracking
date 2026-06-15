@@ -1,3 +1,4 @@
+# Explains which local files Git should ignore.
 .venv/
 venv/
 __pycache__/

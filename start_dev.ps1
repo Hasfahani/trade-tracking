@@ -1,3 +1,4 @@
+# Starts the app in development mode on Windows.
 $port = if ($env:PORT) { [int]$env:PORT } else { 8000 }
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir

@@ -1,3 +1,4 @@
+{# Renders the trade detail page. #}
 {% extends "base_v2.html" %}
 
 {% block title %}Trade Detail{% endblock %}
@@ -41,24 +42,50 @@
     </div>
 </section>
 
+<section class="card">
+    <div class="section-head">
+        <h2>Signal Model</h2>
+        {% if trade.notable_score is not none and trade.notable_score >= signal_threshold %}
+        <span class="pill info">Flagged</span>
+        {% elif trade.notable_score is not none %}
+        <span class="pill">Scored</span>
+        {% else %}
+        <span class="pill">Not scored</span>
+        {% endif %}
+    </div>
+    {% if trade.notable_score is not none %}
+    <div class="metrics-grid embedded-metrics">
+        <article class="metric-card">
+            <span class="metric-label">Signal score</span>
+            <strong>{{ '%.1f'|format(trade.notable_score * 100) }}%</strong>
+            <small class="subtle">Trained on this wallet's historical behavior &mdash; likelihood this trade is unusually large in context.</small>
+        </article>
+    </div>
+    {% else %}
+    <p class="subtle">Not scored &mdash; insufficient wallet history.</p>
+    {% endif %}
+</section>
+
 <section class="card" id="ai-section" data-trade-id="{{ trade.trade_id }}">
     <div class="section-head">
-        <h2>AI Analysis</h2>
+        <h2>Local AI Analysis</h2>
         <div style="display:flex;gap:0.5rem;align-items:center">
             <button type="button" class="btn btn-small" id="ai-reanalyze-btn" style="display:none">Re-analyze</button>
-            <button type="button" class="btn btn-small" id="ai-btn" {% if not ai_provider_configured %}disabled{% endif %}>{{ 'Analyze' if ai_provider_configured else 'AI not configured' }}</button>
+            <button type="button" class="btn btn-small" id="ai-btn" {% if not ai_analysis_available %}disabled{% endif %}>{{ 'Analyze' if ai_analysis_available else 'AI unavailable' }}</button>
         </div>
     </div>
+    <p class="subtle">Runs on this app&rsquo;s own trained model &mdash; no API keys or external AI required.</p>
 
     <div id="ai-loading" class="ai-loading" style="display:none">
         <div class="ai-spinner"></div>
-        <span class="subtle" id="ai-loading-msg">Analyzing trade with AI&hellip;</span>
+        <span class="subtle" id="ai-loading-msg">Analyzing trade&hellip;</span>
     </div>
 
     <div id="ai-result" style="display:none">
         <div class="ai-badges" style="flex-wrap:wrap;gap:0.4rem">
             <span class="ai-badge" id="ai-signal-badge"></span>
             <span class="ai-badge ai-risk-badge" id="ai-risk-badge"></span>
+            <span class="ai-badge" id="ai-score-badge" style="display:none"></span>
             <span class="ai-cache-badge" id="ai-cache-badge" style="display:none"></span>
             <span class="subtle ai-provider-label" id="ai-provider-label"></span>
         </div>
@@ -66,6 +93,10 @@
         <div class="ai-verdict" id="ai-verdict"></div>
 
         <div class="ai-details">
+            <div class="ai-detail-block" id="ai-reason-block" style="display:none">
+                <p class="ai-detail-label">Why the model thinks so</p>
+                <p class="ai-detail-text" id="ai-reason"></p>
+            </div>
             <div class="ai-detail-block">
                 <p class="ai-detail-label">Price insight</p>
                 <p class="ai-detail-text" id="ai-price-insight"></p>
@@ -84,7 +115,7 @@
         <button type="button" class="btn btn-small" id="ai-retry-btn">Retry</button>
     </div>
 
-    <div id="ai-unavailable" style="display:{% if ai_provider_configured %}none{% else %}block{% endif %}" class="subtle">
+    <div id="ai-unavailable" style="display:{% if ai_analysis_available %}none{% else %}block{% endif %}" class="subtle">
         <span id="ai-unavailable-message">{{ ai_unavailable_message }}</span>
     </div>
 </section>

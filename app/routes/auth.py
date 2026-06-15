@@ -1,3 +1,4 @@
+# Handles login and logout pages.
 """Login and logout routes."""
 import time
 from collections import defaultdict

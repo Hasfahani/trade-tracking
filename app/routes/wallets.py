@@ -1,3 +1,4 @@
+# Handles wallet pages and wallet actions.
 """Wallet management routes: list, add, edit, pin, archive, delete, import."""
 import csv
 import io
@@ -13,6 +14,7 @@ from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
 from app.ingest import refresh_wallet
+from app.ml.model import effective_signal_threshold, get_signal_model
 from app.models import SyncEvent, Trade, Wallet
 from app.routes._shared import (
     _flash_redirect,
@@ -50,6 +52,17 @@ async def import_wallets(
         text = content.decode("latin-1")
 
     reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames or "address" not in reader.fieldnames:
+        return templates.TemplateResponse(
+            request,
+            "wallets_import.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": 'Missing required "address" column. Expected columns: address, label, tags, notes, is_pinned, is_archived.',
+                "result": None,
+            },
+        )
     total = 0
     added = 0
     duplicates = 0
@@ -271,6 +284,14 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
     wallet_top_markets = vh.build_top_markets(db, wallet_address=wallet.address)
     wallet_activity_days = vh.build_activity_heatmap(db, wallet_address=wallet.address)
 
+    flagged_query = (
+        db.query(Trade)
+        .filter(Trade.wallet_address == wallet.address)
+        .filter(Trade.notable_score >= effective_signal_threshold())
+    )
+    signal_flagged_count = flagged_query.count()
+    signal_recent_flagged = flagged_query.order_by(Trade.traded_at.desc()).limit(5).all()
+
     total_value = float(pnl["total_value"] or 0)
     yes_value = float(pnl["yes_value"] or 0)
     no_value = float(pnl["no_value"] or 0)
@@ -316,6 +337,9 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
             "wallet_activity_days": wallet_activity_days,
             "activity_timeline": activity_timeline,
             "wallet_intelligence": wallet_intelligence,
+            "signal_flagged_count": signal_flagged_count,
+            "signal_recent_flagged": signal_recent_flagged,
+            "signal_model_loaded": get_signal_model() is not None,
             "short_address": vh.short_address,
             "duration_label": vh.duration_label,
             "sync_status_class": vh.sync_status_class,

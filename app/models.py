@@ -1,3 +1,4 @@
+# Defines the database tables.
 """SQLAlchemy models for the watchlist app.
 
 SQLite compatibility changes are applied by app.db.run_schema_migrations.
@@ -49,6 +50,7 @@ class Trade(Base):
     inserted_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     alert_sent = Column(Integer, nullable=False, default=0)
+    notable_score = Column(Float, nullable=True)
 
     __table_args__ = (
         CheckConstraint("side IN ('YES', 'NO')", name="check_side"),

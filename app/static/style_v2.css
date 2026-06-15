@@ -1,3 +1,4 @@
+/* Styles the current PolySignal dashboard UI. */
 
 :root {
     --bg: #070b12;
@@ -1831,9 +1832,6 @@ body::before {
 }
 
 th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
     backdrop-filter: blur(10px);
 }
 
@@ -2651,10 +2649,9 @@ select:focus {
         0 0 22px rgba(118, 228, 214, 0.1);
 }
 
-/* ── Table head: sticky frosted glass ── */
+/* Table head: calm contrast without viewport stickiness. */
 th {
     background: rgba(8, 10, 15, 0.8);
-    backdrop-filter: blur(12px);
     border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -3901,9 +3898,6 @@ table {
 }
 
 th {
-    position: sticky;
-    top: 74px;
-    z-index: 5;
     color: #9facbd;
     background: #0b1119;
 }
@@ -4045,5 +4039,130 @@ tbody tr:hover {
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.08em;
+    }
+}
+
+/* Results tables: keep headers in-flow so they never float over scrolled rows. */
+.table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+}
+
+.trade-table {
+    min-width: 980px;
+    table-layout: fixed;
+}
+
+.table-wrap th {
+    position: static;
+    top: auto;
+    z-index: auto;
+    background: #0b1119;
+    backdrop-filter: none;
+}
+
+.trade-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trade-table td[data-label="Market"] {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
+.trade-table td[data-label="Side"] {
+    text-align: right;
+}
+
+.trade-table td[data-label="Price"],
+.trade-table td[data-label="Size"],
+.trade-table td[data-label="Value"] {
+    text-align: right;
+}
+
+.trade-table td[data-label="IDs"] {
+    overflow: visible;
+    white-space: normal;
+}
+
+.trade-table td[data-label="Side"] .pill {
+    justify-content: center;
+    min-width: 56px;
+}
+
+.all-trades-table th:nth-child(1),
+.all-trades-table td:nth-child(1) {
+    width: 18ch;
+}
+
+.all-trades-table th:nth-child(2),
+.all-trades-table td:nth-child(2) {
+    width: 31ch;
+}
+
+.all-trades-table th:nth-child(4),
+.all-trades-table td:nth-child(4) {
+    width: 8ch;
+    text-align: right;
+}
+
+.all-trades-table th:nth-child(5),
+.all-trades-table td:nth-child(5) {
+    width: 12ch;
+    text-align: right;
+}
+
+.wallet-trades-table {
+    min-width: 1160px;
+}
+
+.wallet-trades-table th:nth-child(1),
+.wallet-trades-table td:nth-child(1) {
+    width: 18ch;
+}
+
+.wallet-trades-table th:nth-child(3),
+.wallet-trades-table td:nth-child(3) {
+    width: 8ch;
+    text-align: right;
+}
+
+.wallet-trades-table th:nth-child(4),
+.wallet-trades-table td:nth-child(4),
+.wallet-trades-table th:nth-child(5),
+.wallet-trades-table td:nth-child(5),
+.wallet-trades-table th:nth-child(6),
+.wallet-trades-table td:nth-child(6) {
+    width: 11ch;
+    text-align: right;
+}
+
+.wallet-trades-table th:nth-child(7),
+.wallet-trades-table td:nth-child(7) {
+    width: 19ch;
+}
+
+@media (max-width: 760px) {
+    .trade-table {
+        min-width: 0;
+        table-layout: auto;
+    }
+
+    .trade-table td,
+    .trade-table td[data-label="Market"],
+    .trade-table td[data-label="IDs"] {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+    }
+
+    .trade-table th,
+    .trade-table td {
+        width: auto !important;
+        text-align: left;
     }
 }
