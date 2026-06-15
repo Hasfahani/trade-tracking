@@ -88,6 +88,13 @@ def test_dashboard_returns_200():
     assert response.status_code == 200, f"Dashboard returned {response.status_code}"
 
 
+def test_tutorial_returns_200():
+    client, _ = _build_client()
+    response = client.get("/tutorial")
+    assert response.status_code == 200
+    assert "How to use" in response.text
+
+
 def test_all_trades_returns_200():
     client, _ = _build_client()
     response = client.get("/all-trades")

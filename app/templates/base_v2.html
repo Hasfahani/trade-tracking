@@ -50,6 +50,7 @@
             <nav class="top-nav" id="top-nav">
                 {% set _path = request.url.path if request is defined else '' %}
                 <a href="/dashboard" {% if _path == '/dashboard' %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">D</span>Dashboard</a>
+                <a href="/tutorial" {% if _path == '/tutorial' %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">?</span>Tutorial</a>
                 <a href="/wallets" {% if _path.startswith('/wallets') %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">W</span>Wallets</a>
                 <a href="/all-trades" {% if _path.startswith('/all-trades') or _path.startswith('/trades/') %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">T</span>Trades</a>
                 <a href="/admin/sync-status" {% if _path.startswith('/admin/sync') %}class="active" aria-current="page"{% endif %}><span class="nav-glyph">S</span>Sync</a>

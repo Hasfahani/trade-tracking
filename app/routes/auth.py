@@ -31,7 +31,7 @@ def _is_rate_limited(ip: str) -> bool:
 def _record_failed_attempt(ip: str) -> None:
     _login_attempts[ip].append(time.monotonic())
 
-_SAFE_NEXT_PREFIXES = ("/wallets", "/dashboard", "/all-trades", "/trades", "/admin", "/settings")
+_SAFE_NEXT_PREFIXES = ("/wallets", "/dashboard", "/tutorial", "/all-trades", "/trades", "/admin", "/settings")
 
 
 def _safe_next(next_path: Optional[str]) -> str:

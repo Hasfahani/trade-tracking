@@ -1,0 +1,155 @@
+{# Renders the app tutorial page. #}
+{% extends "base_v2.html" %}
+
+{% block title %}Tutorial{% endblock %}
+{% block meta_description %}Learn the normal PolySignal workflow for adding wallets, refreshing trades, reviewing dashboard signals, filtering activity, and using alerts.{% endblock %}
+
+{% block content %}
+<section class="hero-card hero-tutorial">
+    <div class="hero-copy">
+        <p class="eyebrow">Tutorial</p>
+        <h1>How to use {{ app_name or "PolySignal" }}</h1>
+        <p class="subtle">Follow the normal workflow: build a watchlist, refresh wallet activity, review signals, filter trades, and check sync health when something looks off.</p>
+    </div>
+    <div class="hero-actions tutorial-quickstart">
+        <div class="market-pulse" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="hero-actions-row">
+            <a href="/wallets" class="btn btn-primary btn-small">Start with wallets</a>
+            <a href="/dashboard" class="btn btn-small">Open dashboard</a>
+            <a href="/all-trades" class="btn btn-small">Search trades</a>
+        </div>
+    </div>
+</section>
+
+<section class="tutorial-flow" aria-label="Core workflow">
+    <article class="tutorial-step">
+        <span class="tutorial-step-number">1</span>
+        <div>
+            <span class="metric-label">Watchlist</span>
+            <h2>Add wallets</h2>
+            <p>Open Wallets, paste a Polymarket wallet address, add a useful label, and use tags or notes to remember why the wallet matters.</p>
+            <a href="/wallets" class="btn btn-small">Manage wallets</a>
+        </div>
+    </article>
+    <article class="tutorial-step">
+        <span class="tutorial-step-number">2</span>
+        <div>
+            <span class="metric-label">Refresh</span>
+            <h2>Pull trades</h2>
+            <p>Use Refresh on one wallet for targeted checks, or Refresh all wallets when you want to update the whole watchlist. Pages read from stored data after refresh.</p>
+            <a href="/admin/sync-status" class="btn btn-small">View sync log</a>
+        </div>
+    </article>
+    <article class="tutorial-step">
+        <span class="tutorial-step-number">3</span>
+        <div>
+            <span class="metric-label">Review</span>
+            <h2>Scan the dashboard</h2>
+            <p>Use Dashboard for the fastest read on wallet count, stored value, recent trades, top markets, value mix, and model-flagged activity.</p>
+            <a href="/dashboard" class="btn btn-small">Open dashboard</a>
+        </div>
+    </article>
+    <article class="tutorial-step">
+        <span class="tutorial-step-number">4</span>
+        <div>
+            <span class="metric-label">Investigate</span>
+            <h2>Filter trade history</h2>
+            <p>Use All Trades to narrow by wallet, market, date range, side, or value. Export CSV when you want to analyze the filtered result elsewhere.</p>
+            <a href="/all-trades" class="btn btn-small">Open all trades</a>
+        </div>
+    </article>
+</section>
+
+<section class="tutorial-grid">
+    <article class="card tutorial-panel">
+        <div class="section-head">
+            <h2>Daily operating loop</h2>
+            <span class="pill">Typical flow</span>
+        </div>
+        <div class="tutorial-checklist">
+            <div>
+                <strong>Refresh active wallets</strong>
+                <p>Start on Wallets and refresh the wallets you care about today. Check the status pills for success, no-new-trades, or errors.</p>
+            </div>
+            <div>
+                <strong>Review new activity</strong>
+                <p>Open Dashboard for recent trades, top markets, value concentration, and interesting events from the last 24 hours.</p>
+            </div>
+            <div>
+                <strong>Drill into context</strong>
+                <p>Click a wallet profile or trade detail when a large trade, new market, or signal score needs a closer look.</p>
+            </div>
+            <div>
+                <strong>Export when needed</strong>
+                <p>Apply filters in All Trades first, then export the matching rows to CSV for notes, sharing, or outside analysis.</p>
+            </div>
+        </div>
+    </article>
+
+    <article class="card tutorial-panel">
+        <div class="section-head">
+            <h2>What each area is for</h2>
+            <span class="pill">Navigation map</span>
+        </div>
+        <div class="tutorial-map">
+            <a href="/dashboard">
+                <span class="nav-glyph">D</span>
+                <strong>Dashboard</strong>
+                <small>Overall status, recent trades, value mix, top wallets, and notable activity.</small>
+            </a>
+            <a href="/wallets">
+                <span class="nav-glyph">W</span>
+                <strong>Wallets</strong>
+                <small>Add, label, tag, pin, archive, refresh, and inspect tracked wallets.</small>
+            </a>
+            <a href="/all-trades">
+                <span class="nav-glyph">T</span>
+                <strong>Trades</strong>
+                <small>Search and export stored trades across the whole database.</small>
+            </a>
+            <a href="/admin/sync-status">
+                <span class="nav-glyph">S</span>
+                <strong>Sync</strong>
+                <small>Audit refresh runs, inserted rows, duplicates, and failures.</small>
+            </a>
+            <a href="/settings">
+                <span class="nav-glyph">G</span>
+                <strong>Settings</strong>
+                <small>Configure Telegram alerts and minimum trade-size thresholds.</small>
+            </a>
+            <a href="/admin/ops-ui">
+                <span class="nav-glyph">O</span>
+                <strong>Ops</strong>
+                <small>Check database readiness, migration status, build info, and AI provider state.</small>
+            </a>
+        </div>
+    </article>
+</section>
+
+<section class="card tutorial-panel">
+    <div class="section-head">
+        <h2>Reading the signals</h2>
+        <span class="pill">Fast interpretation</span>
+    </div>
+    <div class="tutorial-signal-grid">
+        <div>
+            <span class="pill success">Refresh success</span>
+            <p>The wallet refresh completed and stored new trades if any were found.</p>
+        </div>
+        <div>
+            <span class="pill info">No new trades</span>
+            <p>The refresh worked, but nothing new was inserted for that wallet.</p>
+        </div>
+        <div>
+            <span class="pill danger">Refresh failed</span>
+            <p>Open Sync to read the error and decide whether to retry later.</p>
+        </div>
+        <div>
+            <span class="pill info">Signal score</span>
+            <p>A trade crossed the configured model threshold and deserves a closer read.</p>
+        </div>
+    </div>
+</section>
+{% endblock %}

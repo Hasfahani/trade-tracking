@@ -60,6 +60,7 @@ def test_active_router_exposes_expected_routes_once_and_in_safe_order():
     expected_paths = {
         "/",
         "/dashboard",
+        "/tutorial",
         "/wallets",
         "/wallets/export",
         "/wallets/import",

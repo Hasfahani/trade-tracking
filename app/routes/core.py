@@ -35,6 +35,26 @@ async def root():
     return RedirectResponse(url="/wallets", status_code=302)
 
 
+@router.get("/tutorial")
+async def tutorial(request: Request):
+    """HTML tutorial for the normal wallet-tracking workflow."""
+    if RETENTION_METRICS_ENABLED:
+        ret.emit(ret.RawEvent(
+            tracker_id=ret.get_or_create_tracker_id(request),
+            event_name="page_view",
+            route="tutorial",
+        ))
+
+    return templates.TemplateResponse(
+        request,
+        "tutorial_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+        },
+    )
+
+
 @router.get("/healthz")
 async def healthz(request: Request):
     return JSONResponse(
@@ -271,6 +291,7 @@ async def sitemap_xml(request: Request):
     urls = [
         "/",
         "/dashboard",
+        "/tutorial",
         "/wallets",
         "/all-trades",
         "/wallets/import",
