@@ -27,7 +27,7 @@ It is built for a simple workflow:
   date presets, side filters, wallet search, market search, and CSV export.
 - Trade detail pages with related trades, signal model context, and optional AI
   analysis.
-- Local notable-trade scoring model with numpy-only inference in the running
+- Local observed-trade anomaly model with numpy-only inference in the running
   app.
 - Admin model-training UI and scripts for local-only TensorFlow training.
 - Telegram alert settings, test alerts, and notifications for newly imported
@@ -201,6 +201,7 @@ All configuration is read from environment variables at startup.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `DASHBOARD_PASSWORD` | unset | Enables password login when set. Required in production. |
+| `PUBLIC_READ_ONLY` | `false` | Allows public GET access to browsing pages and trained-model trade analysis while keeping admin pages and mutations password-protected. |
 | `SESSION_SECRET_KEY` | development default | Session signing secret. Set a strong value for deployment. |
 | `SESSION_COOKIE_NAME` | `polysignal_session` | Session cookie name. |
 | `SESSION_COOKIE_SECURE` | `true` in production, else `false` | Secure flag for the session cookie. |
@@ -244,8 +245,8 @@ the in-app scheduler.
 
 PolySignal can explain trades in two ways:
 
-- A local notable-trade model scores trades from wallet history using
-  leakage-safe features and numpy-only inference.
+- A local observed-trade anomaly model scores each public trade against the
+  wallet's prior behavior using historical context plus the trade's known value.
 - Optional external providers can generate natural-language analysis when
   configured.
 

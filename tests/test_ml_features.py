@@ -79,6 +79,9 @@ def test_feature_values_match_hand_computation():
     assert row[9] == 0.0  # 10 prior trades on this market -> not a first entry
     assert row[10] == 1.0  # all prior trades on this market
     assert math.isclose(row[11], 0.4)  # |0.7 - 0.5| * 2
+    assert math.isclose(row[12], math.log1p(7.0))
+    assert math.isclose(row[13], math.log(7.0 / 5.0))
+    assert math.isclose(row[14], 7.0 / 5.0)  # std-zero fallback
     # value 7 vs std-zero fallback threshold 2 * 5 = 10 -> not notable
     assert y[0] == 0.0
 
@@ -128,7 +131,7 @@ def test_expanding_window_earlier_rows_unaffected_by_later_trades():
     np.testing.assert_array_equal(y_after[: len(ids_before)], y_before)
 
 
-def test_changing_own_size_changes_label_but_not_features():
+def test_changing_own_size_changes_observed_value_features_and_label():
     prior = make_trades(MIN_PRIOR_TRADES)  # uniform value 5 -> prior std 0
     small = prior + [make_trade(MIN_PRIOR_TRADES, size=10.0)]
     large = prior + [make_trade(MIN_PRIOR_TRADES, size=1000.0)]
@@ -137,7 +140,10 @@ def test_changing_own_size_changes_label_but_not_features():
     X_large, y_large, ids_large = build_features_for_wallet(large)
 
     assert ids_small == ids_large
-    np.testing.assert_array_equal(X_small, X_large)
+    np.testing.assert_array_equal(X_small[:, :12], X_large[:, :12])
+    assert X_large[0, 12] > X_small[0, 12]
+    assert X_large[0, 13] > X_small[0, 13]
+    assert X_large[0, 14] > X_small[0, 14]
     assert y_small[0] == 0.0  # value 5 <= 2 * prior mean 5
     assert y_large[0] == 1.0  # value 500 > 2 * prior mean 5
 

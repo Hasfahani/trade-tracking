@@ -69,11 +69,11 @@ class TestSignalPills:
     @pytest.mark.parametrize("path", ["/all-trades", f"/wallets/{_ADDR}/trades", "/dashboard"])
     def test_pill_shown_for_high_scores_only(self, path):
         client, session_factory = _build_client()
-        _seed(session_factory, [0.84, 0.42, None])
+        _seed(session_factory, [0.99, 0.42, None])
 
         response = client.get(path)
         assert response.status_code == 200
-        assert "Signal 0.84" in response.text
+        assert "Signal 0.99" in response.text
         assert "Signal 0.42" not in response.text
         # Exactly one flagged trade -> exactly one Signal pill
         assert response.text.count("Signal 0.") == 1
@@ -88,7 +88,7 @@ class TestTradeDetailCard:
         assert response.status_code == 200
         assert "Signal Model" in response.text
         assert "84.0%" in response.text
-        assert "Trained on this wallet" in response.text
+        assert "Observed-trade anomaly score" in response.text
 
     def test_scored_trade_enables_ai_analysis_without_external_provider(self):
         client, session_factory = _build_client()
@@ -113,7 +113,7 @@ class TestTradeDetailCard:
 class TestWalletDetailSection:
     def test_flagged_count_and_recent_list(self):
         client, session_factory = _build_client()
-        _seed(session_factory, [0.95, 0.71, 0.72, 0.73, 0.74, 0.75, 0.99, 0.2, None])
+        _seed(session_factory, [0.95, 0.93, 0.94, 0.96, 0.97, 0.98, 0.99, 0.2, None])
 
         response = client.get(f"/wallets/{_ADDR}")
         assert response.status_code == 200
@@ -122,7 +122,7 @@ class TestWalletDetailSection:
         # Only the 5 most recent flagged trades are listed (hours_ago grows with index).
         assert response.text.count("Signal 0.") == 5
         assert "Signal 0.95" in response.text  # most recent flagged
-        assert "Signal 0.75" not in response.text  # 6th most recent flagged
+        assert "Signal 0.98" not in response.text  # 6th most recent flagged
 
     def test_degrades_gracefully_when_model_never_loaded(self):
         client, session_factory = _build_client()
@@ -141,9 +141,9 @@ class TestDashboardStat:
         db = session_factory()
         try:
             db.add(Wallet(address=_ADDR))
-            _add_trade(db, "fresh-high", notable_score=0.9, hours_ago=2)
+            _add_trade(db, "fresh-high", notable_score=0.99, hours_ago=2)
             _add_trade(db, "fresh-low", notable_score=0.3, hours_ago=2)
-            _add_trade(db, "old-high", notable_score=0.9, hours_ago=48)
+            _add_trade(db, "old-high", notable_score=0.99, hours_ago=48)
             _add_trade(db, "fresh-null", notable_score=None, hours_ago=2)
             db.commit()
         finally:

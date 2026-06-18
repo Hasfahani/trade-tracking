@@ -14,7 +14,7 @@ IMPORTANT â€” deployment boundary:
 This is a thin CLI wrapper around app.ml.train.train_and_export.
 
 Usage (from the repo root):
-    python scripts/train_model.py [--epochs 200] [--lecture]
+    python scripts/train_model.py [--epochs 100] [--lecture]
 
 --lecture trains with the exact lecture math (single sigmoid neuron, MSE
 loss, SGD lr=0.1, no class weights). The default "improved" mode keeps the
@@ -32,7 +32,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Train the notable-trade model (local only).")
-    parser.add_argument("--epochs", type=int, default=200, help="Number of training epochs (default: 200)")
+    parser.add_argument("--epochs", type=int, default=100, help="Maximum epochs; improved mode uses early stopping (default: 100)")
     parser.add_argument(
         "--lecture",
         action="store_true",
@@ -72,6 +72,10 @@ def main() -> int:
         print(f"  positive class weight={result['class_weight_positive']:.1f}")
     else:
         print()
+    print(
+        f"Epochs: best {result.get('best_epoch', result['epochs_completed'])}, "
+        f"completed {result['epochs_completed']} / requested {result['epochs_requested']}"
+    )
     print(f"Chosen operating threshold (max F0.5 on validation): {result['threshold']:.4f}")
     print()
     print(f"{'':>12} | {'val':>8} | {'test':>8}")

@@ -65,6 +65,78 @@ WATCHLIST_SEED_WALLETS: List[SeedWallet] = [
         tags="high_win_rate, hype_markets",
         notes="Publicly profiled as a high-win-rate hype-market wallet.",
     ),
+    SeedWallet(
+        address="0x96cfcb0c30942cfcd1cdf76c7d408794d66b1acb",
+        label="mintblade — Monthly Sports PnL Leader",
+        tags="leaderboard_2026_06, sports, monthly_pnl",
+        notes="Ranked #1 on Polymarket's SPORTS monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0xed64a7bf029040aa331abc87902434d815ef217d",
+        label="fishalive — Monthly Sports PnL #2",
+        tags="leaderboard_2026_06, sports, monthly_pnl",
+        notes="Ranked #2 on Polymarket's SPORTS monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0x5e4c3b5b81171e2ca4ab776ac0d6bba787f9dba2",
+        label="endlessFate — Monthly Sports PnL #3",
+        tags="leaderboard_2026_06, sports, monthly_pnl",
+        notes="Ranked #3 on Polymarket's SPORTS monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0xf0318c32136c2db7fec88b84869aee6a1106c80c",
+        label="BreakTheBank — Monthly Sports PnL #4",
+        tags="leaderboard_2026_06, sports, monthly_pnl",
+        notes="Ranked #4 on Polymarket's SPORTS monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0xde7be6d489bce070a959e0cb813128ae659b5f4b",
+        label="wan123 — Monthly Politics PnL Leader",
+        tags="leaderboard_2026_06, politics, monthly_pnl",
+        notes="Ranked #1 on Polymarket's POLITICS monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0xbaa2bcb5439e985ce4ccf815b4700027d1b92c73",
+        label="denizz — Monthly Politics PnL #2",
+        tags="leaderboard_2026_06, politics, monthly_pnl",
+        notes="Ranked #2 on Polymarket's POLITICS monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0xc6587b11a2209e46dfe3928b31c5514a8e33b784",
+        label="Erasmus. — Monthly Politics PnL #3",
+        tags="leaderboard_2026_06, politics, monthly_pnl",
+        notes="Ranked #3 on Polymarket's POLITICS monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0xc84f7e76ec28ef20e7773b7b4926bfb7378be0c5",
+        label="BrightStars — Monthly Politics PnL #4",
+        tags="leaderboard_2026_06, politics, monthly_pnl",
+        notes="Ranked #4 on Polymarket's POLITICS monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0xf284ad6d607f777f34bc643cea587c33a886b9f9",
+        label="strike123 — Monthly Crypto PnL Leader",
+        tags="leaderboard_2026_06, crypto, monthly_pnl",
+        notes="Ranked #1 on Polymarket's CRYPTO monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0x0f0edbb5fca07a7efffe283624f085a7b2e2a019",
+        label="prayingnotbroke — Monthly Crypto PnL #2",
+        tags="leaderboard_2026_06, crypto, monthly_pnl",
+        notes="Ranked #2 on Polymarket's CRYPTO monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0x44c1dfe43260c94ed4f1d00de2e1f80fb113ebc1",
+        label="aenews2 — Monthly Crypto PnL #3",
+        tags="leaderboard_2026_06, crypto, monthly_pnl",
+        notes="Ranked #3 on Polymarket's CRYPTO monthly PnL leaderboard on 2026-06-18.",
+    ),
+    SeedWallet(
+        address="0xeebde7a0e019a63e6b476eb425505b7b3e6eba30",
+        label="Bonereaper — Monthly Crypto PnL #4",
+        tags="leaderboard_2026_06, crypto, monthly_pnl",
+        notes="Ranked #4 on Polymarket's CRYPTO monthly PnL leaderboard on 2026-06-18.",
+    ),
 ]
 
 

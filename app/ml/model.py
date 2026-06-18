@@ -40,7 +40,8 @@ def _stable_sigmoid(z: np.ndarray) -> np.ndarray:
     out[positive] = 1.0 / (1.0 + np.exp(-z[positive]))
     exp_z = np.exp(z[~positive])
     out[~positive] = exp_z / (1.0 + exp_z)
-    return out
+    epsilon = np.finfo(np.float64).eps
+    return np.clip(out, epsilon, 1.0 - epsilon)
 
 
 class SignalModel:

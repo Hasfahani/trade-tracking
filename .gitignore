@@ -6,7 +6,9 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
-data/
+data/*
+!data/.gitkeep
+!data/model_weights.json
 uvicorn_out.log
 uvicorn_err.log
 .env

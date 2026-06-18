@@ -313,7 +313,8 @@ class TestAnalyzeTrade:
         _wallet(db)
         trade = _trade(db, notable_score=0.84)
         with patch("app.ai_analysis._detect_provider_candidates", return_value=[]), \
-             patch("app.ai_analysis.get_signal_model", return_value=None):
+             patch("app.ai_analysis.get_signal_model", return_value=None), \
+             patch("app.ai_analysis.effective_signal_threshold", return_value=0.7):
             result = analyze_trade(trade, db)
 
         assert result is not None

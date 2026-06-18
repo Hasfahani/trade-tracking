@@ -129,6 +129,14 @@ class TestRefreshWalletPipeline:
         assert second["inserted"] == 0
         assert db.query(Trade).count() == 1
 
+    def test_deduplicates_repeated_trade_ids_inside_one_api_response(self, db):
+        wallet = self._make_wallet(db)
+        with patch("app.ingest.fetch_trades_for_wallet", return_value=[_RAW_TRADE, _RAW_TRADE]):
+            result = refresh_wallet(db, wallet)
+        assert result["inserted"] == 1
+        assert result["duplicates"] == 1
+        assert db.query(Trade).count() == 1
+
     def test_no_new_status_when_no_new_trades(self, db):
         wallet = self._make_wallet(db)
         with patch("app.ingest.fetch_trades_for_wallet", return_value=[_RAW_TRADE]):

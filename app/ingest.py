@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 DATA_API_BASE = "https://data-api.polymarket.com"
 _MAX_RETRY_ATTEMPTS = 3
 _INITIAL_BACKOFF_SECONDS = 2.0
+_MAX_TRADES_PAGE_SIZE = 1000
+_MAX_TRADES_OFFSET = 3000
 
 
 @lru_cache(maxsize=1)
@@ -45,6 +47,7 @@ def fetch_trades_for_wallet(address: str, limit: int = 1000, fetch_all: bool = F
     """Fetch trades for a wallet from Polymarket public data API."""
     address = address.lower().strip()
     all_trades: List[Dict[str, Any]] = []
+    limit = min(max(int(limit), 1), _MAX_TRADES_PAGE_SIZE)
 
     if fetch_all:
         offset = 0
@@ -56,6 +59,13 @@ def fetch_trades_for_wallet(address: str, limit: int = 1000, fetch_all: bool = F
             if len(batch) < limit:
                 break
             offset += limit
+            if offset > _MAX_TRADES_OFFSET:
+                logger.info(
+                    "Reached Polymarket historical trade offset cap for wallet=%s after %d rows",
+                    address,
+                    len(all_trades),
+                )
+                break
         return all_trades
 
     return _fetch_trade_batch(address=address, limit=limit)
@@ -69,8 +79,24 @@ def _fetch_trade_batch(address: str, limit: int, offset: Optional[int] = None) -
 
     backoff = _INITIAL_BACKOFF_SECONDS
     for attempt in range(1, _MAX_RETRY_ATTEMPTS + 1):
-        with httpx.Client(timeout=_polymarket_timeout(), verify=_polymarket_ssl_context()) as client:
-            response = client.get(url, params=params)
+        try:
+            with httpx.Client(timeout=_polymarket_timeout(), verify=_polymarket_ssl_context()) as client:
+                response = client.get(url, params=params)
+        except httpx.TransportError:
+            if attempt >= _MAX_RETRY_ATTEMPTS:
+                raise
+            logger.warning(
+                "Polymarket transport error for wallet=%s offset=%s, attempt=%d/%d, sleeping=%.1fs",
+                address,
+                offset,
+                attempt,
+                _MAX_RETRY_ATTEMPTS,
+                backoff,
+                exc_info=True,
+            )
+            time.sleep(backoff)
+            backoff *= 2
+            continue
 
         status_code = getattr(response, "status_code", None)
         if status_code == 429:
@@ -349,7 +375,11 @@ def refresh_wallet(
 
     try:
         raw_trades = fetch_trades_for_wallet(wallet.address, limit=limit, fetch_all=fetch_all)
-        normalized = [trade for trade in (normalize_trade(raw, wallet.address) for raw in raw_trades) if trade]
+        normalized_rows = [trade for trade in (normalize_trade(raw, wallet.address) for raw in raw_trades) if trade]
+        normalized_by_id: Dict[str, Dict[str, Any]] = {}
+        for trade in normalized_rows:
+            normalized_by_id.setdefault(trade["id"], trade)
+        normalized = list(normalized_by_id.values())
 
         inserted = 0
         if normalized:
@@ -378,7 +408,7 @@ def refresh_wallet(
                 )
             inserted = len(new_trades)
 
-        duplicate_count = len(normalized) - inserted
+        duplicate_count = len(raw_trades) - inserted
         status = "no_new" if inserted == 0 else "success"
         wallet.last_refresh_status = status
         wallet.last_refresh_count = inserted

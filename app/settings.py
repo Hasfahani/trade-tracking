@@ -107,6 +107,7 @@ POLYMARKET_POOL_TIMEOUT_SECONDS = _env_float("POLYMARKET_POOL_TIMEOUT_SECONDS", 
 
 # Authentication â€” if set, all routes require a session login
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip() or None
+PUBLIC_READ_ONLY = _env_bool("PUBLIC_READ_ONLY", False)
 
 # Session secret key for itsdangerous / Starlette sessions
 DEFAULT_SESSION_SECRET_KEY = "change-me-in-production-use-a-long-random-secret"

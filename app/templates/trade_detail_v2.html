@@ -56,9 +56,9 @@
     {% if trade.notable_score is not none %}
     <div class="metrics-grid embedded-metrics">
         <article class="metric-card">
-            <span class="metric-label">Signal score</span>
+            <span class="metric-label">Anomaly score</span>
             <strong>{{ '%.1f'|format(trade.notable_score * 100) }}%</strong>
-            <small class="subtle">Trained on this wallet's historical behavior &mdash; likelihood this trade is unusually large in context.</small>
+            <small class="subtle">Observed-trade anomaly score relative to this wallet&rsquo;s prior history. This is not a probability or trading recommendation.</small>
         </article>
     </div>
     {% else %}

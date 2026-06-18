@@ -43,12 +43,15 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_EPOCHS = 200
+DEFAULT_EPOCHS = 100
 DEFAULT_MODE = "improved"  # "improved" | "lecture"
 TRAIN_FRACTION = 0.7
 VAL_FRACTION = 0.15  # remainder (0.15) is the test set
 SWEEP_THRESHOLDS = (0.3, 0.5, 0.7)
 MAX_THRESHOLD_CANDIDATES = 512
+EARLY_STOPPING_PATIENCE = 15
+EARLY_STOPPING_MIN_EPOCHS = 20
+EARLY_STOPPING_MIN_DELTA = 1e-4
 
 _status_lock = threading.Lock()
 _status: Dict[str, Any] = {"state": "idle"}  # idle | running | done | error
@@ -258,13 +261,38 @@ def train_and_export(
         loss_name = "binary_crossentropy"
         optimizer_name = "adam(0.01)"
 
+    best_weights = None
+    best_val_ap = -1.0
+    best_epoch = 0
+    epochs_without_improvement = 0
+    epochs_completed = 0
     for epoch in range(1, epochs + 1):
         history = model.fit(X_train, y_train, epochs=1, verbose=0, class_weight=class_weight)
+        epochs_completed = epoch
+        if mode == "improved":
+            epoch_val_scores = model.predict(X_val, verbose=0).flatten()
+            epoch_val_ap = average_precision(y_val, epoch_val_scores)
+            if epoch_val_ap > best_val_ap + EARLY_STOPPING_MIN_DELTA:
+                best_val_ap = epoch_val_ap
+                best_epoch = epoch
+                best_weights = model.get_weights()
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
         if progress_callback is not None:
             weights, bias = model.layers[0].get_weights()
             progress_callback(
                 epoch, epochs, float(history.history["loss"][0]), weights.flatten(), float(bias[0])
             )
+        if (
+            mode == "improved"
+            and epoch >= EARLY_STOPPING_MIN_EPOCHS
+            and epochs_without_improvement >= EARLY_STOPPING_PATIENCE
+        ):
+            break
+
+    if best_weights is not None:
+        model.set_weights(best_weights)
 
     weights, bias = model.layers[0].get_weights()
     val_scores = model.predict(X_val, verbose=0).flatten()
@@ -294,6 +322,10 @@ def train_and_export(
         "mode": mode,
         "loss": loss_name,
         "optimizer": optimizer_name,
+        "epochs_requested": int(epochs),
+        "epochs_completed": int(epochs_completed),
+        "best_epoch": int(best_epoch or epochs_completed),
+        "best_val_pr_auc": float(best_val_ap) if best_val_ap >= 0.0 else None,
         "class_weight_positive": pos_weight,
         "threshold": float(threshold),
         "n_train": int(len(y_train)),

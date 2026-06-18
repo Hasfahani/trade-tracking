@@ -94,7 +94,23 @@ def get_status_counters() -> dict:
 
 # Paths that do NOT require authentication (login page itself, static assets)
 _PUBLIC_PATHS = frozenset({"/login", "/logout", "/healthz", "/readyz", "/robots.txt", "/sitemap.xml"})
+_PUBLIC_READ_ONLY_EXCLUDED_PREFIXES = ("/admin", "/settings", "/login", "/logout")
 _READINESS_TIMEOUT_SECONDS = 3.0
+
+
+def _is_public_read_only_request(request: Request) -> bool:
+    """Allow public browsing and local-model analysis while keeping mutations private."""
+    if not app_settings.PUBLIC_READ_ONLY or request.method not in {"GET", "HEAD"}:
+        return False
+
+    path = request.url.path
+    if path.startswith(_PUBLIC_READ_ONLY_EXCLUDED_PREFIXES):
+        return False
+
+    if path.startswith("/api/"):
+        return path.startswith("/api/trades/") and path.endswith("/ai-analysis")
+
+    return True
 
 
 @asynccontextmanager
@@ -418,6 +434,7 @@ async def auth_middleware(request: Request, call_next):
         auth.auth_enabled()
         and path not in _PUBLIC_PATHS
         and not path.startswith("/static")
+        and not _is_public_read_only_request(request)
         and not auth.is_authenticated(request)
     ):
         return RedirectResponse(url=f"/login?next={path}", status_code=302)

@@ -1,16 +1,11 @@
 # Creates model inputs from wallet trade history.
-"""Leakage-safe feature engineering for per-wallet trade notability.
+"""Feature engineering for per-wallet observed-trade notability.
 
 Features for each trade are computed from an expanding window of the
-wallet's PRIOR trades only. The current trade's own size/value influences
-its label but never its features.
-
-Deliberately excluded features: anything derived from the current trade's
-size or value (e.g. "value vs wallet average", "value percentile"). The
-label is defined as "value > prior mean + 2*std", so those features would
-hand the model the answer and the score would stop being a prediction.
-The size-vs-average comparison belongs in the explanation layer
-(app/ai_analysis.py), which may look at the whole trade.
+wallet's PRIOR trades, plus three observed-value features from the current
+trade. This is an anomaly detector, not a forecast: when a trade arrives its
+price and size are already public, and the product needs to answer how unusual
+that observed trade is relative to the wallet's history.
 """
 
 import math
@@ -25,7 +20,7 @@ from app.models import Trade
 MIN_PRIOR_TRADES = 10
 MAX_GAP_HOURS = 168.0
 MAX_VALUE_CV = 5.0
-FEATURE_COUNT = 12
+FEATURE_COUNT = 15
 
 # Order must match the rows built in build_features_for_wallet.
 FEATURE_NAMES = [
@@ -41,6 +36,9 @@ FEATURE_NAMES = [
     "is_first_trade_on_market",
     "market_concentration",
     "price_extremity",
+    "log1p_trade_value",
+    "log_value_vs_prior_mean",
+    "value_zscore_capped",
 ]
 
 # Human-readable labels for the explanation layer ("why" in the UI).
@@ -57,11 +55,14 @@ FEATURE_LABELS = {
     "is_first_trade_on_market": "first entry on this market",
     "market_concentration": "wallet's focus on this market",
     "price_extremity": "how extreme the entry price is (longshot/near-certain)",
+    "log1p_trade_value": "observed trade value",
+    "log_value_vs_prior_mean": "trade value vs the wallet's prior average",
+    "value_zscore_capped": "trade value deviation from the wallet's prior history",
 }
 
 
 def build_features_for_wallet(trades: Sequence) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-    """Build a leakage-safe feature matrix for one wallet's trades.
+    """Build an observed-trade anomaly feature matrix for one wallet's trades.
 
     Args:
         trades: Trade rows for a single wallet, sorted by traded_at ascending.
@@ -117,6 +118,15 @@ def build_features_for_wallet(trades: Sequence) -> Tuple[np.ndarray, np.ndarray,
             prior_value_cv = (
                 min(prior_value_std / prior_value_mean, MAX_VALUE_CV) if prior_value_mean > 0.0 else 0.0
             )
+            value_ratio = value / prior_value_mean if prior_value_mean > 0.0 else 1.0
+            log_value_ratio = min(max(math.log(max(value_ratio, 1e-9)), -6.0), 6.0)
+            if prior_value_std > 0.0:
+                value_zscore = (value - prior_value_mean) / prior_value_std
+            elif prior_value_mean > 0.0:
+                value_zscore = value_ratio
+            else:
+                value_zscore = 0.0
+            value_zscore = min(max(value_zscore, -10.0), 10.0)
 
             cutoff = trade.traded_at - timedelta(hours=24)
             while window_start < i and trades[window_start].traded_at < cutoff:
@@ -143,6 +153,9 @@ def build_features_for_wallet(trades: Sequence) -> Tuple[np.ndarray, np.ndarray,
                     1.0 if prior_on_market == 0 else 0.0,
                     prior_on_market / prior_count,
                     abs(price - 0.5) * 2.0,
+                    math.log1p(value),
+                    log_value_ratio,
+                    value_zscore,
                 ]
             )
             labels.append(1.0 if is_notable else 0.0)

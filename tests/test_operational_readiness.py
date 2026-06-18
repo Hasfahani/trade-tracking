@@ -193,6 +193,35 @@ def test_auth_enabled_protected_route_redirects_without_session_error(monkeypatc
     assert response.headers["location"] == "/login?next=/wallets"
 
 
+def test_public_read_only_allows_analysis_but_keeps_admin_private(monkeypatch):
+    import app.auth as auth_mod
+    import app.routes.auth as auth_route_mod
+    import app.main as main_mod
+
+    monkeypatch.setattr(auth_mod, "DASHBOARD_PASSWORD", "correct-password")
+    monkeypatch.setattr(auth_route_mod, "DASHBOARD_PASSWORD", "correct-password")
+    monkeypatch.setattr(main_mod.app_settings, "PUBLIC_READ_ONLY", True)
+    app = create_app(lifespan_context=None, csrf_enabled=False)
+    app.state.ready = True
+    client = TestClient(app, raise_server_exceptions=False)
+
+    public_page = client.get("/all-trades", follow_redirects=False)
+    assert public_page.status_code == 200
+
+    public_analysis = client.get("/api/trades/missing/ai-analysis", follow_redirects=False)
+    assert public_analysis.status_code == 404
+
+    protected_admin = client.get("/admin/train-model", follow_redirects=False)
+    assert protected_admin.status_code == 302
+    assert protected_admin.headers["location"] == "/login?next=/admin/train-model"
+
+    protected_mutation = client.post(
+        "/api/trades/missing/ai-analysis/invalidate",
+        follow_redirects=False,
+    )
+    assert protected_mutation.status_code == 302
+
+
 def test_auto_refresh_scheduler_disabled_with_multiple_workers(monkeypatch):
     import app.main as main_mod
 
