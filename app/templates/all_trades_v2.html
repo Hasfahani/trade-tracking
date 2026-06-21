@@ -19,15 +19,15 @@
             </div>
             <div class="stat-chip">
                 <span class="metric-label">Total value</span>
-                <strong>${{ '%.2f'|format(pnl.total_value) }}</strong>
+                <strong title="{{ fmt_money_full(pnl.total_value) }}">{{ fmt_money(pnl.total_value) }}</strong>
             </div>
             <div class="stat-chip">
                 <span class="metric-label">YES</span>
-                <strong class="text-success">${{ '%.2f'|format(pnl.yes_value) }}</strong>
+                <strong class="text-success" title="{{ fmt_money_full(pnl.yes_value) }}">{{ fmt_money(pnl.yes_value) }}</strong>
             </div>
             <div class="stat-chip">
                 <span class="metric-label">NO</span>
-                <strong class="text-danger">${{ '%.2f'|format(pnl.no_value) }}</strong>
+                <strong class="text-danger" title="{{ fmt_money_full(pnl.no_value) }}">{{ fmt_money(pnl.no_value) }}</strong>
             </div>
         </div>
     </div>
@@ -61,8 +61,8 @@
             <span class="split-no" style="width: {{ no_value_pct }}%;"></span>
         </div>
         <div class="legend-row">
-            <span><i class="legend-dot yes-dot"></i>YES ${{ '{:,.2f}'.format(pnl.yes_value) }} - {{ yes_value_pct }}%</span>
-            <span><i class="legend-dot no-dot"></i>NO ${{ '{:,.2f}'.format(pnl.no_value) }} - {{ no_value_pct }}%</span>
+            <span><i class="legend-dot yes-dot"></i>YES {{ fmt_money(pnl.yes_value) }} - {{ yes_value_pct }}%</span>
+            <span><i class="legend-dot no-dot"></i>NO {{ fmt_money(pnl.no_value) }} - {{ no_value_pct }}%</span>
         </div>
         {% else %}
         <div class="empty-state compact-empty">
@@ -82,7 +82,7 @@
             <a class="ranked-bar" href="/wallets/{{ row.address }}/trades">
                 <span>
                     <em>{% if row.wallet and row.wallet.label %}{{ row.wallet.label }}{% else %}{{ short_address(row.address) }}{% endif %}</em>
-                    <strong>${{ '{:,.2f}'.format(row.total_value) }}</strong>
+                    <strong title="{{ fmt_money_full(row.total_value) }}">{{ fmt_money(row.total_value) }}</strong>
                 </span>
                 <small>{{ row.trade_count }} trade{{ 's' if row.trade_count != 1 else '' }}</small>
                 <i><b style="width: {{ row.bar_pct }}%;"></b></i>
@@ -107,7 +107,7 @@
             <a class="ranked-bar" href="/all-trades?market_search={{ row.condition_id }}">
                 <span>
                     <em>{{ row.market }}</em>
-                    <strong>${{ '{:,.2f}'.format(row.total_value) }}</strong>
+                    <strong title="{{ fmt_money_full(row.total_value) }}">{{ fmt_money(row.total_value) }}</strong>
                 </span>
                 <small>{{ row.trade_count }} trade{{ 's' if row.trade_count != 1 else '' }}</small>
                 <i><b style="width: {{ row.bar_pct }}%;"></b></i>
@@ -123,17 +123,20 @@
 </section>
 
 <section class="card">
+    <div class="section-head filter-head">
+        <h2>Filters</h2>
+        <button type="button" class="btn btn-small filter-toggle" data-collapse-toggle="all-trades-filter-body" aria-expanded="false">Show / hide</button>
+    </div>
+
+    <div class="quick-presets" role="group" aria-label="Quick date range">
+        <a class="preset-chip {% if not date_preset %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='', date_from='', date_to='', page=1) }}">All</a>
+        <a class="preset-chip {% if date_preset == 'today' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='today', date_from='', date_to='', page=1) }}">Today</a>
+        <a class="preset-chip {% if date_preset == '7d' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='7d', date_from='', date_to='', page=1) }}">7D</a>
+        <a class="preset-chip {% if date_preset == '30d' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='30d', date_from='', date_to='', page=1) }}">30D</a>
+    </div>
+
+    <div id="all-trades-filter-body" class="filter-body">
     <form method="get" class="filter-grid">
-        <label>
-            Date preset
-            <select name="date_preset">
-                <option value="">Custom / all</option>
-                <option value="today" {% if date_preset == 'today' %}selected{% endif %}>Today</option>
-                <option value="7d" {% if date_preset == '7d' %}selected{% endif %}>Last 7 days</option>
-                <option value="30d" {% if date_preset == '30d' %}selected{% endif %}>Last 30 days</option>
-                <option value="all" {% if date_preset == 'all' %}selected{% endif %}>All dates</option>
-            </select>
-        </label>
         <label>
             Wallet search
             <input type="text" name="wallet_search" placeholder="0x..." value="{{ wallet_search or '' }}">
@@ -175,18 +178,23 @@
                 <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
             </select>
         </label>
-        <button class="btn btn-primary" type="submit">Apply filters</button>
+        <div class="action-row">
+            <button class="btn btn-primary" type="submit">Apply filters</button>
+            <a class="btn" href="/all-trades">Reset</a>
+        </div>
     </form>
+    </div>
 </section>
 
-<section class="summary-chip-row">
+<section class="summary-chip-row" aria-label="Active filters">
     <span class="pill">Showing {{ pagination.start }}-{{ pagination.end }} of {{ total_trades }} matches</span>
-    {% if wallet_search %}<span class="pill">Wallet: {{ wallet_search }}</span>{% endif %}
-    {% if side %}<span class="pill">Side: {{ side }}</span>{% endif %}
-    {% if market_search %}<span class="pill">Search: {{ market_search }}</span>{% endif %}
-    {% if date_preset and date_preset != 'all' %}<span class="pill">Preset: {{ date_preset }}</span>{% endif %}
-    {% if summary_row and summary_row.newest_trade_at %}<span class="pill">Newest: {{ summary_row.newest_trade_at.strftime('%Y-%m-%d') }}</span>{% endif %}
-    {% if summary_row and summary_row.oldest_trade_at %}<span class="pill">Oldest: {{ summary_row.oldest_trade_at.strftime('%Y-%m-%d') }}</span>{% endif %}
+    {% if wallet_search %}<span class="pill info">Wallet: {{ wallet_search }}</span>{% endif %}
+    {% if side %}<span class="pill info">Side: {{ side }}</span>{% endif %}
+    {% if market_search %}<span class="pill info">Search: {{ market_search }}</span>{% endif %}
+    {% if date_preset and date_preset != 'all' %}<span class="pill info">Preset: {{ date_preset }}</span>{% endif %}
+    {% if date_from %}<span class="pill info">From: {{ date_from }}</span>{% endif %}
+    {% if date_to %}<span class="pill info">To: {{ date_to }}</span>{% endif %}
+    {% if wallet_search or side or market_search or date_preset or date_from or date_to %}<a class="pill clear-chip" href="/all-trades">Clear all</a>{% endif %}
 </section>
 
 <section class="card">
@@ -216,11 +224,11 @@
                     <td data-label="Market">
                         <a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a>
                         {% if trade.notable_score is not none and trade.notable_score >= signal_threshold %}
-                        <span class="pill info">Signal {{ '%.2f'|format(trade.notable_score) }}</span>
+                        <span class="pill {{ signal_tone(trade.notable_score) }}" title="Signal strength {{ '%.2f'|format(trade.notable_score) }} / 1.00">{{ signal_label(trade.notable_score) }} signal</span>
                         {% endif %}
                     </td>
                     <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
-                    <td data-label="Value">${{ '%.2f'|format(trade.price * trade.size) }}</td>
+                    <td data-label="Value" title="{{ fmt_money_full(trade.price * trade.size) }}">{{ fmt_money(trade.price * trade.size) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

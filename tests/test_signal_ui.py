@@ -73,10 +73,10 @@ class TestSignalPills:
 
         response = client.get(path)
         assert response.status_code == 200
-        assert "Signal 0.99" in response.text
-        assert "Signal 0.42" not in response.text
-        # Exactly one flagged trade -> exactly one Signal pill
-        assert response.text.count("Signal 0.") == 1
+        assert "Signal strength 0.99 / 1.00" in response.text
+        assert "Signal strength 0.42" not in response.text
+        # Exactly one flagged trade -> exactly one signal-strength pill
+        assert response.text.count("Signal strength 0.") == 1
 
 
 class TestTradeDetailCard:
@@ -117,12 +117,12 @@ class TestWalletDetailSection:
 
         response = client.get(f"/wallets/{_ADDR}")
         assert response.status_code == 200
-        assert "Signal Model" in response.text
+        assert "Signal strength" in response.text
         assert "7 flagged trades" in response.text
         # Only the 5 most recent flagged trades are listed (hours_ago grows with index).
-        assert response.text.count("Signal 0.") == 5
-        assert "Signal 0.95" in response.text  # most recent flagged
-        assert "Signal 0.98" not in response.text  # 6th most recent flagged
+        assert response.text.count(" / 1.00") == 5
+        assert "0.95 / 1.00" in response.text  # most recent flagged
+        assert "0.98 / 1.00" not in response.text  # 6th most recent flagged
 
     def test_degrades_gracefully_when_model_never_loaded(self):
         client, session_factory = _build_client()

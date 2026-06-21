@@ -6,7 +6,7 @@ train_and_export, never at module top, so the app imports this module and
 starts normally on servers without TF. Use tensorflow_available() to check
 before offering training in the UI.
 
-Two training modes share the SAME architecture â€” the single sigmoid neuron
+Two training modes share the SAME architecture - the single sigmoid neuron
 from the lecture (Manually Written Lecture AP SS26):
 
     weighted inputs:  z = wÂ·x + b              -> Dense(1) layer
@@ -16,10 +16,10 @@ from the lecture (Manually Written Lecture AP SS26):
 
 - "lecture" mode reproduces the lecture training exactly: MSE loss
   (E = 1/N Î£ (t âˆ’ y)Â²) minimised with SGD(learning_rate=0.1), no class
-  weighting â€” the same math as the hand-worked epochs in the notes.
+  weighting - the same math as the hand-worked epochs in the notes.
 - "improved" mode (default) keeps the neuron but trains it with binary
   cross-entropy and class weights. With a ~3.5% positive rate, MSE+sigmoid
-  has vanishing gradients near yâ‰ˆ0 and converges to "predict 0 everywhere"
+  has vanishing gradients near y~=0 and converges to "predict 0 everywhere"
   (precision/recall 0.0). BCE is the maximum-likelihood loss for a sigmoid
   output, and weighting positives by n_neg/n_pos makes rare notable trades
   matter as much as common normal ones.
@@ -100,7 +100,7 @@ def precision_recall_f1(y_true, y_score, threshold):
 
 
 def roc_auc(y_true, y_score) -> float:
-    """Rank-based ROC-AUC (Mannâ€“Whitney U) with average ranks for ties.
+    """Rank-based ROC-AUC (Mann-Whitney U) with average ranks for ties.
 
     Returns nan when either class is absent.
     """
@@ -143,7 +143,7 @@ def average_precision(y_true, y_score) -> float:
     return float((precision_at_k * y_sorted).sum() / n_pos)
 
 
-THRESHOLD_FBETA = 0.5  # weights precision 2x recall â€” flags should be rare and high-confidence
+THRESHOLD_FBETA = 0.5  # weights precision 2x recall - flags should be rare and high-confidence
 MAX_FLAG_RATE = 0.10  # a "notable" flag may fire on at most this fraction of trades
 
 
@@ -151,7 +151,7 @@ def select_threshold(y_true, y_score, beta: float = THRESHOLD_FBETA, max_flag_ra
     """Pick the operating threshold that maximises F-beta on (y_true, y_score).
 
     Two product constraints are encoded here rather than hardcoding a number:
-    - beta < 1 weights precision over recall â€” we prefer fewer,
+    - beta < 1 weights precision over recall - we prefer fewer,
       higher-confidence flags over catching every positive.
     - candidates are restricted to thresholds that flag at most
       max_flag_rate of trades: a "notable trade" pill on half the feed is
@@ -224,7 +224,7 @@ def train_and_export(
     if mode not in ("improved", "lecture"):
         raise ValueError(f"Unknown training mode: {mode!r}")
 
-    import tensorflow as tf  # LOCAL-ONLY heavy dep â€” see module docstring
+    import tensorflow as tf  # LOCAL-ONLY heavy dep - see module docstring
 
     from app.db import get_db_context
     from app.ml import model as ml_model
@@ -254,7 +254,7 @@ def train_and_export(
         n_pos = float(y_train.sum())
         n_neg = float(len(y_train) - n_pos)
         if n_pos == 0:
-            raise RuntimeError("Training set has no notable trades â€” cannot class-weight.")
+            raise RuntimeError("Training set has no notable trades - cannot class-weight.")
         pos_weight = n_neg / n_pos
         class_weight = {0: 1.0, 1: pos_weight}
         model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01), loss='binary_crossentropy')
@@ -343,7 +343,7 @@ def train_and_export(
     }
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     logger.info(
-        "Model trained (%s mode, %d epochs) and exported to %s â€” threshold %.4f, test F1 %.4f",
+        "Model trained (%s mode, %d epochs) and exported to %s - threshold %.4f, test F1 %.4f",
         mode, epochs, output_path, threshold, test_metrics["f1_at_threshold"],
     )
     return {**payload, "output_path": str(output_path)}

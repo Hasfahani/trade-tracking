@@ -4332,3 +4332,405 @@ tbody tr:hover {
         grid-column: 1 / -1;
     }
 }
+
+/* ==========================================================================
+   PolySignal trader UI - wallet header, summary cards, signal & sticky bar
+   ========================================================================== */
+
+/* ---- Sticky mobile wallet bar ---- */
+.sticky-wallet-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(8, 13, 21, 0.96);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    transform: translateY(-100%);
+    transition: transform 0.25s ease;
+    font-size: 0.85rem;
+}
+
+.sticky-wallet-bar.is-visible {
+    transform: translateY(0);
+}
+
+.sticky-name {
+    font-weight: 700;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 40%;
+}
+
+.sticky-stat {
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.sticky-bias {
+    margin-left: auto;
+}
+
+/* ---- Wallet identity header ---- */
+.wallet-id-card {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(16, 25, 38, 0.97), rgba(10, 17, 28, 0.98));
+    box-shadow: var(--shadow);
+    padding: 20px 22px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.wallet-id-main {
+    min-width: 0;
+    flex: 1 1 320px;
+}
+
+.wallet-id-name {
+    margin: 2px 0 12px;
+    font-size: clamp(1.4rem, 4.5vw, 2rem);
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+}
+
+.identity-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.mono-chip {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: 0.82rem;
+    color: var(--muted);
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 9px;
+}
+
+.icon-copy {
+    border: 1px solid var(--border);
+    background: #1b2b3f;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s ease;
+}
+
+.icon-copy:hover {
+    background: #25384f;
+}
+
+.wallet-id-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.wallet-id-actions form {
+    margin: 0;
+}
+
+.follow-btn {
+    min-width: 150px;
+}
+
+.follow-btn.is-following {
+    background: #1c3a2f;
+    color: #b6f4d8;
+    border: 1px solid #2a7654;
+}
+
+.follow-btn.is-following:hover {
+    background: #245041;
+}
+
+.secondary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.secondary-actions form {
+    margin: 0;
+}
+
+/* ---- Compact summary cards ---- */
+.summary-cards {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.summary-cards .metric-card {
+    padding: 13px 15px;
+}
+
+.summary-cards .metric-card strong {
+    font-size: 1.3rem;
+    overflow-wrap: anywhere;
+}
+
+.metric-sm {
+    font-size: 0.95rem !important;
+    font-weight: 700;
+}
+
+.metric-sm small {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.metric-foot {
+    display: block;
+    margin-top: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Performance placeholders ---- */
+.perf-grid {
+    margin-bottom: 4px;
+}
+
+.perf-locked {
+    margin-top: 16px;
+    text-align: left;
+    padding: 16px;
+}
+
+.perf-locked h3 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+}
+
+.perf-locked > p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.perf-placeholder-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.perf-placeholder {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: rgba(8, 13, 21, 0.5);
+}
+
+.perf-placeholder em {
+    font-style: normal;
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.perf-placeholder b {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.88rem;
+}
+
+/* ---- Signal strength ---- */
+.signal-explainer {
+    margin: 2px 0 14px;
+    line-height: 1.5;
+}
+
+.signal-table {
+    min-width: 720px;
+}
+
+/* ==========================================================================
+   Mobile polish for the trader UI
+   ========================================================================== */
+@media (max-width: 760px) {
+    .sticky-wallet-bar {
+        display: flex;
+    }
+
+    .wallet-id-card {
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .wallet-id-actions {
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .wallet-id-actions .follow-btn {
+        width: 100%;
+    }
+
+    .secondary-actions {
+        justify-content: stretch;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .secondary-actions .btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .summary-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .summary-cards .metric-card strong {
+        font-size: 1.15rem;
+    }
+
+    .perf-placeholder-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .signal-table {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 430px) {
+    .summary-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .wallet-id-name {
+        font-size: 1.35rem;
+    }
+
+    .identity-chips {
+        gap: 6px;
+    }
+}
+
+/* ---- Trade filters: quick presets + collapsible body ---- */
+.quick-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 6px 0 14px;
+}
+
+.preset-chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--muted);
+    background: #101d2f;
+}
+
+.preset-chip:hover {
+    color: var(--text);
+    background: #16273c;
+}
+
+.preset-chip.is-active {
+    color: #02131d;
+    background: linear-gradient(180deg, #2cb4f4, #139de3);
+    border-color: transparent;
+}
+
+.filter-toggle {
+    display: none;
+}
+
+.clear-chip {
+    color: #ffc0cc;
+    border-color: #7c3347;
+    background: #3e1e2a;
+    cursor: pointer;
+}
+
+.clear-chip:hover {
+    color: #fff;
+    background: #50263440;
+}
+
+@media (max-width: 760px) {
+    .filter-toggle {
+        display: inline-flex;
+    }
+
+    .filter-body {
+        display: none;
+    }
+
+    .filter-body.is-open {
+        display: block;
+    }
+
+    .filter-grid .action-row .btn {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* ---- Leaderboard ---- */
+.leaderboard-table {
+    min-width: 880px;
+}
+
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 0.82rem;
+    color: var(--muted);
+    background: #101d2f;
+    border: 1px solid var(--border);
+}
+
+.rank-badge.rank-top {
+    color: #02131d;
+    background: linear-gradient(180deg, var(--warning), #ffd591);
+    border-color: transparent;
+}
+
+.lb-addr {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.74rem;
+}
+
+@media (max-width: 760px) {
+    .leaderboard-table {
+        min-width: 0;
+    }
+}

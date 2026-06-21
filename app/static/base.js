@@ -216,3 +216,32 @@ function _updateStaleness() {
 
 _updateStaleness();
 setInterval(_updateStaleness, 60000);
+
+// Sticky bars: reveal an element once the page scrolls past data-sticky-after px
+document.querySelectorAll('[data-sticky-after]').forEach(function (el) {
+    var threshold = parseInt(el.getAttribute('data-sticky-after'), 10) || 200;
+    var ticking = false;
+    function update() {
+        var show = window.scrollY > threshold;
+        el.classList.toggle('is-visible', show);
+        el.setAttribute('aria-hidden', show ? 'false' : 'true');
+        ticking = false;
+    }
+    window.addEventListener('scroll', function () {
+        if (!ticking) {
+            window.requestAnimationFrame(update);
+            ticking = true;
+        }
+    }, { passive: true });
+    update();
+});
+
+// Collapsible panels (mobile filters): toggle [data-collapse-target] visibility
+document.querySelectorAll('[data-collapse-toggle]').forEach(function (btn) {
+    var target = document.getElementById(btn.getAttribute('data-collapse-toggle'));
+    if (!target) return;
+    btn.addEventListener('click', function () {
+        var open = target.classList.toggle('is-open');
+        btn.setAttribute('aria-expanded', String(open));
+    });
+});

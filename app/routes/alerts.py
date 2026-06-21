@@ -81,7 +81,7 @@ async def save_settings(
         return _flash_redirect_to("/settings", "Settings saved.", "success")
     except Exception:
         logger.exception("Failed to save settings")
-        return _flash_redirect_to("/settings", "Failed to save settings â€” please try again.", "error")
+        return _flash_redirect_to("/settings", "Failed to save settings - please try again.", "error")
 
 
 @router.post("/settings/test-alert")
@@ -229,7 +229,7 @@ async def start_train_model(request: Request):
     from app.ml import train as ml_train
 
     if not ml_train.tensorflow_available():
-        return _flash_redirect_to("/admin/train-model", "Training unavailable on this server â€” run locally.", "error")
+        return _flash_redirect_to("/admin/train-model", "Training unavailable on this server - run locally.", "error")
 
     app = request.app
 

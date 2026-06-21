@@ -256,7 +256,7 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
 @router.get("/api/trades/{trade_id}/ai-analysis")
 @limiter.limit(AI_RATE_LIMIT)
 def get_trade_ai_analysis(request: Request, trade_id: str, db: Session = Depends(get_db)):
-    """Analyze a trade â€” local trained model first, external providers as fallback."""
+    """Analyze a trade - local trained model first, external providers as fallback."""
     trade = db.query(Trade).filter(Trade.trade_id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")

@@ -263,6 +263,63 @@ def refresh_all_wallets(
     )
 
 
+@router.get("/leaderboard")
+async def leaderboard(request: Request, db: Session = Depends(get_db)):
+    """Rank tracked wallets by total stored trade value.
+
+    Resolved-performance columns (ROI, PnL, wallet score) are placeholders until
+    market-outcome data is stored; this keeps the leaderboard honest, not faked.
+    """
+    if RETENTION_METRICS_ENABLED:
+        ret.emit(ret.RawEvent(
+            tracker_id=ret.get_or_create_tracker_id(request),
+            event_name="page_view",
+            route="leaderboard",
+        ))
+
+    trade_value = Trade.price * Trade.size
+    ranked = (
+        db.query(
+            Trade.wallet_address,
+            func.count(Trade.id).label("trade_count"),
+            func.sum(trade_value).label("total_value"),
+        )
+        .group_by(Trade.wallet_address)
+        .order_by(func.sum(trade_value).desc())
+        .limit(100)
+        .all()
+    )
+    addresses = [r.wallet_address for r in ranked]
+    wallet_map = {
+        w.address: w
+        for w in db.query(Wallet).filter(Wallet.address.in_(addresses)).all()
+    } if addresses else {}
+
+    rows = []
+    for position, row in enumerate(ranked, start=1):
+        wallet = wallet_map.get(row.wallet_address)
+        tags = vh.tag_list(wallet.tags) if wallet and wallet.tags else []
+        rows.append({
+            "rank": position,
+            "address": row.wallet_address,
+            "label": wallet.label if wallet and wallet.label else None,
+            "focus": tags[0] if tags else None,
+            "trade_count": int(row.trade_count or 0),
+            "total_value": float(row.total_value or 0),
+        })
+
+    return templates.TemplateResponse(
+        request,
+        "leaderboard_v2.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "rows": rows,
+            "short_address": vh.short_address,
+        },
+    )
+
+
 @router.get("/wallets/{identifier}")
 async def wallet_detail(request: Request, identifier: str, db: Session = Depends(get_db)):
     wallet = resolve_wallet(db, identifier)
@@ -300,6 +357,36 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
 
     recent_value_24h = float(summary_row.recent_value_24h or 0)
 
+    trade_count = int(pnl["trade_count"] or 0)
+    avg_trade_value = total_value / trade_count if trade_count else 0.0
+
+    # Biggest single trade by notional value (reuses the wallet-scoped query).
+    biggest_trade = trade_query.order_by((Trade.price * Trade.size).desc()).first()
+    biggest_trade_value = float(biggest_trade.price * biggest_trade.size) if biggest_trade else 0.0
+
+    # Rank this wallet against every other wallet by total stored trade value.
+    value_rows = (
+        db.query(func.sum(Trade.price * Trade.size).label("v"))
+        .group_by(Trade.wallet_address)
+        .all()
+    )
+    peer_values = [float(r.v or 0) for r in value_rows]
+    ranked_total = sum(1 for v in peer_values if v > 0)
+    wallet_rank = (1 + sum(1 for v in peer_values if v > total_value)) if total_value > 0 else None
+
+    # Lightweight, data-derived persona (no resolved-market PnL required).
+    trades_last_24h = int(wallet_intelligence.get("trades_last_24h") or 0)
+    if trade_count == 0:
+        wallet_persona = "Unseen wallet"
+    elif avg_trade_value >= 10000:
+        wallet_persona = "Whale"
+    elif avg_trade_value >= 1000:
+        wallet_persona = "High-volume trader"
+    elif trades_last_24h >= 10:
+        wallet_persona = "Active trader"
+    else:
+        wallet_persona = "Retail trader"
+
     wallet_insights = [
         {
             "label": "24h value",
@@ -327,11 +414,21 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
         {
             "request": request,
             "app_name": APP_NAME,
+            "flash": request.query_params.get("flash"),
+            "flash_level": request.query_params.get("level", "info"),
             "wallet": wallet,
             "summary_row": summary_row,
             "pnl": pnl,
             "yes_value_pct": yes_value_pct,
             "no_value_pct": no_value_pct,
+            "recent_value_24h": recent_value_24h,
+            "avg_trade_value": avg_trade_value,
+            "biggest_trade": biggest_trade,
+            "biggest_trade_value": biggest_trade_value,
+            "wallet_rank": wallet_rank,
+            "ranked_total": ranked_total,
+            "wallet_persona": wallet_persona,
+            "is_following": bool(wallet.is_pinned),
             "wallet_insights": wallet_insights,
             "wallet_top_markets": wallet_top_markets,
             "wallet_activity_days": wallet_activity_days,
@@ -423,12 +520,18 @@ async def edit_wallet(
 
 
 @router.post("/wallets/{identifier}/pin")
-async def toggle_wallet_pin(identifier: str, db: Session = Depends(get_db)):
+async def toggle_wallet_pin(
+    identifier: str,
+    db: Session = Depends(get_db),
+    next_path: Optional[str] = Query(None, alias="next"),
+):
     wallet = resolve_wallet(db, identifier)
     wallet.is_pinned = 0 if wallet.is_pinned else 1
     db.commit()
-    state = "Pinned" if wallet.is_pinned else "Unpinned"
-    return _flash_redirect(f"{state} {vh.short_address(wallet.address)}.", "success")
+    state = "Following" if wallet.is_pinned else "Unfollowed"
+    msg = f"{state} {vh.short_address(wallet.address)}."
+    redirect_to = _safe_next(next_path)
+    return _flash_redirect_to(redirect_to, msg, "success") if redirect_to else _flash_redirect(msg, "success")
 
 
 @router.post("/wallets/{identifier}/archive")

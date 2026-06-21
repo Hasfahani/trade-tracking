@@ -25,7 +25,7 @@ def retention_metrics(
     """Return live retention summary plus pre-computed daily/weekly series.
 
     Query params:
-        range: 7d | 30d (default) | 90d â€” lookback window for live summary
+        range: 7d | 30d (default) | 90d - lookback window for live summary
     """
     if not RETENTION_METRICS_ENABLED:
         return JSONResponse({"enabled": False}, status_code=200)

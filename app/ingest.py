@@ -432,7 +432,7 @@ def refresh_wallet(
                 except Exception:
                     pass
                 logger.warning(
-                    "Notable scoring failed for wallet=%s â€” refresh unaffected", wallet.address, exc_info=True
+                    "Notable scoring failed for wallet=%s - refresh unaffected", wallet.address, exc_info=True
                 )
 
         stats = calculate_wallet_stats_snapshot(db, wallet.address)
@@ -447,12 +447,12 @@ def refresh_wallet(
             "error": None,
         }
     except httpx.TimeoutException as exc:
-        error_msg = "API unreachable â€” connection timed out"
+        error_msg = "API unreachable - connection timed out"
         logger.warning("Wallet refresh timeout for %s: %s", wallet.address, exc)
         return _handle_refresh_error(db, wallet, started_at, error_msg)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 429:
-            error_msg = "Rate limited â€” try again later"
+            error_msg = "Rate limited - try again later"
         else:
             error_msg = f"API error {exc.response.status_code}"
         logger.warning("Wallet refresh HTTP error for %s: %s", wallet.address, exc)

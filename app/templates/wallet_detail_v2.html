@@ -4,49 +4,122 @@
 {% block title %}{{ wallet.label or short_address(wallet.address) }} - Wallet{% endblock %}
 
 {% block content %}
-<section class="hero-card">
-    <div class="hero-copy">
+{% set bias = side_bias(pnl.yes_value, pnl.no_value) %}
+
+{# Sticky compact bar that appears on mobile after scrolling past the header. #}
+<div class="sticky-wallet-bar" data-sticky-after="220" aria-hidden="true">
+    <span class="sticky-name">{{ wallet.label or short_address(wallet.address) }}</span>
+    <span class="sticky-stat" title="{{ fmt_money_full(pnl.total_value) }}">{{ fmt_money(pnl.total_value) }}</span>
+    <span class="sticky-stat">{{ summary_row.total_trades or 0 }} trades</span>
+    {% if bias.side %}<span class="pill {{ bias.tone }} sticky-bias">{{ bias.side }} {{ bias.pct }}%</span>{% endif %}
+</div>
+
+{% if flash %}
+<section class="flash flash-{{ flash_level }}">
+    <strong>{{ flash }}</strong>
+</section>
+{% endif %}
+
+{# ---- Wallet identity header ---- #}
+<section class="wallet-id-card">
+    <div class="wallet-id-main">
         <p class="eyebrow">Wallet profile</p>
-        <h1>{{ wallet.label or 'Unlabeled wallet' }}</h1>
-        <p class="subtle mono">{{ short_address(wallet.address) }}</p>
-        <div class="address-block">
-            <code class="address-code">{{ wallet.address }}</code>
-            <button type="button" class="btn btn-small" data-copy="{{ wallet.address }}" data-copy-label="Copy wallet address">Copy wallet address</button>
+        <h1 class="wallet-id-name">{{ wallet.label or 'Unlabeled wallet' }}</h1>
+        <div class="identity-chips">
+            <span class="mono-chip" title="{{ wallet.address }}">{{ short_address(wallet.address) }}</span>
+            <button type="button" class="icon-copy" data-copy="{{ wallet.address }}" data-copy-label="Copy" title="Copy wallet address">Copy</button>
+            {% if wallet_rank %}<span class="pill info" title="Ranked by total stored trade value">Rank #{{ wallet_rank }}{% if ranked_total %} / {{ ranked_total }}{% endif %}</span>{% endif %}
+            <span class="pill pill-soft">{{ wallet_persona }}</span>
+            {% if bias.side %}<span class="pill {{ bias.tone }}">{{ bias.label }} - {{ bias.pct }}%</span>{% endif %}
+            {% if wallet.is_archived %}<span class="pill warning">Archived</span>{% endif %}
         </div>
     </div>
-    <div class="action-row">
-        <a href="/wallets" class="btn">Back to wallets</a>
-        <a href="/wallets/{{ wallet.address }}/trades" class="btn">View trades</a>
-        <form method="post" action="/wallets/{{ wallet.address }}/refresh?next=/wallets/{{ wallet.address }}">
-            <button type="submit" class="btn">Refresh</button>
+    <div class="wallet-id-actions">
+        <form method="post" action="/wallets/{{ wallet.address }}/pin?next=/wallets/{{ wallet.address }}">
+            <button type="submit" class="btn btn-primary follow-btn{% if is_following %} is-following{% endif %}">
+                {{ 'Following' if is_following else 'Follow wallet' }}
+            </button>
         </form>
-        <a href="/wallets/{{ wallet.address }}/edit" class="btn">Edit</a>
+        <div class="secondary-actions">
+            <form method="post" action="/wallets/{{ wallet.address }}/refresh?next=/wallets/{{ wallet.address }}">
+                <button type="submit" class="btn btn-small">Refresh</button>
+            </form>
+            <a href="/wallets/{{ wallet.address }}/trades/export" class="btn btn-small">Export CSV</a>
+            <a href="/wallets/{{ wallet.address }}/trades" class="btn btn-small">Trades</a>
+            <a href="/wallets/{{ wallet.address }}/edit" class="btn btn-small">Edit</a>
+        </div>
     </div>
 </section>
 
-<section class="metrics-grid dashboard-metrics">
+{# ---- Top summary cards ---- #}
+<section class="metrics-grid summary-cards">
     <article class="metric-card">
-        <span class="metric-label">Total trades</span>
+        <span class="metric-label">Total value</span>
+        <strong title="{{ fmt_money_full(pnl.total_value) }}">{{ fmt_money(pnl.total_value) }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">YES value</span>
+        <strong class="text-success" title="{{ fmt_money_full(pnl.yes_value) }}">{{ fmt_money(pnl.yes_value) }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">NO value</span>
+        <strong class="text-danger" title="{{ fmt_money_full(pnl.no_value) }}">{{ fmt_money(pnl.no_value) }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Avg price (VWAP)</span>
+        <strong>{{ '%.4f'|format(pnl.avg_price) }}</strong>
+    </article>
+    <article class="metric-card">
+        <span class="metric-label">Trades</span>
         <strong>{{ summary_row.total_trades or 0 }}</strong>
     </article>
     <article class="metric-card">
-        <span class="metric-label">First trade</span>
-        <strong>{% if summary_row.first_trade_at %}{{ summary_row.first_trade_at.strftime('%Y-%m-%d') }}{% else %}<span class="subtle">None</span>{% endif %}</strong>
-    </article>
-    <article class="metric-card">
-        <span class="metric-label">Latest trade</span>
-        <strong>{% if summary_row.latest_trade_at %}{{ summary_row.latest_trade_at.strftime('%Y-%m-%d') }}{% else %}<span class="subtle">None</span>{% endif %}</strong>
-    </article>
-    <article class="metric-card">
-        <span class="metric-label">Total value</span>
-        <strong>${{ '{:,.2f}'.format(pnl.total_value) }}</strong>
-    </article>
-    <article class="metric-card">
-        <span class="metric-label">State</span>
-        <strong>{% if wallet.is_archived %}Archived{% elif wallet.is_pinned %}Pinned{% else %}Active{% endif %}</strong>
+        <span class="metric-label">Latest refresh</span>
+        <strong class="metric-sm">{% if wallet.last_checked_at %}{{ wallet.last_checked_at.strftime('%Y-%m-%d %H:%M') }}<small> UTC</small>{% else %}<span class="subtle">Never</span>{% endif %}</strong>
     </article>
 </section>
 
+{# ---- Performance metrics ---- #}
+<section class="card">
+    <div class="section-head">
+        <h2>Performance</h2>
+        <span class="pill">Stored data</span>
+    </div>
+    <div class="metrics-grid embedded-metrics perf-grid">
+        <article class="metric-card">
+            <span class="metric-label">Average trade value</span>
+            <strong title="{{ fmt_money_full(avg_trade_value) }}">{{ fmt_money(avg_trade_value) }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Biggest trade</span>
+            <strong title="{{ fmt_money_full(biggest_trade_value) }}">{{ fmt_money(biggest_trade_value) }}</strong>
+            {% if biggest_trade %}<small class="subtle metric-foot">{{ biggest_trade.market_title or biggest_trade.condition_id }}</small>{% endif %}
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">24h value</span>
+            <strong title="{{ fmt_money_full(recent_value_24h) }}">{{ fmt_money(recent_value_24h) }}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Wallet rank</span>
+            <strong>{% if wallet_rank %}#{{ wallet_rank }}{% else %}<span class="subtle">Unranked</span>{% endif %}</strong>
+            {% if ranked_total %}<small class="subtle metric-foot">of {{ ranked_total }} active wallets</small>{% endif %}
+        </article>
+    </div>
+
+    {# Resolved-market metrics need outcome data we do not store yet. #}
+    <div class="empty-state perf-locked">
+        <h3>Resolved performance unavailable</h3>
+        <p>PnL, ROI, win rate, and markets won/lost need resolved market outcomes. Not enough resolved market data yet.</p>
+        <div class="perf-placeholder-row">
+            <span class="perf-placeholder"><em>PnL</em><b>Not enough data</b></span>
+            <span class="perf-placeholder"><em>ROI</em><b>Not enough data</b></span>
+            <span class="perf-placeholder"><em>Win rate</em><b>Not enough data</b></span>
+            <span class="perf-placeholder"><em>Markets won / lost</em><b>Not enough data</b></span>
+        </div>
+    </div>
+</section>
+
+{# ---- Charts ---- #}
 <section class="dashboard-grid">
     <article class="card dashboard-panel insight-panel">
         <div class="section-head">
@@ -76,8 +149,8 @@
             <span class="split-no" style="width: {{ no_value_pct }}%;"></span>
         </div>
         <div class="legend-row">
-            <span><i class="legend-dot yes-dot"></i>YES ${{ '{:,.2f}'.format(pnl.yes_value) }} - {{ yes_value_pct }}%</span>
-            <span><i class="legend-dot no-dot"></i>NO ${{ '{:,.2f}'.format(pnl.no_value) }} - {{ no_value_pct }}%</span>
+            <span><i class="legend-dot yes-dot"></i>YES {{ fmt_money(pnl.yes_value) }} - {{ yes_value_pct }}%</span>
+            <span><i class="legend-dot no-dot"></i>NO {{ fmt_money(pnl.no_value) }} - {{ no_value_pct }}%</span>
         </div>
         {% else %}
         <div class="empty-state compact-empty">
@@ -115,7 +188,7 @@
             <a class="ranked-bar" href="/wallets/{{ wallet.address }}/trades?market_search={{ row.condition_id }}">
                 <span>
                     <em>{{ row.market }}</em>
-                    <strong>${{ '{:,.2f}'.format(row.total_value) }}</strong>
+                    <strong title="{{ fmt_money_full(row.total_value) }}">{{ fmt_money(row.total_value) }}</strong>
                 </span>
                 <small>{{ row.trade_count }} trade{{ 's' if row.trade_count != 1 else '' }}</small>
                 <i><b style="width: {{ row.bar_pct }}%;"></b></i>
@@ -130,10 +203,82 @@
     </article>
 </section>
 
+{# ---- AI summary ---- #}
+<section class="card" id="ai-summary-section" data-wallet-address="{{ wallet.address }}">
+    <div class="section-head">
+        <h2>AI pattern summary</h2>
+        <button type="button" class="btn btn-small" id="ai-summary-btn" {% if not ai_provider_configured %}disabled{% endif %}>{{ 'Analyse recent trades' if ai_provider_configured else 'AI not configured' }}</button>
+    </div>
+
+    <div id="ai-summary-loading" style="display:none" class="ai-loading">
+        <div class="ai-spinner"></div>
+        <span class="subtle">Generating AI pattern summary&hellip;</span>
+    </div>
+
+    <div id="ai-summary-result" style="display:none">
+        <p id="ai-summary-text" class="ai-wallet-summary"></p>
+        <small id="ai-summary-meta" class="subtle"></small>
+    </div>
+
+    <div id="ai-summary-unavailable" style="display:{% if ai_provider_configured %}none{% else %}block{% endif %}" class="subtle">
+        <p id="ai-summary-unavailable-message">{{ ai_unavailable_message }}</p>
+    </div>
+
+    <div id="ai-summary-no-trades" style="display:none" class="subtle">
+        <p>No stored trades yet. Refresh this wallet first.</p>
+    </div>
+</section>
+
+{# ---- Signal strength model ---- #}
+<section class="card">
+    <div class="section-head">
+        <h2>Signal strength</h2>
+        <span class="pill {% if signal_flagged_count %}info{% endif %}">{{ signal_flagged_count }} flagged trade{{ 's' if signal_flagged_count != 1 else '' }}</span>
+    </div>
+    <p class="subtle signal-explainer">Signal strength compares each trade against this wallet's history, market consensus, trade size, and peer flow. Scores run 0.00 - 1.00; trades scoring &ge; {{ '%.2f'|format(signal_threshold) }} are flagged as unusual.</p>
+    {% if signal_recent_flagged %}
+    <div class="table-wrap">
+        <table class="trade-table signal-table">
+            <thead>
+                <tr>
+                    <th>Date (UTC)</th>
+                    <th>Market</th>
+                    <th>Side</th>
+                    <th>Value</th>
+                    <th>Signal strength</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trade in signal_recent_flagged %}
+                <tr>
+                    <td data-label="Date">{{ trade.traded_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td data-label="Market"><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
+                    <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
+                    <td data-label="Value">{{ fmt_money(trade.price * trade.size) }}</td>
+                    <td data-label="Signal strength">
+                        <span class="pill {{ signal_tone(trade.notable_score) }}" title="Notable score {{ '%.2f'|format(trade.notable_score) }} of 1.00">{{ signal_label(trade.notable_score) }} - {{ '%.2f'|format(trade.notable_score) }} / 1.00</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state compact-empty">
+        {% if signal_model_loaded %}
+        <p>No flagged trades yet. Trades scoring &ge; {{ '%.2f'|format(signal_threshold) }} appear here after refreshes.</p>
+        {% else %}
+        <p>Signal model not available &mdash; train it locally and deploy the exported weights to enable scoring.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+
+{# ---- Refresh status + intelligence details ---- #}
 <section class="two-col">
     <article class="card">
         <div class="section-head">
-            <h2>Wallet intelligence details</h2>
+            <h2>Activity detail</h2>
             <span class="pill {{ wallet_intelligence.activity_tone }}">{{ wallet_intelligence.activity_level }}</span>
         </div>
         <div class="metrics-grid embedded-metrics">
@@ -143,11 +288,11 @@
             </article>
             <article class="metric-card">
                 <span class="metric-label">Value in last 24 hours</span>
-                <strong>${{ '%.2f'|format(wallet_intelligence.total_value_last_24h) }}</strong>
+                <strong title="{{ fmt_money_full(wallet_intelligence.total_value_last_24h) }}">{{ fmt_money(wallet_intelligence.total_value_last_24h) }}</strong>
             </article>
             <article class="metric-card">
                 <span class="metric-label">Average trade size</span>
-                <strong>${{ '%.2f'|format(wallet_intelligence.average_trade_size) }}</strong>
+                <strong title="{{ fmt_money_full(wallet_intelligence.average_trade_size) }}">{{ fmt_money(wallet_intelligence.average_trade_size) }}</strong>
             </article>
             <article class="metric-card">
                 <span class="metric-label">Markets traded</span>
@@ -186,7 +331,7 @@
             {% endif %}
         </div>
         {% if wallet.last_error_message %}
-        <p class="error-text" style="margin-top: 10px; font-size: 0.88rem;">{{ wallet.last_error_message }}</p>
+        <p class="error-text refresh-error">{{ wallet.last_error_message }}</p>
         {% endif %}
         <div class="panel-actions">
             <a href="/admin/sync-status?wallet_search={{ wallet.address }}" class="btn btn-small">Full sync history</a>
@@ -194,73 +339,7 @@
     </article>
 </section>
 
-<section class="card" id="ai-summary-section" data-wallet-address="{{ wallet.address }}">
-    <div class="section-head">
-        <h2>AI pattern summary</h2>
-        <button type="button" class="btn btn-small" id="ai-summary-btn" {% if not ai_provider_configured %}disabled{% endif %}>{{ 'Analyse recent trades' if ai_provider_configured else 'AI not configured' }}</button>
-    </div>
-
-    <div id="ai-summary-loading" style="display:none" class="ai-loading">
-        <div class="ai-spinner"></div>
-        <span class="subtle">Generating AI pattern summary&hellip;</span>
-    </div>
-
-    <div id="ai-summary-result" style="display:none">
-        <p id="ai-summary-text" class="ai-wallet-summary"></p>
-        <small id="ai-summary-meta" class="subtle"></small>
-    </div>
-
-    <div id="ai-summary-unavailable" style="display:{% if ai_provider_configured %}none{% else %}block{% endif %}" class="subtle">
-        <p id="ai-summary-unavailable-message">{{ ai_unavailable_message }}</p>
-    </div>
-
-    <div id="ai-summary-no-trades" style="display:none" class="subtle">
-        <p>No stored trades yet. Refresh this wallet first.</p>
-    </div>
-</section>
-
-<section class="card">
-    <div class="section-head">
-        <h2>Signal Model</h2>
-        <span class="pill {% if signal_flagged_count %}info{% endif %}">{{ signal_flagged_count }} flagged trade{{ 's' if signal_flagged_count != 1 else '' }}</span>
-    </div>
-    {% if signal_recent_flagged %}
-    <p class="subtle">Most recent trades the model flagged as unusually large for this wallet (score &ge; {{ '%.1f'|format(signal_threshold) }}).</p>
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date (UTC)</th>
-                    <th>Market</th>
-                    <th>Side</th>
-                    <th>Value</th>
-                    <th>Score</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for trade in signal_recent_flagged %}
-                <tr>
-                    <td>{{ trade.traded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                    <td><a href="/trades/{{ trade.trade_id }}">{{ trade.market_title or trade.condition_id }}</a></td>
-                    <td><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
-                    <td>${{ '%.2f'|format(trade.price * trade.size) }}</td>
-                    <td><span class="pill info">Signal {{ '%.2f'|format(trade.notable_score) }}</span></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="empty-state compact-empty">
-        {% if signal_model_loaded %}
-        <p>No flagged trades yet. Trades scoring &ge; {{ '%.1f'|format(signal_threshold) }} appear here after refreshes.</p>
-        {% else %}
-        <p>Signal model not available &mdash; train it locally and deploy the exported weights to enable scoring.</p>
-        {% endif %}
-    </div>
-    {% endif %}
-</section>
-
+{# ---- Activity timeline ---- #}
 <section class="card">
     <div class="section-head">
         <h2>Activity timeline</h2>

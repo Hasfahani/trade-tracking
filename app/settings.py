@@ -105,7 +105,7 @@ POLYMARKET_READ_TIMEOUT_SECONDS = _env_float("POLYMARKET_READ_TIMEOUT_SECONDS", 
 POLYMARKET_WRITE_TIMEOUT_SECONDS = _env_float("POLYMARKET_WRITE_TIMEOUT_SECONDS", 15.0)
 POLYMARKET_POOL_TIMEOUT_SECONDS = _env_float("POLYMARKET_POOL_TIMEOUT_SECONDS", 5.0)
 
-# Authentication â€” if set, all routes require a session login
+# Authentication - if set, all routes require a session login
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip() or None
 PUBLIC_READ_ONLY = _env_bool("PUBLIC_READ_ONLY", False)
 
@@ -137,10 +137,10 @@ DB_POOL_TIMEOUT = _env_float("DB_POOL_TIMEOUT", 30.0)
 DB_POOL_RECYCLE = _env_int("DB_POOL_RECYCLE", 1800)
 
 
-# Retention metrics feature flag â€” disable to stop event logging without code change
+# Retention metrics feature flag - disable to stop event logging without code change
 RETENTION_METRICS_ENABLED: bool = os.getenv("RETENTION_METRICS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 
-# AI Analysis â€” Anthropic Claude (preferred), Ollama (local), or HuggingFace
+# AI Analysis - Anthropic Claude (preferred), Ollama (local), or HuggingFace
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = _env_str("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -149,11 +149,11 @@ OLLAMA_TIMEOUT_SECONDS = _env_float("OLLAMA_TIMEOUT_SECONDS", 60.0)
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 AI_CACHE_TTL_HOURS = _env_int("AI_CACHE_TTL_HOURS", 72)
 
-# Rate limiting â€” applied to expensive endpoints (AI analysis, wallet refresh)
+# Rate limiting - applied to expensive endpoints (AI analysis, wallet refresh)
 AI_RATE_LIMIT = _env_str("AI_RATE_LIMIT", "20/minute")
 REFRESH_RATE_LIMIT = _env_str("REFRESH_RATE_LIMIT", "10/minute")
 
-# Scheduled auto-refresh â€” set interval > 0 to enable background wallet polling
+# Scheduled auto-refresh - set interval > 0 to enable background wallet polling
 AUTO_REFRESH_INTERVAL_MINUTES = _env_int("AUTO_REFRESH_INTERVAL_MINUTES", 0)
 AUTO_REFRESH_MAX_WALLETS = _env_int("AUTO_REFRESH_MAX_WALLETS", 50)
 AUTO_REFRESH_ALLOW_MULTI_WORKER = _env_bool("AUTO_REFRESH_ALLOW_MULTI_WORKER", False)
@@ -187,7 +187,7 @@ def ai_unavailable_message() -> str:
             "set HUGGINGFACE_API_KEY, or point OLLAMA_BASE_URL to a reachable Ollama service."
         )
     return (
-        "AI unavailable â€” set ANTHROPIC_API_KEY, run Ollama locally, or set "
+        "AI unavailable - set ANTHROPIC_API_KEY, run Ollama locally, or set "
         "HUGGINGFACE_API_KEY."
     )
 

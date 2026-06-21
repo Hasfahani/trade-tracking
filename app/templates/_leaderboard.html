@@ -1,0 +1,49 @@
+{# Reusable leaderboard table component.
+   Usage: {% from "_leaderboard.html" import leaderboard_table %}
+          {{ leaderboard_table(rows) }}
+
+   Each row is a dict with: rank, address, label, focus, trade_count, total_value.
+   ROI / PnL / wallet score render as honest placeholders until resolved-market
+   data exists. Relies on global helpers: short_address, fmt_money, fmt_money_full. #}
+{% macro leaderboard_table(rows, empty_message="No ranked wallets yet. Refresh wallets to populate the leaderboard.") %}
+{% if rows %}
+<div class="table-wrap">
+    <table class="trade-table leaderboard-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Wallet</th>
+                <th>Total value</th>
+                <th>Trades</th>
+                <th>ROI</th>
+                <th>PnL</th>
+                <th>Wallet score</th>
+                <th>Focus</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td data-label="Rank"><span class="rank-badge{% if row.rank <= 3 %} rank-top{% endif %}">#{{ row.rank }}</span></td>
+                <td data-label="Wallet">
+                    <a href="/wallets/{{ row.address }}">{{ row.label or short_address(row.address) }}</a>
+                    <span class="mono subtle lb-addr">{{ short_address(row.address) }}</span>
+                </td>
+                <td data-label="Total value" title="{{ fmt_money_full(row.total_value) }}">{{ fmt_money(row.total_value) }}</td>
+                <td data-label="Trades">{{ row.trade_count }}</td>
+                <td data-label="ROI"><span class="subtle">Not enough data</span></td>
+                <td data-label="PnL"><span class="subtle">Not enough data</span></td>
+                <td data-label="Wallet score"><span class="subtle">Not enough data</span></td>
+                <td data-label="Focus">{% if row.focus %}<span class="pill pill-soft">{{ row.focus }}</span>{% else %}<span class="subtle">-</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <h3>Leaderboard not available yet</h3>
+    <p>{{ empty_message }}</p>
+</div>
+{% endif %}
+{% endmacro %}

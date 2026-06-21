@@ -1,0 +1,23 @@
+{# Renders the wallet leaderboard page. #}
+{% extends "base_v2.html" %}
+{% from "_leaderboard.html" import leaderboard_table %}
+
+{% block title %}Leaderboard{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">Wallet intelligence</p>
+        <h1>Leaderboard</h1>
+        <p class="subtle">Tracked wallets ranked by total stored trade value. Resolved performance (ROI, PnL, wallet score) unlocks once market outcomes are stored.</p>
+    </div>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h2>Top wallets</h2>
+        <span class="pill">{{ rows|length }} ranked</span>
+    </div>
+    {{ leaderboard_table(rows) }}
+</section>
+{% endblock %}

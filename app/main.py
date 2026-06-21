@@ -120,14 +120,14 @@ async def lifespan(app: FastAPI):
     app.state.startup_error = None
     app.state.startup_task = None
 
-    # Optional ML scoring model â€” same pattern as the AI providers: load if
+    # Optional ML scoring model - same pattern as the AI providers: load if
     # the exported weights exist, otherwise run without scoring.
     signal_model = get_signal_model()
     app.state.signal_model = signal_model
     if signal_model is not None:
         logger.info("Signal model loaded trained_at=%s", signal_model.trained_at)
     else:
-        logger.info("Signal model not available â€” notable_score scoring disabled")
+        logger.info("Signal model not available - notable_score scoring disabled")
 
     logger.info(
         "Application startup beginning env=%s production=%s database=%s auth_enabled=%s version=%s commit=%s",
@@ -181,7 +181,7 @@ async def lifespan(app: FastAPI):
                 app_settings.AUTO_REFRESH_MAX_WALLETS,
             )
         except Exception:
-            logger.exception("Failed to start auto-refresh scheduler â€” continuing without it")
+            logger.exception("Failed to start auto-refresh scheduler - continuing without it")
 
     logger.info("HTTP server ready; database initialising in background")
     yield
@@ -270,7 +270,7 @@ def _run_startup_maintenance() -> None:
     except Exception:
         if db is not None:
             db.rollback()
-        logger.exception("Startup maintenance failed â€” continuing anyway")
+        logger.exception("Startup maintenance failed - continuing anyway")
     finally:
         if db is not None:
             db.close()

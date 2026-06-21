@@ -116,7 +116,7 @@ def load_model(path: Union[str, Path] = DEFAULT_WEIGHTS_PATH) -> Optional[Signal
         if threshold is not None:
             threshold = float(threshold)
             if not (np.isfinite(threshold) and 0.0 < threshold < 1.0):
-                logger.warning("Ignoring invalid stored threshold %r â€” using default", threshold)
+                logger.warning("Ignoring invalid stored threshold %r - using default", threshold)
                 threshold = None
 
         return SignalModel(
@@ -133,7 +133,7 @@ def load_model(path: Union[str, Path] = DEFAULT_WEIGHTS_PATH) -> Optional[Signal
     except FileNotFoundError:
         return None
     except Exception as exc:
-        logger.warning("Invalid signal model weights at %s: %s â€” scoring disabled", path, exc)
+        logger.warning("Invalid signal model weights at %s: %s - scoring disabled", path, exc)
         return None
 
 

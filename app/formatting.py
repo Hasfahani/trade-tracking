@@ -19,11 +19,144 @@ def short_address(address: str) -> str:
         address: Full 0x-prefixed hex address.
 
     Returns:
-        Original address if â‰¤14 chars, otherwise ``0x123456...abcdef`` form.
+        Original address if <=14 chars, otherwise ``0x123456...abcdef`` form.
     """
     if len(address) <= 14:
         return address
     return f"{address[:8]}...{address[-6:]}"
+
+
+def format_compact_number(value: Any, decimals: int = 2) -> str:
+    """Format a number compactly with K/M/B/T suffixes.
+
+    Examples:
+        ``1544312.13 -> "1.54M"``, ``1200000 -> "1.20M"``, ``42 -> "42"``.
+
+    Args:
+        value: Any numeric-coercible value (``None`` is treated as 0).
+        decimals: Decimal places kept on the scaled value.
+
+    Returns:
+        Compact string. Whole numbers below 1,000 render without decimals.
+    """
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        return "0"
+    sign = "-" if n < 0 else ""
+    n = abs(n)
+    for threshold, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if n >= threshold:
+            return f"{sign}{n / threshold:.{decimals}f}{suffix}"
+    if n == int(n):
+        return f"{sign}{int(n)}"
+    return f"{sign}{n:.{decimals}f}"
+
+
+def format_compact_currency(value: Any) -> str:
+    """Format a currency amount compactly (``$13.18M``, ``$845.20``).
+
+    Values at or above 1,000 use K/M/B/T suffixes; smaller values keep two
+    decimals so cents stay readable.
+
+    Args:
+        value: Any numeric-coercible value (``None`` is treated as 0).
+
+    Returns:
+        Compact dollar string, with a leading ``-`` for negatives.
+    """
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        return "$0.00"
+    sign = "-" if n < 0 else ""
+    amount = abs(n)
+    if amount >= 1000:
+        return f"{sign}${format_compact_number(amount)}"
+    return f"{sign}${amount:,.2f}"
+
+
+def format_full_currency(value: Any) -> str:
+    """Format a currency amount in full with thousands separators (``$13,181,916.44``).
+
+    Suitable for ``title``/tooltip text where the exact figure matters.
+    """
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        return "$0.00"
+    sign = "-" if n < 0 else ""
+    return f"{sign}${abs(n):,.2f}"
+
+
+def format_percent(value: Any, decimals: int = 1) -> str:
+    """Format an already-scaled percentage value (e.g. ``64 -> "64.0%"``).
+
+    Args:
+        value: A percentage number (not a 0-1 ratio). ``None`` becomes 0.
+        decimals: Decimal places to keep.
+
+    Returns:
+        Percentage string with a trailing ``%``.
+    """
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        return "0%"
+    return f"{n:.{decimals}f}%"
+
+
+# Signal-strength bands for the model's per-trade notable_score (roughly 0-1).
+_SIGNAL_BANDS = (
+    (0.25, "Weak", ""),
+    (0.50, "Medium", "info"),
+    (0.75, "Strong", "warning"),
+)
+
+
+def signal_label(score: Any) -> str:
+    """Map a notable_score to a strength label (Weak/Medium/Strong/Very Strong)."""
+    try:
+        s = float(score)
+    except (TypeError, ValueError):
+        return "Unknown"
+    for upper, label, _tone in _SIGNAL_BANDS:
+        if s < upper:
+            return label
+    return "Very Strong"
+
+
+def signal_tone(score: Any) -> str:
+    """Return the CSS pill tone class matching a notable_score's strength band."""
+    try:
+        s = float(score)
+    except (TypeError, ValueError):
+        return ""
+    for upper, _label, tone in _SIGNAL_BANDS:
+        if s < upper:
+            return tone
+    return "success"
+
+
+def side_bias(yes_value: Any, no_value: Any) -> Dict[str, Any]:
+    """Return the dominant trading bias from YES/NO value totals.
+
+    Args:
+        yes_value: Total stored value on the YES side.
+        no_value: Total stored value on the NO side.
+
+    Returns:
+        Dict with ``label`` (e.g. ``"YES bias"``), ``side`` (``"YES"``/``"NO"``/
+        ``None``), ``tone`` (CSS class), and ``pct`` (share of the dominant side).
+    """
+    yes = float(yes_value or 0)
+    no = float(no_value or 0)
+    total = yes + no
+    if total <= 0:
+        return {"label": "No bias yet", "side": None, "tone": "", "pct": 0}
+    if yes >= no:
+        return {"label": "YES bias", "side": "YES", "tone": "success", "pct": round(yes / total * 100)}
+    return {"label": "NO bias", "side": "NO", "tone": "danger", "pct": round(no / total * 100)}
 
 
 def duration_label(duration_ms: Optional[int]) -> str:

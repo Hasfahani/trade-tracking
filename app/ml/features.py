@@ -69,7 +69,7 @@ def build_features_for_wallet(trades: Sequence) -> Tuple[np.ndarray, np.ndarray,
 
     Returns:
         X: float array of shape (n, FEATURE_COUNT).
-        y: float array of shape (n,) â€” 1.0 if the trade's value is notably
+        y: float array of shape (n,) - 1.0 if the trade's value is notably
            large versus the wallet's prior history, else 0.0.
         trade_ids: trade_id strings aligned with the rows of X and y.
 
@@ -95,7 +95,7 @@ def build_features_for_wallet(trades: Sequence) -> Tuple[np.ndarray, np.ndarray,
         condition_id = trade.condition_id
 
         # Evaluate the notable rule for every trade with at least one prior
-        # trade â€” both for labels (i >= MIN_PRIOR_TRADES) and for the running
+        # trade - both for labels (i >= MIN_PRIOR_TRADES) and for the running
         # prior_notable_rate feature. Uses PRIOR stats only.
         is_notable = False
         if i >= 1:

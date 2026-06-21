@@ -22,6 +22,17 @@ templates.env.globals["db_backend"] = "postgresql" if _DATABASE_URL.startswith("
 # Snapshot of the model's operating threshold for template pills; refreshed on
 # process start (weights deploy with the app, so this matches the live model).
 templates.env.globals["signal_threshold"] = effective_signal_threshold()
+# Shared display helpers available to every template without per-route wiring.
+templates.env.globals.update(
+    fmt_money=vh.format_compact_currency,
+    fmt_money_full=vh.format_full_currency,
+    fmt_num=vh.format_compact_number,
+    fmt_pct=vh.format_percent,
+    signal_label=vh.signal_label,
+    signal_tone=vh.signal_tone,
+    side_bias=vh.side_bias,
+    short_address=vh.short_address,
+)
 DATE_PRESETS = frozenset({"today", "7d", "30d"})
 
 _MAX_SEARCH_LEN = 255
