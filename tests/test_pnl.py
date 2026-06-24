@@ -156,6 +156,17 @@ class TestDbBacked:
         assert compute_wallet_performance_map(db) == {}
         assert compute_wallet_performance(db, _ADDR)["has_data"] is False
 
+    def test_map_queries_only_resolved_joined_rows(self, db):
+        self._seed(db)
+        db.add(Trade(wallet_address=_ADDR, trade_id="unresolved", condition_id="c9", side="YES",
+                     outcome_token="YES", price=0.5, size=10.0, traded_at=datetime(2026, 1, 1)))
+        db.commit()
+
+        perf_map = compute_wallet_performance_map(db)
+
+        assert perf_map[_ADDR]["resolved_trades"] == 2
+        assert perf_map[_ADDR]["resolved_markets"] == 2
+
     def test_upsert_market_resolution_is_idempotent(self, db):
         data = {"condition_id": _CID, "market_title": "Q", "outcome": "YES", "resolved_at": None}
         upsert_market_resolution(db, data)

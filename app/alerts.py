@@ -40,7 +40,7 @@ def _build_message(trade: Trade, wallet: Wallet) -> str:
     market = trade.market_title or trade.condition_id
     time_str = trade.traded_at.strftime("%Y-%m-%d %H:%M UTC")
     return (
-        f"ðŸ”” <b>Trade Alert</b>\n\n"
+        f"<b>Trade Alert</b>\n\n"
         f"<b>Wallet:</b> {label}\n"
         f"<b>Market:</b> {market}\n"
         f"<b>Direction:</b> {direction}\n"

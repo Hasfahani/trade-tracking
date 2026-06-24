@@ -169,6 +169,8 @@ def test_postgres_compat_migrations_add_missing_columns_once():
                         "numeric" if "NUMERIC(18,6)" in statement else "integer"
                     )
                 return _FakeResult(None)
+            if statement.startswith("CREATE INDEX IF NOT EXISTS"):
+                return _FakeResult(None)
             raise AssertionError(f"Unexpected SQL: {statement}")
 
     class _FakeBegin:

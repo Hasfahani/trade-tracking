@@ -125,14 +125,14 @@
 <section class="card">
     <div class="section-head filter-head">
         <h2>Filters</h2>
-        <button type="button" class="btn btn-small filter-toggle" data-collapse-toggle="all-trades-filter-body" aria-expanded="false">Show / hide</button>
+        <button type="button" class="btn btn-small filter-toggle" data-collapse-toggle="all-trades-filter-body" aria-controls="all-trades-filter-body" aria-expanded="false">Show / hide</button>
     </div>
 
     <div class="quick-presets" role="group" aria-label="Quick date range">
-        <a class="preset-chip {% if not date_preset %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='', date_from='', date_to='', page=1) }}">All</a>
-        <a class="preset-chip {% if date_preset == 'today' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='today', date_from='', date_to='', page=1) }}">Today</a>
-        <a class="preset-chip {% if date_preset == '7d' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='7d', date_from='', date_to='', page=1) }}">7D</a>
-        <a class="preset-chip {% if date_preset == '30d' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='30d', date_from='', date_to='', page=1) }}">30D</a>
+        <a class="preset-chip {% if not date_preset %}is-active{% endif %}" {% if not date_preset %}aria-current="true"{% endif %} href="{{ request.url.include_query_params(date_preset='', date_from='', date_to='', page=1) }}">All</a>
+        <a class="preset-chip {% if date_preset == 'today' %}is-active{% endif %}" {% if date_preset == 'today' %}aria-current="true"{% endif %} href="{{ request.url.include_query_params(date_preset='today', date_from='', date_to='', page=1) }}">Today</a>
+        <a class="preset-chip {% if date_preset == '7d' %}is-active{% endif %}" {% if date_preset == '7d' %}aria-current="true"{% endif %} href="{{ request.url.include_query_params(date_preset='7d', date_from='', date_to='', page=1) }}">7D</a>
+        <a class="preset-chip {% if date_preset == '30d' %}is-active{% endif %}" {% if date_preset == '30d' %}aria-current="true"{% endif %} href="{{ request.url.include_query_params(date_preset='30d', date_from='', date_to='', page=1) }}">30D</a>
     </div>
 
     <div id="all-trades-filter-body" class="filter-body">
@@ -194,7 +194,7 @@
     {% if date_preset and date_preset != 'all' %}<span class="pill info">Preset: {{ date_preset }}</span>{% endif %}
     {% if date_from %}<span class="pill info">From: {{ date_from }}</span>{% endif %}
     {% if date_to %}<span class="pill info">To: {{ date_to }}</span>{% endif %}
-    {% if wallet_search or side or market_search or date_preset or date_from or date_to %}<a class="pill clear-chip" href="/all-trades">Clear all</a>{% endif %}
+    {% if wallet_search or side or market_search or date_preset or date_from or date_to %}<a class="pill clear-chip" href="/all-trades" aria-label="Clear all active trade filters">Clear all</a>{% endif %}
 </section>
 
 <section class="card">
@@ -226,7 +226,7 @@
                         {% if trade.notable_score is not none and trade.notable_score >= signal_threshold %}
                         <span class="pill {{ signal_tone(trade.notable_score) }}" title="Signal strength {{ '%.2f'|format(trade.notable_score) }} / 1.00">{{ signal_label(trade.notable_score) }} signal</span>
                         {% endif %}
-                        <a href="/trades/{{ trade.trade_id }}?analyze=1#ai-section" class="ai-inline-link" title="Run AI analysis on this trade">Analyze with AI</a>
+                        <a href="/trades/{{ trade.trade_id }}?analyze=1#ai-section" class="ai-inline-link" title="Run AI analysis on this trade" aria-label="Analyze trade {{ trade.trade_id }} with AI">Analyze with AI</a>
                     </td>
                     <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
                     <td data-label="Value" title="{{ fmt_money_full(trade.price * trade.size) }}">{{ fmt_money(trade.price * trade.size) }}</td>

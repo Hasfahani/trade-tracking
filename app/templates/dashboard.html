@@ -318,7 +318,7 @@
                 <span class="pill info">New market</span>
                 {% endif %}
             </div>
-            <p class="subtle">{{ event.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if event.timestamp else '-' }}{% if event.trade_id %} &middot; <a href="/trades/{{ event.trade_id }}?analyze=1#ai-section" class="ai-inline-link">Analyze with AI</a>{% endif %}</p>
+            <p class="subtle">{{ event.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if event.timestamp else '-' }}{% if event.trade_id %} &middot; <a href="/trades/{{ event.trade_id }}?analyze=1#ai-section" class="ai-inline-link" aria-label="Analyze trade {{ event.trade_id }} with AI">Analyze with AI</a>{% endif %}</p>
         </article>
         {% endfor %}
     </div>

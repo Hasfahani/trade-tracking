@@ -25,7 +25,7 @@
         <tbody>
             {% for row in rows %}
             <tr>
-                <td data-label="Rank"><span class="rank-badge{% if row.rank <= 3 %} rank-top{% endif %}">#{{ row.rank }}</span></td>
+                <td data-label="Rank"><span class="rank-badge{% if row.rank <= 3 %} rank-top{% endif %}" aria-label="Rank {{ row.rank }}">#{{ row.rank }}</span></td>
                 <td data-label="Wallet">
                     <a href="/wallets/{{ row.address }}">{{ row.label or short_address(row.address) }}</a>
                     <span class="mono subtle lb-addr">{{ short_address(row.address) }}</span>

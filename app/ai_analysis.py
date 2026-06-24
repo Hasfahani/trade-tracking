@@ -155,7 +155,7 @@ def build_trade_context(trade: Trade, db: Session) -> Dict[str, Any]:
         elif diff_pct < -8:
             price_vs_consensus = f"{abs(diff_pct)}% below {trade.side} avg (got discount)"
         else:
-            price_vs_consensus = f"near {trade.side} market average (±{abs(diff_pct)}%)"
+            price_vs_consensus = f"near {trade.side} market average (+/-{abs(diff_pct)}%)"
 
     if market_yes_pct >= 65:
         market_sentiment = "strongly bullish"

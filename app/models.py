@@ -62,6 +62,8 @@ class Trade(Base):
         Index("ix_trades_wallet_traded_at", "wallet_address", "traded_at"),
         Index("ix_trades_wallet_side_traded_at", "wallet_address", "side", "traded_at"),
         Index("ix_trades_wallet_market_title", "wallet_address", "market_title"),
+        Index("ix_trades_outcome_wallet_condition", "outcome_token", "wallet_address", "condition_id"),
+        Index("ix_trades_wallet_condition_traded_at", "wallet_address", "condition_id", "traded_at"),
         Index("ix_trades_traded_at", "traded_at"),
         Index("ix_trades_alert_sent", "alert_sent"),
     )

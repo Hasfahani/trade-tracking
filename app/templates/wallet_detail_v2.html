@@ -36,7 +36,7 @@
     </div>
     <div class="wallet-id-actions">
         <form method="post" action="/wallets/{{ wallet.address }}/pin?next=/wallets/{{ wallet.address }}">
-            <button type="submit" class="btn btn-primary follow-btn{% if is_following %} is-following{% endif %}">
+            <button type="submit" class="btn btn-primary follow-btn{% if is_following %} is-following{% endif %}" aria-pressed="{{ 'true' if is_following else 'false' }}" aria-label="{{ 'Unfollow wallet ' ~ short_address(wallet.address) if is_following else 'Follow wallet ' ~ short_address(wallet.address) }}">
                 {{ 'Following' if is_following else 'Follow wallet' }}
             </button>
         </form>
@@ -52,16 +52,16 @@
 </section>
 
 {# ---- Top summary cards ---- #}
-<section class="metrics-grid summary-cards">
-    <article class="metric-card">
+<section class="metrics-grid summary-cards" aria-label="Wallet stored-value summary">
+    <article class="metric-card" aria-label="Total stored value">
         <span class="metric-label">Total value</span>
         <strong title="{{ fmt_money_full(pnl.total_value) }}">{{ fmt_money(pnl.total_value) }}</strong>
     </article>
-    <article class="metric-card">
+    <article class="metric-card" aria-label="YES stored value">
         <span class="metric-label">YES value</span>
         <strong class="text-success" title="{{ fmt_money_full(pnl.yes_value) }}">{{ fmt_money(pnl.yes_value) }}</strong>
     </article>
-    <article class="metric-card">
+    <article class="metric-card" aria-label="NO stored value">
         <span class="metric-label">NO value</span>
         <strong class="text-danger" title="{{ fmt_money_full(pnl.no_value) }}">{{ fmt_money(pnl.no_value) }}</strong>
     </article>
@@ -85,8 +85,8 @@
         <h2>Performance</h2>
         <span class="pill">Stored data</span>
     </div>
-    <div class="metrics-grid embedded-metrics perf-grid">
-        <article class="metric-card">
+    <div class="metrics-grid embedded-metrics perf-grid" aria-label="Stored performance metrics">
+        <article class="metric-card" aria-label="Average trade value">
             <span class="metric-label">Average trade value</span>
             <strong title="{{ fmt_money_full(avg_trade_value) }}">{{ fmt_money(avg_trade_value) }}</strong>
         </article>
@@ -110,13 +110,13 @@
     {# Realized performance from resolved markets only (honest, not stored-value). #}
     <h3 class="perf-resolved-head">Resolved-market performance</h3>
     <p class="subtle perf-resolved-note">Realized across {{ perf.resolved_markets }} resolved market{{ '' if perf.resolved_markets == 1 else 's' }} ({{ perf.resolved_trades }} trade{{ '' if perf.resolved_trades == 1 else 's' }}). Net positions are valued at settlement; open positions on unresolved markets are excluded.</p>
-    <div class="metrics-grid embedded-metrics perf-grid">
-        <article class="metric-card">
+    <div class="metrics-grid embedded-metrics perf-grid" aria-label="Resolved-market performance metrics">
+        <article class="metric-card" aria-label="Realized PnL from resolved markets">
             <span class="metric-label">Realized PnL</span>
             <strong class="{{ 'text-success' if perf.realized_pnl >= 0 else 'text-danger' }}" title="{{ fmt_money_full(perf.realized_pnl) }}">{{ '+' if perf.realized_pnl > 0 else '' }}{{ fmt_money(perf.realized_pnl) }}</strong>
             <small class="subtle metric-foot">on {{ fmt_money(perf.total_invested) }} invested</small>
         </article>
-        <article class="metric-card">
+        <article class="metric-card" aria-label="Return on investment from resolved markets">
             <span class="metric-label">ROI</span>
             <strong class="{{ 'text-success' if perf.roi is not none and perf.roi >= 0 else 'text-danger' }}">{% if perf.roi is not none %}{{ '+' if perf.roi > 0 else '' }}{{ fmt_pct(perf.roi * 100) }}{% else %}<span class="subtle">-</span>{% endif %}</strong>
         </article>

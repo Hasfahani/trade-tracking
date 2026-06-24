@@ -220,32 +220,25 @@ def compute_wallet_performance_map(
     Scoped to one wallet when ``wallet_address`` is given. Returns ``{}`` when no
     resolved+tokened trades exist, so callers fall back to honest placeholders.
     """
-    trade_query = db.query(Trade).filter(Trade.outcome_token.in_(("YES", "NO")))
+    trade_query = (
+        db.query(Trade, MarketResolution.outcome)
+        .join(MarketResolution, Trade.condition_id == MarketResolution.condition_id)
+        .filter(
+            Trade.outcome_token.in_(("YES", "NO")),
+            MarketResolution.outcome.in_(("YES", "NO")),
+        )
+    )
     if wallet_address:
         trade_query = trade_query.filter(Trade.wallet_address == wallet_address)
-    trades = trade_query.all()
-    if not trades:
-        return {}
-
-    condition_ids = {trade.condition_id for trade in trades}
-    outcome_by_condition = {
-        cid: outcome
-        for cid, outcome in (
-            db.query(MarketResolution.condition_id, MarketResolution.outcome)
-            .filter(
-                MarketResolution.condition_id.in_(condition_ids),
-                MarketResolution.outcome.in_(("YES", "NO")),
-            )
-            .all()
-        )
-    }
-    if not outcome_by_condition:
+    rows = trade_query.all()
+    if not rows:
         return {}
 
     by_wallet: Dict[str, List] = defaultdict(list)
-    for trade in trades:
-        if trade.condition_id in outcome_by_condition:
-            by_wallet[trade.wallet_address].append(trade)
+    outcome_by_condition: Dict[str, str] = {}
+    for trade, outcome in rows:
+        outcome_by_condition[trade.condition_id] = outcome
+        by_wallet[trade.wallet_address].append(trade)
 
     return {
         address: compute_performance_from_trades(wallet_trades, outcome_by_condition)

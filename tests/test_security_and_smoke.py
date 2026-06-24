@@ -219,3 +219,45 @@ def test_trade_tables_have_non_sticky_header_contract():
     assert not re.search(r"(?ms)^th\s*{[^}]*position:\s*sticky", css)
     assert 'class="trade-table all-trades-table"' in all_trades_template
     assert 'class="trade-table wallet-trades-table"' in wallet_trades_template
+
+
+def test_app_sources_do_not_contain_known_mojibake_markers():
+    markers = ("Â", "Ã", "â€", "â†", "â€”", "â€¦", "ðŸ")
+    checked_suffixes = {".py", ".html", ".js", ".css"}
+    offenders = []
+    for path in (PROJECT_ROOT / "app").rglob("*"):
+        if path.is_file() and path.suffix in checked_suffixes:
+            text = path.read_text(encoding="utf-8")
+            for marker in markers:
+                if marker in text:
+                    offenders.append(f"{path.relative_to(PROJECT_ROOT)} contains {marker!r}")
+
+    assert not offenders
+
+
+def test_phase4_accessibility_markup_contracts():
+    wallet_template = (PROJECT_ROOT / "app" / "templates" / "wallet_detail_v2.html").read_text(encoding="utf-8")
+    all_trades_template = (PROJECT_ROOT / "app" / "templates" / "all_trades_v2.html").read_text(encoding="utf-8")
+    wallet_trades_template = (PROJECT_ROOT / "app" / "templates" / "trades_v2.html").read_text(encoding="utf-8")
+    leaderboard_template = (PROJECT_ROOT / "app" / "templates" / "_leaderboard.html").read_text(encoding="utf-8")
+
+    assert "aria-pressed=" in wallet_template
+    assert "Wallet stored-value summary" in wallet_template
+    assert "Resolved-market performance metrics" in wallet_template
+    assert 'aria-controls="all-trades-filter-body"' in all_trades_template
+    assert 'aria-controls="trade-filter-body"' in wallet_trades_template
+    assert 'aria-current="true"' in all_trades_template
+    assert 'aria-current="true"' in wallet_trades_template
+    assert "Analyze trade {{ trade.trade_id }} with AI" in all_trades_template
+    assert "Analyze trade {{ trade.trade_id }} with AI" in wallet_trades_template
+    assert 'aria-label="Rank {{ row.rank }}"' in leaderboard_template
+
+
+def test_phase4_mobile_css_contracts():
+    css = (PROJECT_ROOT / "app" / "static" / "style_v2.css").read_text(encoding="utf-8")
+
+    assert ".ai-inline-link" in css
+    assert "min-height: 40px;" in css
+    assert "@media (max-width: 430px)" in css
+    assert "grid-template-columns: minmax(7.5rem, 35%) minmax(0, 1fr);" in css
+    assert ".trade-table td[data-label=\"IDs\"] .mono-actions" in css

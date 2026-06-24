@@ -9,7 +9,7 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import httpx
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import MarketResolution, SyncEvent, Trade, Wallet
@@ -476,20 +476,19 @@ def refresh_resolutions_for_wallet(db: Session, wallet_address: str, max_markets
     of markets newly resolved (YES/NO). Best-effort: individual fetch failures
     are skipped.
     """
-    already_resolved = {
-        cid for (cid,) in db.query(MarketResolution.condition_id)
-        .filter(MarketResolution.outcome.in_(("YES", "NO"))).all()
-    }
     market_rows = (
         db.query(Trade.condition_id, func.max(Trade.traded_at).label("last_traded"))
+        .outerjoin(MarketResolution, Trade.condition_id == MarketResolution.condition_id)
         .filter(Trade.wallet_address == wallet_address)
+        .filter(or_(MarketResolution.condition_id.is_(None), MarketResolution.outcome.notin_(("YES", "NO"))))
         .group_by(Trade.condition_id)
         .order_by(func.max(Trade.traded_at).desc())
+        .limit(max_markets * 4)
         .all()
     )
     candidates = [
         cid for (cid, _last) in market_rows
-        if cid not in already_resolved and _CONDITION_ID_RE.match(cid or "")
+        if _CONDITION_ID_RE.match(cid or "")
     ][:max_markets]
 
     resolved = 0

@@ -60,15 +60,15 @@
 <section class="card">
     <div class="section-head filter-head">
         <h2>Filters</h2>
-        <button type="button" class="btn btn-small filter-toggle" data-collapse-toggle="trade-filter-body" aria-expanded="false">Show / hide</button>
+        <button type="button" class="btn btn-small filter-toggle" data-collapse-toggle="trade-filter-body" aria-controls="trade-filter-body" aria-expanded="false">Show / hide</button>
     </div>
 
     {# Quick date presets - always visible #}
     <div class="quick-presets" role="group" aria-label="Quick date range">
-        <a class="preset-chip {% if not date_preset %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='', date_from='', date_to='', page=1) }}">All</a>
-        <a class="preset-chip {% if date_preset == 'today' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='today', date_from='', date_to='', page=1) }}">Today</a>
-        <a class="preset-chip {% if date_preset == '7d' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='7d', date_from='', date_to='', page=1) }}">7D</a>
-        <a class="preset-chip {% if date_preset == '30d' %}is-active{% endif %}" href="{{ request.url.include_query_params(date_preset='30d', date_from='', date_to='', page=1) }}">30D</a>
+        <a class="preset-chip {% if not date_preset %}is-active{% endif %}" {% if not date_preset %}aria-current="true"{% endif %} href="{{ request.url.include_query_params(date_preset='', date_from='', date_to='', page=1) }}">All</a>
+        <a class="preset-chip {% if date_preset == 'today' %}is-active{% endif %}" {% if date_preset == 'today' %}aria-current="true"{% endif %} href="{{ request.url.include_query_params(date_preset='today', date_from='', date_to='', page=1) }}">Today</a>
+        <a class="preset-chip {% if date_preset == '7d' %}is-active{% endif %}" {% if date_preset == '7d' %}aria-current="true"{% endif %} href="{{ request.url.include_query_params(date_preset='7d', date_from='', date_to='', page=1) }}">7D</a>
+        <a class="preset-chip {% if date_preset == '30d' %}is-active{% endif %}" {% if date_preset == '30d' %}aria-current="true"{% endif %} href="{{ request.url.include_query_params(date_preset='30d', date_from='', date_to='', page=1) }}">30D</a>
     </div>
 
     <div id="trade-filter-body" class="filter-body">
@@ -125,7 +125,7 @@
     {% if date_preset and date_preset != 'all' %}<span class="pill info">Preset: {{ date_preset }}</span>{% endif %}
     {% if date_from %}<span class="pill info">From: {{ date_from }}</span>{% endif %}
     {% if date_to %}<span class="pill info">To: {{ date_to }}</span>{% endif %}
-    {% if side or market_search or date_preset or date_from or date_to %}<a class="pill clear-chip" href="/wallets/{{ wallet.address }}/trades">Clear all</a>{% endif %}
+    {% if side or market_search or date_preset or date_from or date_to %}<a class="pill clear-chip" href="/wallets/{{ wallet.address }}/trades" aria-label="Clear all active trade filters">Clear all</a>{% endif %}
 </section>
 
 <section class="card">
@@ -193,7 +193,7 @@
                     <td data-label="Value" title="{{ fmt_money_full(trade.price * trade.size) }}">{{ fmt_money(trade.price * trade.size) }}</td>
                     <td data-label="IDs">
                         <div class="stack-tight mono-actions">
-                            <a href="/trades/{{ trade.trade_id }}?analyze=1#ai-section" class="btn btn-small btn-ai">Analyze with AI</a>
+                            <a href="/trades/{{ trade.trade_id }}?analyze=1#ai-section" class="btn btn-small btn-ai" aria-label="Analyze trade {{ trade.trade_id }} with AI">Analyze with AI</a>
                             <a href="/trades/{{ trade.trade_id }}" class="btn btn-small">View analysis</a>
                             <button type="button" class="btn btn-small" data-copy="{{ trade.trade_id }}" data-copy-label="Copy trade ID">Copy trade ID</button>
                             <button type="button" class="btn btn-small" data-copy="{{ trade.condition_id }}" data-copy-label="Copy condition ID">Copy condition ID</button>

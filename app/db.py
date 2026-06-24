@@ -273,6 +273,23 @@ def _migrate_market_resolutions_table(conn) -> None:
     )
 
 
+def _migrate_phase4_performance_indexes(conn) -> None:
+    if _table_exists(conn, "trades"):
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_trades_outcome_wallet_condition "
+            "ON trades (outcome_token, wallet_address, condition_id)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_trades_wallet_condition_traded_at "
+            "ON trades (wallet_address, condition_id, traded_at)"
+        )
+    if _table_exists(conn, "market_resolutions"):
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_market_resolutions_outcome "
+            "ON market_resolutions (outcome)"
+        )
+
+
 SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("001_wallet_compat_columns", _migrate_wallet_columns),
     ("002_sync_event_columns", _migrate_sync_event_columns),
@@ -287,6 +304,16 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("011_trade_notable_score", _migrate_trade_notable_score),
     ("012_trade_outcome_token", _migrate_trade_outcome_token),
     ("013_market_resolutions_table", _migrate_market_resolutions_table),
+    ("014_phase4_performance_indexes", _migrate_phase4_performance_indexes),
+)
+
+POSTGRES_INDEX_STATEMENTS: Tuple[str, ...] = (
+    "CREATE INDEX IF NOT EXISTS ix_trades_outcome_wallet_condition "
+    "ON trades (outcome_token, wallet_address, condition_id)",
+    "CREATE INDEX IF NOT EXISTS ix_trades_wallet_condition_traded_at "
+    "ON trades (wallet_address, condition_id, traded_at)",
+    "CREATE INDEX IF NOT EXISTS ix_market_resolutions_outcome "
+    "ON market_resolutions (outcome)",
 )
 
 
@@ -416,6 +443,8 @@ def _ensure_postgres_compat_columns(target_engine: Engine) -> None:
                 logger.info("Migration: added column %s.%s (%s)", table_name, column_name, column_type)
         _normalize_postgres_integer_columns(conn)
         _upgrade_postgres_numeric_columns(conn)
+        for statement in POSTGRES_INDEX_STATEMENTS:
+            conn.exec_driver_sql(statement)
 
 
 def run_schema_migrations(
