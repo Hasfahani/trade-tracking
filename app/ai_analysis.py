@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Trade, TradeAnalysis, Wallet
 from app import settings
+from app.analytics import compute_wallet_performance
 from app.ml.features import FEATURE_LABELS, MIN_PRIOR_TRADES
 from app.ml.model import effective_signal_threshold, get_signal_model
 from app.ml.scoring import prior_trade_count, score_trade
@@ -181,6 +182,10 @@ def build_trade_context(trade: Trade, db: Session) -> Dict[str, Any]:
     price_range = float(market_all.max_price or 0) - float(market_all.min_price or 0)
     market_conviction = "high conviction" if price_range < 0.15 else ("split" if price_range < 0.35 else "wide disagreement")
 
+    # Real, realized track record (resolved markets only) - grounds the analysis
+    # in actual outcomes instead of stored value alone. Empty when no resolved data.
+    perf = compute_wallet_performance(db, trade.wallet_address)
+
     return {
         "trade_value": round(float(this_value), 2),
         "model_signal_score": round(float(trade.notable_score), 4) if trade.notable_score is not None else None,
@@ -202,6 +207,14 @@ def build_trade_context(trade: Trade, db: Session) -> Dict[str, Any]:
         "wallet_trades_on_this_market": wallet_market_count,
         "is_first_trade_on_market": is_first_on_market,
         "size_vs_wallet_avg": size_vs_avg,
+        # Realized track record from resolved markets (None when no resolved data).
+        "wallet_has_track_record": perf["has_data"],
+        "wallet_resolved_markets": perf["resolved_markets"],
+        "wallet_markets_won": perf["markets_won"],
+        "wallet_markets_lost": perf["markets_lost"],
+        "wallet_win_rate_pct": round(perf["win_rate"] * 100) if perf["win_rate"] is not None else None,
+        "wallet_realized_pnl": round(float(perf["realized_pnl"]), 2) if perf["has_data"] else None,
+        "wallet_roi_pct": round(perf["roi"] * 100, 1) if perf["roi"] is not None else None,
     }
 
 
@@ -248,6 +261,15 @@ def _build_prompt(trade: Trade, ctx: Dict[str, Any]) -> str:
         else f"The wallet has {ctx['wallet_trades_on_this_market']} prior trades on this market (accumulating / scaling)."
     )
 
+    track_record_line = ""
+    if ctx.get("wallet_has_track_record"):
+        roi_txt = f"{ctx['wallet_roi_pct']:+.1f}% realized ROI" if ctx.get("wallet_roi_pct") is not None else "n/a ROI"
+        track_record_line = (
+            f"\nTRACK RECORD (resolved markets only): {ctx['wallet_win_rate_pct']}% win rate across "
+            f"{ctx['wallet_markets_won']}W/{ctx['wallet_markets_lost']}L, {roi_txt} on "
+            f"${ctx['wallet_realized_pnl']:,.0f} realized PnL. Weigh this real outcome history."
+        )
+
     return f"""Analyze this Polymarket trade.
 
 RESPOND IN EXACTLY THIS FORMAT - 5 labeled lines, no preamble, no explanation, nothing else:
@@ -261,7 +283,7 @@ VERDICT: [1 sharp, insightful sentence - the single most important takeaway abou
 === TRADE ===
 Market: {trade.market_title}
 Side: {trade.side}
-Price: ${trade.price:.4f} â†’ trader implies {implied_prob}% probability of YES outcome
+Price: ${trade.price:.4f} -> trader implies {implied_prob}% probability of YES outcome
 Trade value: ${ctx['trade_value']:.2f} (price x size)
 Timestamp: {trade.traded_at.strftime('%Y-%m-%d %H:%M UTC')}
 
@@ -277,7 +299,7 @@ This entry vs peer consensus: {ctx['price_vs_consensus']}
 Portfolio: {ctx['wallet_total_trades']} total trades across {ctx['wallet_total_markets']} markets
 Historical bias: {ctx['wallet_bias']} ({ctx['wallet_yes_bias_pct']}% YES across all trades)
 {first_trade_line}
-{size_note}{model_signal_line}"""
+{size_note}{track_record_line}{model_signal_line}"""
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +565,15 @@ def _local_model_analysis(trade: Trade, ctx: Dict[str, Any], db: Session) -> Opt
     )
     if ctx.get("is_first_trade_on_market"):
         behavior += " This is also the wallet's first entry on this market."
+    if ctx.get("wallet_has_track_record"):
+        roi_part = (
+            f" ({ctx['wallet_roi_pct']:+.1f}% realized ROI)" if ctx.get("wallet_roi_pct") is not None else ""
+        )
+        behavior += (
+            f" Track record: this wallet has won {ctx['wallet_win_rate_pct']}% of "
+            f"{ctx['wallet_markets_won'] + ctx['wallet_markets_lost']} decided markets"
+            f"{roi_part} - real resolved outcomes, not just stored value."
+        )
 
     price_insight = (
         f"The entry price implies roughly {round(float(trade.price) * 100)}% YES probability; "
@@ -712,7 +743,7 @@ def analyze_trade(trade: Trade, db: Session) -> Optional[Dict[str, Any]]:
     """Analyze a trade. Returns a structured dict, or None when nothing can analyze it.
 
     The locally trained model is the default analyst - it requires no API
-    keys and is tried first. External providers (Anthropic Claude â†’ Ollama â†’
+    keys and is tried first. External providers (Anthropic Claude -> Ollama ->
     Hugging Face) are only consulted when the local model cannot score the
     trade. Results are persisted to the trade_analysis table with a
     configurable TTL.
@@ -789,10 +820,21 @@ def get_trade_summary(trades: List[Trade], db: Optional[Session] = None) -> Opti
         f"- {t.side} ${t.price:.4f} x {t.size:.2f} on {(t.market_title or t.condition_id)[:50]} ({t.traded_at.strftime('%Y-%m-%d')})"
         for t in trades[:15]
     ]
+    track_record = ""
+    if db:
+        perf = compute_wallet_performance(db, wallet_address)
+        if perf["has_data"]:
+            roi_txt = f"{round(perf['roi'] * 100, 1):+}% ROI" if perf["roi"] is not None else "n/a ROI"
+            track_record = (
+                f"\n\nRealized track record (resolved markets only): "
+                f"{round(perf['win_rate'] * 100)}% win rate across "
+                f"{perf['markets_won']}W/{perf['markets_lost']}L, {roi_txt}, "
+                f"${round(perf['realized_pnl']):,} realized PnL. Factor this in."
+            )
     prompt = (
         "Summarize this wallet's recent trading pattern in 2-3 sentences. "
-        "Focus on market concentration, directional bias, and any notable positioning.\n\n"
-        "Trades (newest first):\n" + "\n".join(lines)
+        "Focus on market concentration, directional bias, realized performance, and any notable positioning.\n\n"
+        "Trades (newest first):\n" + "\n".join(lines) + track_record
     )
 
     for provider, model in candidates:

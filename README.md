@@ -252,6 +252,12 @@ PolySignal can explain trades in two ways:
 - Optional external providers can generate natural-language analysis when
   configured.
 
+Both the local and external analysis are **grounded in the wallet's real
+resolved-market track record** (win rate, realized ROI/PnL) when that data
+exists, so the verdicts reflect actual outcomes rather than stored value alone.
+"Analyze with AI" deep links appear on the trades tables and dashboard activity
+(not just the trade detail page) and run the analysis on arrival.
+
 The model is a single sigmoid neuron (the course's `Dense(1, sigmoid)`), trained
 locally with TensorFlow and deployed as plain-numpy weights. It is **leakage-safe
 by default**: the training label is a 2-sigma threshold on a trade's value

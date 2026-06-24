@@ -226,6 +226,7 @@
                         {% if trade.notable_score is not none and trade.notable_score >= signal_threshold %}
                         <span class="pill {{ signal_tone(trade.notable_score) }}" title="Signal strength {{ '%.2f'|format(trade.notable_score) }} / 1.00">{{ signal_label(trade.notable_score) }} signal</span>
                         {% endif %}
+                        <a href="/trades/{{ trade.trade_id }}?analyze=1#ai-section" class="ai-inline-link" title="Run AI analysis on this trade">Analyze with AI</a>
                     </td>
                     <td data-label="Side"><span class="pill {% if trade.side == 'YES' %}success{% else %}danger{% endif %}">{{ trade.side }}</span></td>
                     <td data-label="Value" title="{{ fmt_money_full(trade.price * trade.size) }}">{{ fmt_money(trade.price * trade.size) }}</td>

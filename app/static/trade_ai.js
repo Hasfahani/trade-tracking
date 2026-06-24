@@ -176,6 +176,10 @@
                 }
                 addContextItem(grid, 'Market history', firstBadge);
                 addContextItem(grid, 'Wallet bias', ctx.wallet_bias + ' (' + ctx.wallet_yes_bias_pct + '% YES overall)');
+                if (ctx.wallet_has_track_record) {
+                    var roiTxt = (typeof ctx.wallet_roi_pct === 'number') ? ', ' + (ctx.wallet_roi_pct > 0 ? '+' : '') + ctx.wallet_roi_pct + '% ROI' : '';
+                    addContextItem(grid, 'Track record', ctx.wallet_win_rate_pct + '% win rate (' + ctx.wallet_markets_won + 'W/' + ctx.wallet_markets_lost + 'L' + roiTxt + ')');
+                }
             }
 
             setDisplay('ai-result', 'block');
@@ -192,4 +196,14 @@
     if (analyzeBtn) analyzeBtn.addEventListener('click', loadTradeAnalysis);
     if (reanalyzeBtn) reanalyzeBtn.addEventListener('click', reanalyzeTrade);
     if (retryBtn) retryBtn.addEventListener('click', loadTradeAnalysis);
+
+    // Auto-run when arriving via an "Analyze" deep link (?analyze=1) from a
+    // trades table or dashboard event, and bring the AI card into view.
+    try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('analyze') === '1' && analyzeBtn && !analyzeBtn.disabled) {
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            loadTradeAnalysis();
+        }
+    } catch (_) { /* deep-link auto-run is best-effort */ }
 }());

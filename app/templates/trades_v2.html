@@ -193,6 +193,7 @@
                     <td data-label="Value" title="{{ fmt_money_full(trade.price * trade.size) }}">{{ fmt_money(trade.price * trade.size) }}</td>
                     <td data-label="IDs">
                         <div class="stack-tight mono-actions">
+                            <a href="/trades/{{ trade.trade_id }}?analyze=1#ai-section" class="btn btn-small btn-ai">Analyze with AI</a>
                             <a href="/trades/{{ trade.trade_id }}" class="btn btn-small">View analysis</a>
                             <button type="button" class="btn btn-small" data-copy="{{ trade.trade_id }}" data-copy-label="Copy trade ID">Copy trade ID</button>
                             <button type="button" class="btn btn-small" data-copy="{{ trade.condition_id }}" data-copy-label="Copy condition ID">Copy condition ID</button>

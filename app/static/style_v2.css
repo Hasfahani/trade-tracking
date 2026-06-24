@@ -4734,3 +4734,27 @@ tbody tr:hover {
         min-width: 0;
     }
 }
+
+/* AI analysis affordances surfaced beyond the trade detail page. */
+.btn-ai {
+    border-color: var(--accent-strong);
+    color: var(--accent);
+}
+.btn-ai:hover {
+    background: rgba(110, 209, 255, 0.12);
+    border-color: var(--accent);
+}
+.ai-inline-link {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 0.82em;
+    color: var(--accent);
+    white-space: nowrap;
+}
+.ai-inline-link::before {
+    content: "\2728\00a0"; /* sparkles */
+}
+.ai-inline-link:hover {
+    color: var(--accent-strong);
+    text-decoration: underline;
+}

@@ -2,7 +2,7 @@
 """Retention signal tracking: event ingestion, identity, and live metrics queries.
 
 Event flow:
-  route handler â†’ emit() â†’ asyncio.Queue â†’ _drain_loop() â†’ event_log table
+  route handler -> emit() -> asyncio.Queue -> _drain_loop() -> event_log table
 
 Identity:
   A stable ``tracker_id`` (random hex UUID) is stored in the Starlette session
