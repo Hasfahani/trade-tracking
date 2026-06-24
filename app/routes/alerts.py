@@ -174,9 +174,25 @@ def _model_weights_status() -> Optional[Dict[str, Any]]:
     try:
         payload = json.loads(Path(DEFAULT_WEIGHTS_PATH).read_text(encoding="utf-8"))
         metrics = payload.get("test_metrics") or {}
+        sweep_raw = metrics.get("threshold_sweep") or {}
+        # Sort the precision/recall-vs-threshold rows by threshold for display.
+        sweep = [
+            {
+                "threshold": float(key),
+                "precision": row.get("precision"),
+                "recall": row.get("recall"),
+                "f1": row.get("f1"),
+            }
+            for key, row in sorted(sweep_raw.items(), key=lambda item: float(item[0]))
+        ]
+        excluded = payload.get("excluded_features") or []
         return {
             "trained_at": payload.get("trained_at"),
             "mode": payload.get("mode"),
+            "feature_set": payload.get("feature_set"),
+            "leakage_safe": payload.get("leakage_safe"),
+            "n_features": len(payload.get("feature_names") or []),
+            "excluded_features": excluded,
             "threshold": payload.get("threshold"),
             "n_train": payload.get("n_train"),
             "n_test": payload.get("n_test"),
@@ -188,6 +204,8 @@ def _model_weights_status() -> Optional[Dict[str, Any]]:
             "precision": metrics.get("precision_at_threshold", metrics.get("precision_at_0_5")),
             "recall": metrics.get("recall_at_threshold", metrics.get("recall_at_0_5")),
             "f1": metrics.get("f1_at_threshold", metrics.get("f1_at_0_5")),
+            "flag_rate": metrics.get("flag_rate_at_threshold"),
+            "threshold_sweep": sweep,
         }
     except Exception:
         return None

@@ -245,10 +245,22 @@ the in-app scheduler.
 
 PolySignal can explain trades in two ways:
 
-- A local observed-trade anomaly model scores each public trade against the
-  wallet's prior behavior using historical context plus the trade's known value.
+- A local observed-trade anomaly model scores how unusual each public trade is
+  versus the wallet's own prior behavior, using **behavioral and contextual
+  signals only** (trading pace, timing gaps, market focus, price extremity, the
+  wallet's past outlier rate). It is an anomaly score, not a profit forecast.
 - Optional external providers can generate natural-language analysis when
   configured.
+
+The model is a single sigmoid neuron (the course's `Dense(1, sigmoid)`), trained
+locally with TensorFlow and deployed as plain-numpy weights. It is **leakage-safe
+by default**: the training label is a 2-sigma threshold on a trade's value
+relative to the wallet's history, so the current-trade value features the label
+is derived from (`log1p_trade_value`, `log_value_vs_prior_mean`,
+`value_zscore_capped`) are **excluded** from the deployed model. Training refuses
+to re-introduce them (see `assert_leakage_safe`). Reported metrics are therefore
+honest point estimates of skill (test ROC-AUC ~0.7), not the ROC-AUC 1.0 a
+leaky model produces by rediscovering its own label.
 
 Provider priority for optional external analysis is Claude, then Ollama, then
 Hugging Face.
@@ -270,16 +282,30 @@ See [AI_SETUP.md](AI_SETUP.md) for provider setup notes and
 
 ### Training the Local Model
 
-The running app does not import TensorFlow. Training is local-only and exports
-lightweight weights to `data/model_weights.json`.
+The running app does not import TensorFlow (never add it to
+`requirements.txt`). Training is local-only and exports lightweight weights to
+`data/model_weights.json`. Install TensorFlow locally first
+(`pip install tensorflow`).
 
 ```powershell
+# Default: leakage-safe "improved" model (BCE + class weights), deployed
 python scripts/train_model.py
-python scripts/score_all_trades.py
+python scripts/score_all_trades.py --overwrite
+
+# Exact lecture math (single sigmoid neuron, MSE + SGD 0.1, no class weights)
+python scripts/train_model.py --lecture --output data/model_weights.lecture.json
+
+# Leaky baseline on all 15 features (comparison only - do NOT deploy)
+python scripts/train_model.py --leaked --output data/model_weights.leaked.json
 ```
 
+To deploy a different model, copy its file over `data/model_weights.json` (the
+only file the app loads) and restart. The app starts and runs normally **without**
+any weights file — scoring is simply disabled.
+
 Use `/admin/train-model` to run training from the admin UI when local training
-dependencies are available.
+dependencies are available; that page also shows the feature set, the honest
+metrics, and a precision/recall-vs-threshold table.
 
 ## Telegram Alerts
 

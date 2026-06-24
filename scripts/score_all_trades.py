@@ -52,7 +52,7 @@ def main() -> int:
             updated = 0
             X, _, trade_ids = build_features_for_wallet(trades)
             if trade_ids:
-                scores = model.predict(X)
+                scores = model.predict_full(X)
                 trades_by_id = {trade.trade_id: trade for trade in trades}
                 for trade_id, score in zip(trade_ids, scores):
                     trade = trades_by_id[trade_id]

@@ -9,6 +9,7 @@ __pycache__/
 data/*
 !data/.gitkeep
 !data/model_weights.json
+!data/model_weights.lecture.json
 uvicorn_out.log
 uvicorn_err.log
 .env

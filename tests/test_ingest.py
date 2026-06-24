@@ -217,7 +217,9 @@ class TestRefreshWalletScoring:
         ]
 
         class _FakeModel:
-            def predict(self, X):
+            # Refresh scores via predict_full (it selects the model's columns
+            # from the full feature matrix before predicting).
+            def predict_full(self, X):
                 return np.full(len(X), 0.42)
 
         with patch("app.ingest.fetch_trades_for_wallet", return_value=raw_trades), \

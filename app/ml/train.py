@@ -9,13 +9,13 @@ before offering training in the UI.
 Two training modes share the SAME architecture - the single sigmoid neuron
 from the lecture (Manually Written Lecture AP SS26):
 
-    weighted inputs:  z = wÂ·x + b              -> Dense(1) layer
+    weighted inputs:  z = w*x + b              -> Dense(1) layer
     activation:       y = F(z) = sigmoid(z)    -> activation='sigmoid'
-    weight update:    w_new = w + Î±Â·(t âˆ’ y)Â·x  -> gradient descent step
+    weight update:    w_new = w + a*(t - y)*x  -> gradient descent step
     epochs:           repeat over the dataset  -> the epoch loop below
 
 - "lecture" mode reproduces the lecture training exactly: MSE loss
-  (E = 1/N Î£ (t âˆ’ y)Â²) minimised with SGD(learning_rate=0.1), no class
+  (E = 1/N * sum (t - y)^2) minimised with SGD(learning_rate=0.1), no class
   weighting - the same math as the hand-worked epochs in the notes.
 - "improved" mode (default) keeps the neuron but trains it with binary
   cross-entropy and class weights. With a ~3.5% positive rate, MSE+sigmoid
@@ -37,7 +37,7 @@ import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Sequence
 
 import numpy as np
 
@@ -55,6 +55,33 @@ EARLY_STOPPING_MIN_DELTA = 1e-4
 
 _status_lock = threading.Lock()
 _status: Dict[str, Any] = {"state": "idle"}  # idle | running | done | error
+
+
+def assert_leakage_safe(feature_names: Sequence[str], allow_leakage: bool = False) -> None:
+    """Guard against re-introducing target leakage into a trained model.
+
+    The training label (app.ml.features) is a deterministic 2-sigma threshold on
+    the current trade's value relative to the wallet's prior history, i.e.
+    exactly ``LABEL_FEATURE > 2.0``. Any feature that carries the current trade's
+    value therefore leaks the label and yields inflated, meaningless metrics
+    (ROC-AUC == 1.0). Training refuses such a set unless allow_leakage=True is
+    passed deliberately to reproduce the leaky baseline for comparison.
+    """
+    from app.ml.features import LABEL_FEATURE, LEAKAGE_FEATURE_NAMES
+
+    if allow_leakage:
+        return
+    leaked = [name for name in feature_names if name in LEAKAGE_FEATURE_NAMES]
+    if LABEL_FEATURE in feature_names:
+        raise ValueError(
+            f"Label leakage: {LABEL_FEATURE!r} is the training label boundary and must be "
+            f"excluded from an honest model. Leaking features present: {leaked}."
+        )
+    if leaked:
+        raise ValueError(
+            f"Label leakage: current-value features carry the label: {leaked}. Use the "
+            "leakage-safe feature set, or pass allow_leakage=True to train a leaky baseline."
+        )
 
 
 def tensorflow_available() -> bool:
@@ -202,6 +229,9 @@ def _metrics_at(y_true, y_score, threshold) -> Dict[str, float]:
 def train_and_export(
     epochs: int = DEFAULT_EPOCHS,
     mode: str = DEFAULT_MODE,
+    feature_names: Optional[Sequence[str]] = None,
+    allow_leakage: bool = False,
+    output_path: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, int, float, np.ndarray, float], None]] = None,
 ) -> Dict[str, Any]:
     """Train the model and export weights + threshold to data/model_weights.json.
@@ -210,6 +240,13 @@ def train_and_export(
         epochs: Number of training epochs.
         mode: "improved" (BCE + class weights, default) or "lecture"
             (exact lecture math: MSE + SGD(0.1), no class weights).
+        feature_names: Which features to train on. Defaults to the leakage-safe
+            set (DEFAULT_FEATURE_NAMES); the deployed model excludes the
+            current-value features the label is derived from.
+        allow_leakage: Permit training on label-leaking features (only to
+            reproduce the leaky baseline for comparison). Off by default.
+        output_path: Where to write the weights JSON. Defaults to the deployed
+            data/model_weights.json.
         progress_callback: Called after each epoch with
             (epoch, total_epochs, train_loss, flat_weights, bias).
 
@@ -219,7 +256,7 @@ def train_and_export(
     Raises:
         ImportError: tensorflow is not installed.
         RuntimeError: not enough data to train.
-        ValueError: unknown mode.
+        ValueError: unknown mode or label-leaking feature set.
     """
     if mode not in ("improved", "lecture"):
         raise ValueError(f"Unknown training mode: {mode!r}")
@@ -228,12 +265,32 @@ def train_and_export(
 
     from app.db import get_db_context
     from app.ml import model as ml_model
-    from app.ml.features import FEATURE_COUNT, FEATURE_NAMES, build_dataset
+    from app.ml.features import (
+        DEFAULT_FEATURE_NAMES,
+        FEATURE_NAMES,
+        SAFE_FEATURE_NAMES,
+        build_dataset,
+        select_feature_columns,
+    )
+
+    active_feature_names = list(feature_names) if feature_names else list(DEFAULT_FEATURE_NAMES)
+    # Phase 1.3 guard: refuse to train a model on the feature the label is a
+    # deterministic threshold of (or the weaker current-value leaks).
+    assert_leakage_safe(active_feature_names, allow_leakage=allow_leakage)
+    n_features = len(active_feature_names)
+    excluded_features = [name for name in FEATURE_NAMES if name not in active_feature_names]
+    if active_feature_names == list(SAFE_FEATURE_NAMES):
+        feature_set = "leakage_safe"
+    elif active_feature_names == list(FEATURE_NAMES):
+        feature_set = "all_features_leaky"
+    else:
+        feature_set = "custom"
 
     with get_db_context() as session:
-        X, y, _trade_ids, timestamps = build_dataset(session)
+        X_full, y, _trade_ids, timestamps = build_dataset(session)
     if len(y) == 0:
         raise RuntimeError("No training data: no wallet has enough trade history.")
+    X = select_feature_columns(X_full, active_feature_names)
 
     X_train, y_train, X_val, y_val, X_test, y_test = temporal_split(X, y, timestamps)
     if len(y_train) == 0 or len(y_val) == 0 or len(y_test) == 0:
@@ -241,7 +298,7 @@ def train_and_export(
     X_train, X_val, X_test, means, stds = standardize(X_train, X_val, X_test)
 
     # The lecture's neuron: weighted inputs + bias through a sigmoid.
-    model = tf.keras.Sequential([tf.keras.layers.Dense(1, activation='sigmoid', input_shape=(FEATURE_COUNT,))])
+    model = tf.keras.Sequential([tf.keras.layers.Dense(1, activation='sigmoid', input_shape=(n_features,))])
 
     class_weight = None
     pos_weight = None
@@ -310,14 +367,17 @@ def train_and_export(
         p, r, f = precision_recall_f1(y_test, test_scores, sweep_threshold)
         sweep[str(sweep_threshold)] = {"precision": p, "recall": r, "f1": f}
 
-    output_path = Path(ml_model.DEFAULT_WEIGHTS_PATH)
+    output_path = Path(output_path) if output_path is not None else Path(ml_model.DEFAULT_WEIGHTS_PATH)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "w": [float(v) for v in weights.flatten()],
         "b": float(bias[0]),
         "feature_means": [float(v) for v in means],
         "feature_stds": [float(v) for v in stds],
-        "feature_names": FEATURE_NAMES,
+        "feature_names": active_feature_names,
+        "feature_set": feature_set,
+        "excluded_features": excluded_features,
+        "leakage_safe": feature_set == "leakage_safe",
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "mode": mode,
         "loss": loss_name,

@@ -152,4 +152,27 @@
         </div>
     </div>
 </section>
+
+<section class="card tutorial-panel">
+    <div class="section-head">
+        <h2>What the signal score means</h2>
+        <span class="pill">Local model</span>
+    </div>
+    <p>Each trade gets an <strong>observed-trade anomaly score</strong> from a small
+    local model: how unusual is this trade versus the same wallet's prior history?
+    The model reads <strong>behavioral and contextual signals only</strong> — trading
+    pace, the gap since the last trade, how focused the wallet is on this market, how
+    extreme the entry price is, and the wallet's past rate of outsized trades.</p>
+    <ul>
+        <li><strong>It is an anomaly score, not a profit prediction.</strong> A high
+        score means "worth a look," not "this trade will win."</li>
+        <li><strong>It is honest about its limits.</strong> The model deliberately
+        excludes the trade's own size/value (which the training label is derived from),
+        so its reported accuracy is a realistic estimate of skill rather than an
+        inflated one. See <a href="/admin/train-model">Train Model</a> for the current
+        metrics and the precision/recall table.</li>
+        <li><strong>Flags are rare by design.</strong> The operating threshold favors a
+        few high-confidence flags over flagging everything, so most trades stay unmarked.</li>
+    </ul>
+</section>
 {% endblock %}

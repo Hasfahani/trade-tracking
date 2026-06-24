@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from app.ml.features import FEATURE_COUNT
+from app.ml.features import FEATURE_COUNT, FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +68,38 @@ class SignalModel:
         self.threshold = float(threshold) if threshold is not None else SIGNAL_THRESHOLD
         self.mode = mode
         self.metrics = metrics or {}
+        # Column indices into the full FEATURE_NAMES matrix, when this model was
+        # trained on a subset (e.g. the leakage-safe set). None means full-width.
+        self._select_idx: Optional[List[int]] = None
+        if self.feature_names and self.feature_names != list(FEATURE_NAMES):
+            if all(name in FEATURE_NAMES for name in self.feature_names):
+                self._select_idx = [FEATURE_NAMES.index(name) for name in self.feature_names]
 
     def predict(self, X) -> np.ndarray:
-        """Standardize with the stored train-set stats and return sigmoid scores."""
+        """Standardize with the stored train-set stats and return sigmoid scores.
+
+        X must already have one column per stored weight. Use predict_full when
+        you have the full FEATURE_NAMES matrix and need column selection.
+        """
         X = np.asarray(X, dtype=np.float64)
         X_std = (X - self.feature_means) / self.feature_stds
         return _stable_sigmoid(X_std @ self.w + self.b)
+
+    def select_columns(self, X_full) -> np.ndarray:
+        """Subset a full (n, FEATURE_COUNT) matrix to this model's feature columns."""
+        X_full = np.asarray(X_full, dtype=np.float64)
+        if self._select_idx is None:
+            return X_full
+        return X_full[:, self._select_idx]
+
+    def predict_full(self, X_full) -> np.ndarray:
+        """Predict from the full FEATURE_NAMES matrix, selecting columns first."""
+        return self.predict(self.select_columns(X_full))
+
+    def explain_full(self, x_full_row) -> List[Tuple[str, float]]:
+        """Per-feature contributions for one full FEATURE_NAMES row."""
+        x = np.asarray(x_full_row, dtype=np.float64).reshape(1, -1)
+        return self.explain(self.select_columns(x)[0])
 
     def explain(self, x_row) -> List[Tuple[str, float]]:
         """Per-feature logit contributions for one feature row.
@@ -99,9 +125,22 @@ def load_model(path: Union[str, Path] = DEFAULT_WEIGHTS_PATH) -> Optional[Signal
         b = float(payload["b"])
         feature_means = np.asarray(payload["feature_means"], dtype=np.float64)
         feature_stds = np.asarray(payload["feature_stds"], dtype=np.float64)
-        expected_shape = (FEATURE_COUNT,)
+        feature_names = payload.get("feature_names")
+        # A model may be trained on a subset of the full feature set (the
+        # leakage-safe set has 12 of 15). The width is whatever the trained
+        # feature_names list says; legacy files without names must be full-width.
+        if feature_names is not None:
+            n_features = len(feature_names)
+            unknown = [name for name in feature_names if name not in FEATURE_NAMES]
+            if unknown:
+                raise ValueError(f"unknown feature names: {unknown}")
+        else:
+            n_features = FEATURE_COUNT
+        if not (1 <= n_features <= FEATURE_COUNT):
+            raise ValueError(f"feature count must be 1..{FEATURE_COUNT}, got {n_features}")
+        expected_shape = (n_features,)
         if w.shape != expected_shape or feature_means.shape != expected_shape or feature_stds.shape != expected_shape:
-            raise ValueError(f"weight vectors must have length {FEATURE_COUNT}")
+            raise ValueError(f"weight vectors must have length {n_features} (from feature_names)")
         if not (
             np.all(np.isfinite(w))
             and np.isfinite(b)

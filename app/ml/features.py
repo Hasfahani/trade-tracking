@@ -41,6 +41,53 @@ FEATURE_NAMES = [
     "value_zscore_capped",
 ]
 
+# Features that carry the CURRENT trade's observed value (price * size). The
+# training label (build_features_for_wallet, below) is a deterministic 2-sigma
+# threshold on the current value relative to the wallet's prior history, so
+# these features leak the label and must be excluded from an honest model:
+#   - value_zscore_capped  IS the label boundary: y == (value_zscore > 2.0)
+#   - log_value_vs_prior_mean and log1p_trade_value both carry `value` directly
+# See data/model_weights.json history: a model trained WITH these scores a
+# perfect ROC-AUC == 1.0, which is leakage, not skill.
+LABEL_FEATURE = "value_zscore_capped"  # the label is exactly (this > 2.0)
+LEAKAGE_FEATURE_NAMES = (
+    "log1p_trade_value",
+    "log_value_vs_prior_mean",
+    "value_zscore_capped",
+)
+
+# The honest, leakage-free feature set: every behavioral/contextual feature,
+# none of which carries the current trade's value or size. Trained models record
+# the exact set they used in their weights file ("feature_names").
+SAFE_FEATURE_NAMES = [name for name in FEATURE_NAMES if name not in LEAKAGE_FEATURE_NAMES]
+
+# Default feature set for training/scoring. The deployed model is leakage-safe.
+DEFAULT_FEATURE_NAMES = SAFE_FEATURE_NAMES
+
+
+def feature_indices(feature_names: Sequence[str]) -> List[int]:
+    """Column indices into the full FEATURE_NAMES matrix for the given names.
+
+    Raises KeyError if any name is not a known feature.
+    """
+    lookup = {name: i for i, name in enumerate(FEATURE_NAMES)}
+    try:
+        return [lookup[name] for name in feature_names]
+    except KeyError as exc:  # pragma: no cover - guards against typos/drift
+        raise KeyError(f"Unknown feature name: {exc.args[0]!r}") from exc
+
+
+def select_feature_columns(X: np.ndarray, feature_names: Sequence[str]) -> np.ndarray:
+    """Subset a full (n, FEATURE_COUNT) matrix to the named columns, in order.
+
+    Returns X unchanged when feature_names is empty or already the full set, so
+    legacy full-width models keep working without a copy.
+    """
+    if not feature_names or list(feature_names) == FEATURE_NAMES:
+        return X
+    return X[:, feature_indices(feature_names)]
+
+
 # Human-readable labels for the explanation layer ("why" in the UI).
 FEATURE_LABELS = {
     "side_yes": "YES/NO side",

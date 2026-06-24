@@ -59,10 +59,10 @@ def score_trade(trade: Trade, db: Session) -> Optional[TradeScore]:
         return None
 
     x_row = X[row_index]
-    score = float(model.predict(x_row.reshape(1, -1))[0])
+    score = float(model.predict_full(x_row.reshape(1, -1))[0])
     ordered = sorted(wallet_trades, key=lambda t: t.traded_at)
     prior = next(
         (i for i, t in enumerate(ordered) if t.trade_id == trade.trade_id),
         MIN_PRIOR_TRADES,
     )
-    return TradeScore(score=score, prior_trades=prior, contributions=model.explain(x_row))
+    return TradeScore(score=score, prior_trades=prior, contributions=model.explain_full(x_row))

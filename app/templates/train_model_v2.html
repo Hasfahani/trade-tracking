@@ -28,9 +28,25 @@
         {% endif %}
     </div>
     {% if model_status %}
+    {% if model_status.leakage_safe %}
+    <p class="flash flash-success" style="margin-bottom: 14px;">
+        <strong>Leakage-safe model.</strong> Trained on {{ model_status.n_features }} behavioral/contextual
+        features. The current trade's value features the label is derived from are
+        <strong>excluded</strong>{% if model_status.excluded_features %} ({{ model_status.excluded_features | join(", ") }}){% endif %},
+        so the metrics below are an honest estimate of skill — not a perfect score from the model
+        rediscovering its own label.
+    </p>
+    {% elif model_status.feature_set == "all_features_leaky" %}
+    <p class="flash flash-error" style="margin-bottom: 14px;">
+        <strong>Leaky baseline — do not deploy.</strong> This model includes the current-value
+        features the label is computed from, so its near-perfect metrics are
+        <strong>target leakage</strong>, not skill. Retrain leakage-safe before shipping.
+    </p>
+    {% endif %}
     <dl class="grid-form">
         <div><dt>Trained at</dt><dd>{{ model_status.trained_at }}</dd></div>
         <div><dt>Mode</dt><dd>{{ model_status.mode or "legacy" }}</dd></div>
+        <div><dt>Feature set</dt><dd>{{ model_status.feature_set or "legacy" }}{% if model_status.n_features %} ({{ model_status.n_features }} features){% endif %}</dd></div>
         <div><dt>Operating threshold</dt><dd>{{ "%.4f" | format(model_status.threshold) if model_status.threshold is not none else "default 0.7" }}</dd></div>
         <div><dt>Rows</dt><dd>{{ model_status.n_train }} train / {{ model_status.n_test }} test</dd></div>
         <div><dt>Test base rate</dt><dd>{{ "%.4f" | format(model_status.base_rate) if model_status.base_rate is not none else "—" }}</dd></div>
@@ -39,7 +55,38 @@
         <div><dt>Test precision</dt><dd>{{ "%.4f" | format(model_status.precision) if model_status.precision is not none else "—" }}</dd></div>
         <div><dt>Test recall</dt><dd>{{ "%.4f" | format(model_status.recall) if model_status.recall is not none else "—" }}</dd></div>
         <div><dt>Test F1</dt><dd>{{ "%.4f" | format(model_status.f1) if model_status.f1 is not none else "—" }}</dd></div>
+        <div><dt>Flag rate</dt><dd>{{ "%.4f" | format(model_status.flag_rate) if model_status.flag_rate is not none else "—" }}</dd></div>
     </dl>
+
+    {% if model_status.threshold_sweep %}
+    <h3 style="margin-top: 18px;">Precision / recall vs. threshold</h3>
+    <p class="subtle">How the operating point trades off precision against recall on the held-out test set. The deployed threshold ({{ "%.4f" | format(model_status.threshold) if model_status.threshold is not none else "—" }}) is chosen on a separate validation split to favor fewer, higher-confidence flags.</p>
+    <table class="trade-table">
+        <thead>
+            <tr><th>Threshold</th><th>Precision</th><th>Recall</th><th>F1</th></tr>
+        </thead>
+        <tbody>
+            {% for row in model_status.threshold_sweep %}
+            {% set is_deployed = model_status.threshold is not none and (row.threshold - model_status.threshold) | abs < 0.001 %}
+            <tr>
+                <td data-label="Threshold">{{ "%.4f" | format(row.threshold) }}{% if is_deployed %} <span class="pill success">deployed</span>{% endif %}</td>
+                <td data-label="Precision">{{ "%.4f" | format(row.precision) if row.precision is not none else "—" }}</td>
+                <td data-label="Recall">{{ "%.4f" | format(row.recall) if row.recall is not none else "—" }}</td>
+                <td data-label="F1">{{ "%.4f" | format(row.f1) if row.f1 is not none else "—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <p class="subtle" style="margin-top: 14px;">
+        <strong>What the score means.</strong> The model estimates how unusual an observed trade is
+        versus the wallet's own prior history, from behavioral and contextual signals only (trading
+        pace, timing gaps, market focus, price extremity, the wallet's past outlier rate). It is an
+        anomaly score, not a profit forecast, and it is not calibrated to a probability — treat a high
+        score as "worth a look", not a guarantee. Reported metrics are point estimates on a single
+        temporal split and will move as more data arrives.
+    </p>
     {% else %}
     <p class="subtle">No model yet — train one below to start scoring trades.</p>
     {% endif %}

@@ -347,7 +347,7 @@ def _score_unscored_trades(db: Session, wallet_address: str) -> int:
     if not trade_ids:
         return 0
 
-    scores = model.predict(X)
+    scores = model.predict_full(X)
     trades_by_id = {trade.trade_id: trade for trade in trades}
     updated = 0
     for trade_id, score in zip(trade_ids, scores):
