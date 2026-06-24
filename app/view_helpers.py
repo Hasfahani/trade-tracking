@@ -6,6 +6,9 @@ from app.analytics import (  # noqa: F401
     build_filtered_top_wallets,
     build_top_markets,
     build_wallet_activity_timeline,
+    compute_performance_from_trades,
+    compute_wallet_performance,
+    compute_wallet_performance_map,
     detect_interesting_activity,
     get_wallet_intelligence_summary,
 )

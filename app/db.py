@@ -251,6 +251,28 @@ def _migrate_wallet_ai_summary_columns(conn) -> None:
     )
 
 
+def _migrate_trade_outcome_token(conn) -> None:
+    _add_missing_columns(conn, "trades", {"outcome_token": "VARCHAR(3)"})
+
+
+def _migrate_market_resolutions_table(conn) -> None:
+    conn.exec_driver_sql(
+        """
+        CREATE TABLE IF NOT EXISTS market_resolutions (
+            condition_id VARCHAR(255) PRIMARY KEY,
+            market_title TEXT,
+            outcome VARCHAR(16) NOT NULL DEFAULT 'UNRESOLVED',
+            resolved_at DATETIME,
+            checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_market_resolutions_outcome ON market_resolutions (outcome)"
+    )
+
+
 SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("001_wallet_compat_columns", _migrate_wallet_columns),
     ("002_sync_event_columns", _migrate_sync_event_columns),
@@ -263,6 +285,8 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("009_trades_condition_traded_at_index", _migrate_trades_condition_traded_at_index),
     ("010_wallet_ai_summary_columns", _migrate_wallet_ai_summary_columns),
     ("011_trade_notable_score", _migrate_trade_notable_score),
+    ("012_trade_outcome_token", _migrate_trade_outcome_token),
+    ("013_market_resolutions_table", _migrate_market_resolutions_table),
 )
 
 
@@ -305,6 +329,14 @@ POSTGRES_COMPAT_COLUMNS: Dict[str, ColumnSpec] = {
         "alert_sent": "INTEGER NOT NULL DEFAULT 0",
         "updated_at": "TIMESTAMP",
         "notable_score": "DOUBLE PRECISION",
+        "outcome_token": "VARCHAR(3)",
+    },
+    "market_resolutions": {
+        "market_title": "TEXT",
+        "outcome": "VARCHAR(16)",
+        "resolved_at": "TIMESTAMP",
+        "checked_at": "TIMESTAMP",
+        "created_at": "TIMESTAMP",
     },
     "sync_events": {
         "duplicate_count": "INTEGER",

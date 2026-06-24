@@ -51,6 +51,11 @@ class Trade(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     alert_sent = Column(Integer, nullable=False, default=0)
     notable_score = Column(Float, nullable=True)
+    # The Yes/No token this trade was on, captured from the Polymarket `outcome`
+    # field. Orthogonal to `side` (which encodes BUY->YES / SELL->NO): together
+    # they reconstruct buy/sell of the Yes/No token for realized-PnL accounting.
+    # Nullable: rows ingested before this column existed have no token.
+    outcome_token = Column(String(3), nullable=True)
 
     __table_args__ = (
         CheckConstraint("side IN ('YES', 'NO')", name="check_side"),
@@ -61,6 +66,29 @@ class Trade(Base):
         Index("ix_trades_alert_sent", "alert_sent"),
     )
 
+
+
+class MarketResolution(Base):
+    """Resolved outcome for a Polymarket condition (binary YES/NO market).
+
+    Populated from Polymarket's CLOB API (the token with ``winner=True``).
+    ``outcome`` is ``YES``/``NO`` for a resolved market, or ``UNRESOLVED`` when
+    the market is not yet closed. Used to compute realized PnL/ROI/win rate.
+    """
+
+    __tablename__ = "market_resolutions"
+
+    condition_id = Column(String(255), primary_key=True)
+    market_title = Column(Text, nullable=True)
+    outcome = Column(String(16), nullable=False, default="UNRESOLVED")
+    resolved_at = Column(DateTime, nullable=True)
+    checked_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("outcome IN ('YES', 'NO', 'UNRESOLVED')", name="check_resolution_outcome"),
+        Index("ix_market_resolutions_outcome", "outcome"),
+    )
 
 
 class SyncEvent(Base):

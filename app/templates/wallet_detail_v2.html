@@ -106,7 +106,33 @@
         </article>
     </div>
 
-    {# Resolved-market metrics need outcome data we do not store yet. #}
+    {% if perf and perf.has_data %}
+    {# Realized performance from resolved markets only (honest, not stored-value). #}
+    <h3 class="perf-resolved-head">Resolved-market performance</h3>
+    <p class="subtle perf-resolved-note">Realized across {{ perf.resolved_markets }} resolved market{{ '' if perf.resolved_markets == 1 else 's' }} ({{ perf.resolved_trades }} trade{{ '' if perf.resolved_trades == 1 else 's' }}). Net positions are valued at settlement; open positions on unresolved markets are excluded.</p>
+    <div class="metrics-grid embedded-metrics perf-grid">
+        <article class="metric-card">
+            <span class="metric-label">Realized PnL</span>
+            <strong class="{{ 'text-success' if perf.realized_pnl >= 0 else 'text-danger' }}" title="{{ fmt_money_full(perf.realized_pnl) }}">{{ '+' if perf.realized_pnl > 0 else '' }}{{ fmt_money(perf.realized_pnl) }}</strong>
+            <small class="subtle metric-foot">on {{ fmt_money(perf.total_invested) }} invested</small>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">ROI</span>
+            <strong class="{{ 'text-success' if perf.roi is not none and perf.roi >= 0 else 'text-danger' }}">{% if perf.roi is not none %}{{ '+' if perf.roi > 0 else '' }}{{ fmt_pct(perf.roi * 100) }}{% else %}<span class="subtle">-</span>{% endif %}</strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Win rate</span>
+            <strong>{% if perf.win_rate is not none %}{{ fmt_pct(perf.win_rate * 100) }}{% else %}<span class="subtle">-</span>{% endif %}</strong>
+            <small class="subtle metric-foot">{{ perf.markets_won }} won / {{ perf.markets_lost }} lost</small>
+        </article>
+        <article class="metric-card">
+            <span class="metric-label">Markets decided</span>
+            <strong>{{ perf.markets_won + perf.markets_lost }}</strong>
+            <small class="subtle metric-foot">of {{ perf.resolved_markets }} resolved</small>
+        </article>
+    </div>
+    {% else %}
+    {# No resolved + outcome-tagged trades yet: stay honest, never fabricate. #}
     <div class="empty-state perf-locked">
         <h3>Resolved performance unavailable</h3>
         <p>PnL, ROI, win rate, and markets won/lost need resolved market outcomes. Not enough resolved market data yet.</p>
@@ -117,6 +143,7 @@
             <span class="perf-placeholder"><em>Markets won / lost</em><b>Not enough data</b></span>
         </div>
     </div>
+    {% endif %}
 </section>
 
 {# ---- Charts ---- #}

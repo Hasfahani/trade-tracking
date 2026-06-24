@@ -1,6 +1,7 @@
 # Downloads and saves Polymarket trades.
 import hashlib
 import logging
+import re
 import ssl
 import time
 from datetime import datetime, timezone
@@ -8,10 +9,10 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.models import SyncEvent, Trade, Wallet
+from app.models import MarketResolution, SyncEvent, Trade, Wallet
 from app.settings import (
     POLYMARKET_CONNECT_TIMEOUT_SECONDS,
     POLYMARKET_POOL_TIMEOUT_SECONDS,
@@ -22,10 +23,18 @@ from app.settings import (
 logger = logging.getLogger(__name__)
 
 DATA_API_BASE = "https://data-api.polymarket.com"
+CLOB_API_BASE = "https://clob.polymarket.com"
 _MAX_RETRY_ATTEMPTS = 3
 _INITIAL_BACKOFF_SECONDS = 2.0
 _MAX_TRADES_PAGE_SIZE = 1000
 _MAX_TRADES_OFFSET = 3000
+
+# Per-refresh cap on resolution lookups (one HTTP call each) so a trade refresh
+# stays responsive. The backfill script sweeps everything without this cap.
+_RESOLUTION_FETCH_LIMIT = 12
+# Polymarket condition ids are 0x + 64 hex chars. Validate before any network
+# call so malformed/test ids never trigger a request.
+_CONDITION_ID_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
 
 @lru_cache(maxsize=1)
@@ -148,6 +157,10 @@ def normalize_trade(raw: Dict[str, Any], wallet_address: str) -> Optional[Dict[s
             logger.warning("Unknown side/outcome in trade payload: side=%r outcome=%r", side_raw, outcome)
             return None
 
+        # The Yes/No token traded, independent of buy/sell. Needed for realized
+        # PnL once the market resolves. None when the API omits a usable outcome.
+        outcome_token = outcome if outcome in {"YES", "NO"} else None
+
         ts = raw.get("timestamp")
         if isinstance(ts, (int, float)):
             traded_at = datetime.fromtimestamp(ts, tz=timezone.utc)
@@ -187,6 +200,7 @@ def normalize_trade(raw: Dict[str, Any], wallet_address: str) -> Optional[Dict[s
             "price": price,
             "size": size,
             "traded_at": traded_at,
+            "outcome_token": outcome_token,
         }
     except Exception:
         logger.exception("Failed to normalize trade payload")
@@ -360,12 +374,144 @@ def _score_unscored_trades(db: Session, wallet_address: str) -> int:
     return updated
 
 
+def _backfill_outcome_tokens(db: Session, normalized: List[Dict[str, Any]], existing_ids: set) -> None:
+    """Set outcome_token on already-stored trades that predate the column.
+
+    Uses the payload we just fetched. Only two token values exist, so this is at
+    most two UPDATE statements per chunk and only touches rows where the column
+    is still NULL.
+    """
+    by_token: Dict[str, List[str]] = {"YES": [], "NO": []}
+    for trade in normalized:
+        token = trade.get("outcome_token")
+        if trade["id"] in existing_ids and token in by_token:
+            by_token[token].append(trade["id"])
+
+    for token, trade_ids in by_token.items():
+        for start in range(0, len(trade_ids), 500):
+            chunk = trade_ids[start : start + 500]
+            if not chunk:
+                continue
+            db.execute(
+                update(Trade)
+                .where(Trade.trade_id.in_(chunk), Trade.outcome_token.is_(None))
+                .values(outcome_token=token)
+            )
+
+
+def parse_market_resolution(market: Any, condition_id: str) -> Optional[Dict[str, Any]]:
+    """Parse a CLOB market payload into a resolution record (pure, no network).
+
+    Returns a dict with condition_id, market_title, outcome (YES/NO/UNRESOLVED),
+    and resolved_at, or None if the payload is unusable. A closed market with
+    exactly one winning Yes/No token resolves to that outcome; anything else is
+    treated as UNRESOLVED so we never fabricate a result.
+    """
+    if not isinstance(market, dict):
+        return None
+    market_title = str(market.get("question") or "").strip() or None
+    resolved_at = None
+    end_iso = market.get("end_date_iso") or market.get("endDate")
+    if isinstance(end_iso, str) and end_iso.strip():
+        try:
+            resolved_at = datetime.fromisoformat(end_iso.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            resolved_at = None
+
+    base = {"condition_id": condition_id, "market_title": market_title}
+    if not market.get("closed"):
+        return {**base, "outcome": "UNRESOLVED", "resolved_at": None}
+
+    winners = [
+        str(token.get("outcome") or "").upper()
+        for token in (market.get("tokens") or [])
+        if token.get("winner")
+    ]
+    winning = [w for w in winners if w in {"YES", "NO"}]
+    if len(winning) == 1:
+        return {**base, "outcome": winning[0], "resolved_at": resolved_at}
+    # Closed but ambiguous (no/many winners, or non-binary) - stay honest.
+    return {**base, "outcome": "UNRESOLVED", "resolved_at": resolved_at}
+
+
+def fetch_market_resolution(condition_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch a single market's resolution from the Polymarket CLOB API.
+
+    Returns a parsed resolution dict, or None on any network/format error or a
+    non-conforming condition id. Never raises - resolution is best-effort.
+    """
+    condition_id = (condition_id or "").strip()
+    if not _CONDITION_ID_RE.match(condition_id):
+        return None
+    url = f"{CLOB_API_BASE}/markets/{condition_id}"
+    try:
+        with httpx.Client(timeout=_polymarket_timeout(), verify=_polymarket_ssl_context()) as client:
+            response = client.get(url)
+        if response.status_code != 200:
+            return None
+        return parse_market_resolution(response.json(), condition_id)
+    except Exception:
+        logger.warning("Resolution fetch failed for condition=%s", condition_id, exc_info=True)
+        return None
+
+
+def upsert_market_resolution(db: Session, data: Dict[str, Any]) -> MarketResolution:
+    """Insert or update a market_resolutions row from a parsed resolution dict."""
+    row = db.get(MarketResolution, data["condition_id"])
+    if row is None:
+        row = MarketResolution(condition_id=data["condition_id"])
+        db.add(row)
+    if data.get("market_title"):
+        row.market_title = data["market_title"]
+    row.outcome = data["outcome"]
+    row.resolved_at = data.get("resolved_at")
+    row.checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    return row
+
+
+def refresh_resolutions_for_wallet(db: Session, wallet_address: str, max_markets: int = _RESOLUTION_FETCH_LIMIT) -> int:
+    """Fetch resolutions for a wallet's not-yet-resolved markets (newest first).
+
+    Bounded by ``max_markets`` so a refresh stays responsive. Returns the number
+    of markets newly resolved (YES/NO). Best-effort: individual fetch failures
+    are skipped.
+    """
+    already_resolved = {
+        cid for (cid,) in db.query(MarketResolution.condition_id)
+        .filter(MarketResolution.outcome.in_(("YES", "NO"))).all()
+    }
+    market_rows = (
+        db.query(Trade.condition_id, func.max(Trade.traded_at).label("last_traded"))
+        .filter(Trade.wallet_address == wallet_address)
+        .group_by(Trade.condition_id)
+        .order_by(func.max(Trade.traded_at).desc())
+        .all()
+    )
+    candidates = [
+        cid for (cid, _last) in market_rows
+        if cid not in already_resolved and _CONDITION_ID_RE.match(cid or "")
+    ][:max_markets]
+
+    resolved = 0
+    for condition_id in candidates:
+        data = fetch_market_resolution(condition_id)
+        if data is None:
+            continue
+        upsert_market_resolution(db, data)
+        if data["outcome"] in ("YES", "NO"):
+            resolved += 1
+    if candidates:
+        db.commit()
+    return resolved
+
+
 def refresh_wallet(
     db: Session,
     wallet: Wallet,
     *,
     fetch_all: bool = False,
     limit: int = 1000,
+    fetch_resolutions: bool = True,
 ) -> Dict[str, Any]:
     """Refresh a wallet and store sync status in SQLite."""
     started_at = datetime.now(timezone.utc)
@@ -402,11 +548,16 @@ def refresh_wallet(
                             "price": t["price"],
                             "size": t["size"],
                             "traded_at": t["traded_at"],
+                            "outcome_token": t["outcome_token"],
                         }
                         for t in new_trades
                     ],
                 )
             inserted = len(new_trades)
+
+            # Backfill outcome_token on trades ingested before that column
+            # existed, using the freshly-fetched payload we already have.
+            _backfill_outcome_tokens(db, normalized, existing_ids)
 
         duplicate_count = len(raw_trades) - inserted
         status = "no_new" if inserted == 0 else "success"
@@ -433,6 +584,20 @@ def refresh_wallet(
                     pass
                 logger.warning(
                     "Notable scoring failed for wallet=%s - refresh unaffected", wallet.address, exc_info=True
+                )
+
+        # Best-effort: fetch resolved outcomes for this wallet's markets. Network
+        # failures here must never fail the refresh (trades are already saved).
+        if fetch_resolutions:
+            try:
+                refresh_resolutions_for_wallet(db, wallet.address)
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                logger.warning(
+                    "Resolution fetch failed for wallet=%s - refresh unaffected", wallet.address, exc_info=True
                 )
 
         stats = calculate_wallet_stats_snapshot(db, wallet.address)

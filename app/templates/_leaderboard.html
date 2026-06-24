@@ -2,9 +2,10 @@
    Usage: {% from "_leaderboard.html" import leaderboard_table %}
           {{ leaderboard_table(rows) }}
 
-   Each row is a dict with: rank, address, label, focus, trade_count, total_value.
-   ROI / PnL / wallet score render as honest placeholders until resolved-market
-   data exists. Relies on global helpers: short_address, fmt_money, fmt_money_full. #}
+   Each row is a dict with: rank, address, label, focus, trade_count, total_value,
+   and optional `perf` (realized-performance dict, or None). ROI / PnL / wallet
+   score render real values when `perf` is set, else honest placeholders. Relies
+   on global helpers: short_address, fmt_money, fmt_money_full, fmt_pct. #}
 {% macro leaderboard_table(rows, empty_message="No ranked wallets yet. Refresh wallets to populate the leaderboard.") %}
 {% if rows %}
 <div class="table-wrap">
@@ -31,9 +32,15 @@
                 </td>
                 <td data-label="Total value" title="{{ fmt_money_full(row.total_value) }}">{{ fmt_money(row.total_value) }}</td>
                 <td data-label="Trades">{{ row.trade_count }}</td>
+                {% if row.perf %}
+                <td data-label="ROI"><span class="{{ 'text-success' if row.perf.roi is not none and row.perf.roi >= 0 else 'text-danger' }}">{% if row.perf.roi is not none %}{{ '+' if row.perf.roi > 0 else '' }}{{ fmt_pct(row.perf.roi * 100) }}{% else %}-{% endif %}</span></td>
+                <td data-label="PnL"><span class="{{ 'text-success' if row.perf.realized_pnl >= 0 else 'text-danger' }}" title="{{ fmt_money_full(row.perf.realized_pnl) }}">{{ '+' if row.perf.realized_pnl > 0 else '' }}{{ fmt_money(row.perf.realized_pnl) }}</span></td>
+                <td data-label="Wallet score">{% if row.perf.win_rate is not none %}<span title="Win rate over {{ row.perf.markets_won + row.perf.markets_lost }} decided market(s)">{{ (row.perf.win_rate * 100) | round | int }}</span>{% else %}<span class="subtle">-</span>{% endif %}</td>
+                {% else %}
                 <td data-label="ROI"><span class="subtle">Not enough data</span></td>
                 <td data-label="PnL"><span class="subtle">Not enough data</span></td>
                 <td data-label="Wallet score"><span class="subtle">Not enough data</span></td>
+                {% endif %}
                 <td data-label="Focus">{% if row.focus %}<span class="pill pill-soft">{{ row.focus }}</span>{% else %}<span class="subtle">-</span>{% endif %}</td>
             </tr>
             {% endfor %}

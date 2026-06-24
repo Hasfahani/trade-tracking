@@ -1,12 +1,16 @@
 # Builds dashboard charts and stats.
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from sqlalchemy import func, text
 from sqlalchemy.orm import Query, Session
 
 from app.formatting import short_address as _short_address, sync_status_class
-from app.models import SyncEvent, Trade, Wallet
+from app.models import MarketResolution, SyncEvent, Trade, Wallet
+
+# Tiny epsilon so floating-point dust doesn't flip a market's win/loss verdict.
+_PNL_EPS = 1e-9
 
 _LARGE_TRADE_THRESHOLD = 200.0
 _SPIKE_COUNT = 3
@@ -129,6 +133,131 @@ def detect_interesting_activity(db: Session) -> List[Dict[str, Any]]:
 
     events.sort(key=_ts, reverse=True)
     return events[:10]
+
+
+def _empty_performance() -> Dict[str, Any]:
+    return {
+        "has_data": False,
+        "realized_pnl": 0.0,
+        "total_invested": 0.0,
+        "roi": None,
+        "markets_won": 0,
+        "markets_lost": 0,
+        "resolved_markets": 0,
+        "resolved_trades": 0,
+        "win_rate": None,
+    }
+
+
+def compute_performance_from_trades(
+    trades: Sequence, outcome_by_condition: Dict[str, str]
+) -> Dict[str, Any]:
+    """Realized PnL/ROI/win-rate from trades on resolved markets (pure function).
+
+    Honest "net position held to resolution" model. For each
+    (condition, Yes/No token) the trader's net is reconstructed from buys and
+    sells (``side`` encodes BUY->YES / SELL->NO, orthogonal to ``outcome_token``):
+
+        pnl = sell_proceeds - buy_cost + max(net_shares, 0) * (1 if token won else 0)
+
+    ROI uses gross buy cost as the basis. A market counts as won/lost by the sign
+    of its summed PnL. Only conditions present in ``outcome_by_condition`` (i.e.
+    resolved YES/NO) and trades with a YES/NO ``outcome_token`` are included;
+    everything else is ignored rather than guessed.
+    """
+    groups: Dict[tuple, Dict[str, float]] = defaultdict(
+        lambda: {"buy_cost": 0.0, "sell_proceeds": 0.0, "net_shares": 0.0}
+    )
+    counted_trades = 0
+    for trade in trades:
+        condition_id = trade.condition_id
+        token = trade.outcome_token
+        if token not in ("YES", "NO") or condition_id not in outcome_by_condition:
+            continue
+        counted_trades += 1
+        value = float(trade.price) * float(trade.size)
+        group = groups[(condition_id, token)]
+        if trade.side == "YES":  # BUY of this token
+            group["buy_cost"] += value
+            group["net_shares"] += float(trade.size)
+        else:  # side == "NO" -> SELL of this token
+            group["sell_proceeds"] += value
+            group["net_shares"] -= float(trade.size)
+
+    market_pnl: Dict[str, float] = defaultdict(float)
+    realized_pnl = 0.0
+    total_invested = 0.0
+    for (condition_id, token), group in groups.items():
+        won = 1.0 if outcome_by_condition[condition_id] == token else 0.0
+        payoff = group["net_shares"] * won if group["net_shares"] > 0 else 0.0
+        pnl = group["sell_proceeds"] - group["buy_cost"] + payoff
+        market_pnl[condition_id] += pnl
+        realized_pnl += pnl
+        total_invested += group["buy_cost"]
+
+    markets_won = sum(1 for v in market_pnl.values() if v > _PNL_EPS)
+    markets_lost = sum(1 for v in market_pnl.values() if v < -_PNL_EPS)
+    decided = markets_won + markets_lost
+    resolved_markets = len(market_pnl)
+    return {
+        "has_data": resolved_markets > 0 and total_invested > 0,
+        "realized_pnl": realized_pnl,
+        "total_invested": total_invested,
+        "roi": (realized_pnl / total_invested) if total_invested > 0 else None,
+        "markets_won": markets_won,
+        "markets_lost": markets_lost,
+        "resolved_markets": resolved_markets,
+        "resolved_trades": counted_trades,
+        "win_rate": (markets_won / decided) if decided > 0 else None,
+    }
+
+
+def compute_wallet_performance_map(
+    db: Session, wallet_address: Optional[str] = None
+) -> Dict[str, Dict[str, Any]]:
+    """Per-wallet realized performance keyed by address (resolved markets only).
+
+    Scoped to one wallet when ``wallet_address`` is given. Returns ``{}`` when no
+    resolved+tokened trades exist, so callers fall back to honest placeholders.
+    """
+    trade_query = db.query(Trade).filter(Trade.outcome_token.in_(("YES", "NO")))
+    if wallet_address:
+        trade_query = trade_query.filter(Trade.wallet_address == wallet_address)
+    trades = trade_query.all()
+    if not trades:
+        return {}
+
+    condition_ids = {trade.condition_id for trade in trades}
+    outcome_by_condition = {
+        cid: outcome
+        for cid, outcome in (
+            db.query(MarketResolution.condition_id, MarketResolution.outcome)
+            .filter(
+                MarketResolution.condition_id.in_(condition_ids),
+                MarketResolution.outcome.in_(("YES", "NO")),
+            )
+            .all()
+        )
+    }
+    if not outcome_by_condition:
+        return {}
+
+    by_wallet: Dict[str, List] = defaultdict(list)
+    for trade in trades:
+        if trade.condition_id in outcome_by_condition:
+            by_wallet[trade.wallet_address].append(trade)
+
+    return {
+        address: compute_performance_from_trades(wallet_trades, outcome_by_condition)
+        for address, wallet_trades in by_wallet.items()
+    }
+
+
+def compute_wallet_performance(db: Session, wallet_address: str) -> Dict[str, Any]:
+    """Realized performance for one wallet, or an empty (placeholder) record."""
+    return compute_wallet_performance_map(db, wallet_address).get(
+        wallet_address, _empty_performance()
+    )
 
 
 def get_wallet_intelligence_summary(db: Session, wallet_address: str) -> Dict[str, Any]:

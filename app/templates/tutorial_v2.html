@@ -175,4 +175,25 @@
         few high-confidence flags over flagging everything, so most trades stay unmarked.</li>
     </ul>
 </section>
+
+<section class="card tutorial-panel">
+    <div class="section-head">
+        <h2>Reading resolved-market performance</h2>
+        <span class="pill">Real PnL</span>
+    </div>
+    <p>On a wallet's profile (and the <a href="/leaderboard">leaderboard</a>) you'll see
+    <strong>realized PnL, ROI, win rate, and markets won/lost</strong>. These are computed
+    only from markets that have <strong>actually resolved</strong> — positions are valued at
+    settlement, so the numbers are real outcomes, not estimates.</p>
+    <ul>
+        <li><strong>Realized PnL / ROI</strong> nets your buys and sells per market and adds
+        the settlement payout of whatever you still held when it resolved. ROI is measured
+        against the cash you put in.</li>
+        <li><strong>Win rate &amp; markets won/lost</strong> count each resolved market once,
+        by whether your net position there made or lost money.</li>
+        <li><strong>"Not enough resolved market data yet"</strong> means this wallet has no
+        resolved markets recorded — refresh it (or run the resolution backfill) and the real
+        numbers appear as markets settle. We never show a fabricated figure.</li>
+    </ul>
+</section>
 {% endblock %}

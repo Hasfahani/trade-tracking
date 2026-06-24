@@ -307,6 +307,36 @@ Use `/admin/train-model` to run training from the admin UI when local training
 dependencies are available; that page also shows the feature set, the honest
 metrics, and a precision/recall-vs-threshold table.
 
+## Resolved-Market Performance (real PnL / ROI / win rate)
+
+Wallet pages and the leaderboard show **realized** PnL, ROI, win rate, and
+markets won/lost — computed only from markets that have actually resolved, never
+fabricated. Until a wallet has resolved-market data, the UI shows an honest
+"Not enough resolved market data yet" placeholder.
+
+How it works:
+
+- Each trade stores the Yes/No `outcome_token` it was on (orthogonal to `side`,
+  which encodes buy/sell). Resolved outcomes are fetched per market from the
+  Polymarket CLOB API (`/markets/{condition_id}`, the token with `winner=true`)
+  and stored in `market_resolutions`.
+- PnL uses a transparent **net-position-held-to-resolution** model per
+  market × token: `pnl = sell_proceeds − buy_cost + max(net_shares, 0) × (1 if
+  the token won else 0)`. ROI is over gross buy cost; a market counts as won or
+  lost by the sign of its summed PnL.
+- Resolution fetching is wired into wallet refresh but fully guarded: if it
+  fails, the refresh still succeeds and stored trades are unaffected.
+
+Backfill existing data (the running app also fills this in over time on refresh):
+
+```powershell
+# Backfill outcome tokens (re-fetches trades) and resolve traded markets
+python scripts/backfill_resolutions.py
+
+# Scope to one wallet / cap the number of markets resolved per run
+python scripts/backfill_resolutions.py --wallet 0x... --limit 200
+```
+
 ## Telegram Alerts
 
 Telegram settings are configured in `/settings` and stored in the

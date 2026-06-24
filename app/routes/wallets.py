@@ -267,8 +267,10 @@ def refresh_all_wallets(
 async def leaderboard(request: Request, db: Session = Depends(get_db)):
     """Rank tracked wallets by total stored trade value.
 
-    Resolved-performance columns (ROI, PnL, wallet score) are placeholders until
-    market-outcome data is stored; this keeps the leaderboard honest, not faked.
+    Resolved-performance columns (ROI, PnL, wallet score) show real realized
+    numbers for wallets with resolved-market data, and an honest "Not enough
+    data" placeholder otherwise - never faked. Ranking stays by total stored
+    value so sparse resolved data can't distort the order.
     """
     if RETENTION_METRICS_ENABLED:
         ret.emit(ret.RawEvent(
@@ -295,10 +297,14 @@ async def leaderboard(request: Request, db: Session = Depends(get_db)):
         for w in db.query(Wallet).filter(Wallet.address.in_(addresses)).all()
     } if addresses else {}
 
+    # Real realized performance (resolved markets only); empty until data exists.
+    perf_map = vh.compute_wallet_performance_map(db)
+
     rows = []
     for position, row in enumerate(ranked, start=1):
         wallet = wallet_map.get(row.wallet_address)
         tags = vh.tag_list(wallet.tags) if wallet and wallet.tags else []
+        wallet_perf = perf_map.get(row.wallet_address)
         rows.append({
             "rank": position,
             "address": row.wallet_address,
@@ -306,6 +312,7 @@ async def leaderboard(request: Request, db: Session = Depends(get_db)):
             "focus": tags[0] if tags else None,
             "trade_count": int(row.trade_count or 0),
             "total_value": float(row.total_value or 0),
+            "perf": wallet_perf if (wallet_perf and wallet_perf["has_data"]) else None,
         })
 
     return templates.TemplateResponse(
@@ -336,6 +343,7 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
 
     trade_query = db.query(Trade).filter(Trade.wallet_address == wallet.address)
     pnl = vh.trade_pnl_summary(trade_query)
+    perf = vh.compute_wallet_performance(db, wallet.address)
     activity_timeline = vh.build_wallet_activity_timeline(db, wallet.address, limit=30)
     wallet_intelligence = vh.get_wallet_intelligence_summary(db, wallet.address)
     wallet_top_markets = vh.build_top_markets(db, wallet_address=wallet.address)
@@ -419,6 +427,7 @@ async def wallet_detail(request: Request, identifier: str, db: Session = Depends
             "wallet": wallet,
             "summary_row": summary_row,
             "pnl": pnl,
+            "perf": perf,
             "yes_value_pct": yes_value_pct,
             "no_value_pct": no_value_pct,
             "recent_value_24h": recent_value_24h,
