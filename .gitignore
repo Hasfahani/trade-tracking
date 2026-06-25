@@ -11,6 +11,7 @@ data/*
 !data/.gitkeep
 !data/model_weights.json
 !data/model_weights.lecture.json
+!data/seed_trades.json
 uvicorn_out.log
 uvicorn_err.log
 .env

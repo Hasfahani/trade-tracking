@@ -130,6 +130,9 @@ CSRF_COOKIE_SECURE = _env_str(
 STARTUP_DB_MAX_ATTEMPTS = _env_int("STARTUP_DB_MAX_ATTEMPTS", 3)
 STARTUP_DB_RETRY_SECONDS = _env_float("STARTUP_DB_RETRY_SECONDS", 1.0)
 STARTUP_SEED_WALLETS = _env_bool("STARTUP_SEED_WALLETS", True)
+# Load data/seed_trades.json into an empty DB on startup (off by default so it
+# never surprises an existing local DB or the test suite; enabled on Render).
+STARTUP_SEED_TRADES = _env_bool("STARTUP_SEED_TRADES", False)
 
 # Connection pool tuning (PostgreSQL only; SQLite uses StaticPool/NullPool)
 DB_POOL_SIZE = _env_int("DB_POOL_SIZE", 5)

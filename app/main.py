@@ -264,6 +264,19 @@ def _run_startup_maintenance() -> None:
                     seed_result["updated"],
                     seed_result["total"],
                 )
+        if app_settings.STARTUP_SEED_TRADES:
+            from app.seed_trades import seed_trades
+
+            db.flush()  # ensure seeded wallets are visible to the FK check
+            trade_seed = seed_trades(db)
+            if not trade_seed["skipped"]:
+                logger.info(
+                    "Startup maintenance: seeded trades=%d resolutions=%d",
+                    trade_seed["inserted_trades"],
+                    trade_seed["inserted_resolutions"],
+                )
+            elif trade_seed["reason"]:
+                logger.info("Startup maintenance: trade seed skipped (%s)", trade_seed["reason"])
         removed = prune_old_sync_events(db, keep_days=90)
         if removed:
             logger.info("Startup maintenance: pruned %d old sync events", removed)
