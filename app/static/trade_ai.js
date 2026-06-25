@@ -1,4 +1,5 @@
-// Adds trade AI analysis browser behavior.
+// Summary: Adds trade AI analysis browser behavior.
+// Details: It adds small browser interactions for the page without needing a separate frontend build system.
 (function () {
     var section = document.getElementById('ai-section');
     if (!section) return;

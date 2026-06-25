@@ -1,4 +1,5 @@
-# Shows retention metrics for admins.
+# Summary: Shows retention metrics for admins.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """Admin endpoint for retention metrics."""
 import logging
 from typing import Optional

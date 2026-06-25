@@ -1,4 +1,5 @@
-# Limits repeated requests from the same user.
+# Summary: Limits repeated requests from the same user.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Shared rate-limiter instance, imported by main.py and route modules."""
 
 from slowapi import Limiter

@@ -1,4 +1,5 @@
-# Builds the Ollama helper Docker image.
+# Summary: Builds the Ollama helper Docker image.
+# Details: It describes how Docker should build the runtime image and prepare services used by the app.
 FROM ollama/ollama:latest
 
 # Pull a model during build (optional - can also be done at runtime)

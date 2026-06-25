@@ -1,4 +1,5 @@
-# Connects to the database and updates tables.
+# Summary: Connects to the database and updates tables.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 import logging
 import threading
 from contextlib import contextmanager

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Creates the database tables.
+# Summary: Creates the database tables.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """
 Initialize the database schema.
 Run this script once before starting the application.

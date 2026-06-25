@@ -1,6 +1,5 @@
-# Sets up PolySignal to start automatically on Windows.
-# This script sets up the server to start automatically with Windows
-
+# Summary: Sets up PolySignal to start automatically on Windows.
+# Details: It is a Windows PowerShell helper for starting, opening, or configuring the local PolySignal app.
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Setting up Auto-Start" -ForegroundColor Cyan

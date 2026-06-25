@@ -1,8 +1,5 @@
-# Starts the app server on Windows.
-# This script ensures only one server instance runs at a time
-# Usage: powershell -ExecutionPolicy Bypass -File start_server.ps1
-
-# Resolve port (defaults to 8000)
+# Summary: Starts the app server on Windows.
+# Details: It is a Windows PowerShell helper for starting, opening, or configuring the local PolySignal app.
 $port = if ($env:PORT) { [int]$env:PORT } else { 8000 }
 
 # Kill any existing Python processes on target port

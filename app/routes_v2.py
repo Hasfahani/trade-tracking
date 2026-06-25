@@ -1,4 +1,5 @@
-# Keeps old route imports working.
+# Summary: Keeps old route imports working.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Legacy route-module compatibility shim.
 
 The active route implementation lives in :mod:`app.routes`. This module remains

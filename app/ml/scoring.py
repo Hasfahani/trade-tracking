@@ -1,4 +1,5 @@
-# Scores one trade using wallet history.
+# Summary: Scores one trade using wallet history.
+# Details: It supports the local machine-learning workflow for feature creation, model training, scoring, or explanations.
 """On-demand scoring of a single trade with the local model (numpy only).
 
 Used by the AI analysis layer so the "Analyze" button works even for trades

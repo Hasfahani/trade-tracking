@@ -1,4 +1,5 @@
-# Tests exports and backups.
+# Summary: Tests exports and backups.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for CSV export routes in app/routes/exports.py."""
 import csv
 import io

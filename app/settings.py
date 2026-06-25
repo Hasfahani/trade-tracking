@@ -1,4 +1,5 @@
-# Loads app settings from environment variables.
+# Summary: Loads app settings from environment variables.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 import os
 import subprocess
 from pathlib import Path

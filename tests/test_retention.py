@@ -1,4 +1,5 @@
-# Tests usage and retention tracking.
+# Summary: Tests usage and retention tracking.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Unit and integration tests for retention signal tracking."""
 import asyncio
 import json

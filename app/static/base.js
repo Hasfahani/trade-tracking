@@ -1,4 +1,5 @@
-// Adds shared browser behavior for app pages.
+// Summary: Adds shared browser behavior for app pages.
+// Details: It adds small browser interactions for the page without needing a separate frontend build system.
 document.querySelectorAll('[data-copy]').forEach(function (button) {
     button.addEventListener('click', async function () {
         var text = button.getAttribute('data-copy');

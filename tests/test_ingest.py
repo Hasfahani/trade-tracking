@@ -1,4 +1,5 @@
-# Tests trade downloading and saving.
+# Summary: Tests trade downloading and saving.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for app/ingest.py â€” normalize, deduplicate, and insert pipeline."""
 from datetime import datetime, timezone
 from unittest.mock import patch

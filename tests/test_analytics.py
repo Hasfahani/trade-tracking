@@ -1,4 +1,5 @@
-# Tests dashboard stats.
+# Summary: Tests dashboard stats.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for app/analytics.py functions with known inputs."""
 from datetime import datetime, timedelta, timezone
 

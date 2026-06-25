@@ -1,4 +1,5 @@
-# Tests signal score display in the UI.
+# Summary: Tests signal score display in the UI.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for the Signal Model UI: pills, trade detail card, wallet section, dashboard stat."""
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch

@@ -1,4 +1,5 @@
-# Handles login and logout pages.
+# Summary: Handles login and logout pages.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """Login and logout routes."""
 import time
 from collections import defaultdict

@@ -1,4 +1,5 @@
-# Copies SQLite data into PostgreSQL.
+# Summary: Copies SQLite data into PostgreSQL.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """
 Migrate data from a local SQLite database to a PostgreSQL database.
 

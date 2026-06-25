@@ -1,4 +1,5 @@
-# Combines all app routes.
+# Summary: Combines all app routes.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """Route package aggregate."""
 from fastapi import APIRouter
 

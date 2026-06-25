@@ -1,4 +1,5 @@
-# Tests realized PnL/ROI/win-rate from resolved markets.
+# Summary: Tests realized PnL/ROI/win-rate from resolved markets.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Phase 2 tests: honest resolved-market performance.
 
 Covers the pure PnL engine (win/lose/mixed/unresolved/buy+sell), the DB-backed

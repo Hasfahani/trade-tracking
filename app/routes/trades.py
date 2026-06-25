@@ -1,4 +1,5 @@
-# Handles trade list and trade detail pages.
+# Summary: Handles trade list and trade detail pages.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """Trade listing and detail routes."""
 from typing import Optional
 

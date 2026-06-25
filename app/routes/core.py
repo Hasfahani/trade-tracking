@@ -1,4 +1,5 @@
-# Handles dashboard and health check pages.
+# Summary: Handles dashboard and health check pages.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """Root redirect and dashboard routes."""
 from datetime import datetime, timedelta, timezone
 

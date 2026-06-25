@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Checks if Ollama is running locally.
+# Summary: Checks if Ollama is running locally.
+# Details: It supports the PolySignal application by keeping setup, UI, tests, or runtime behavior organized.
 """Debug Ollama detection."""
 
 import httpx

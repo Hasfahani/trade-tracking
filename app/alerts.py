@@ -1,4 +1,5 @@
-# Sends Telegram alerts for new trades.
+# Summary: Sends Telegram alerts for new trades.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Telegram alert helpers for trade notifications."""
 
 import logging

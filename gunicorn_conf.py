@@ -1,4 +1,5 @@
-# Sets Gunicorn options for deployment.
+# Summary: Sets Gunicorn options for deployment.
+# Details: It supports the PolySignal application by keeping setup, UI, tests, or runtime behavior organized.
 """Gunicorn configuration for container deployments."""
 
 from __future__ import annotations

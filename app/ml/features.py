@@ -1,4 +1,5 @@
-# Creates model inputs from wallet trade history.
+# Summary: Creates model inputs from wallet trade history.
+# Details: It supports the local machine-learning workflow for feature creation, model training, scoring, or explanations.
 """Feature engineering for per-wallet observed-trade notability.
 
 Features for each trade are computed from an expanding window of the

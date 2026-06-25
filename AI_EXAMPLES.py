@@ -1,4 +1,5 @@
-# Shows examples of using AI trade analysis.
+# Summary: Shows examples of using AI trade analysis.
+# Details: It supports the PolySignal application by keeping setup, UI, tests, or runtime behavior organized.
 """Example usage of AI analysis - customize for your needs."""
 
 from app.ai_analysis import analyze_trade, get_trade_summary

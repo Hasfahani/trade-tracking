@@ -1,4 +1,5 @@
-# Loads and runs the trade scoring model.
+# Summary: Loads and runs the trade scoring model.
+# Details: It supports the local machine-learning workflow for feature creation, model training, scoring, or explanations.
 """Numpy-only inference for the notable-trade model.
 
 Weights are trained offline by scripts/train_model.py (tensorflow, LOCAL-ONLY)

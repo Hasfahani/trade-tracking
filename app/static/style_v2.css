@@ -1,5 +1,5 @@
-/* Styles the current PolySignal dashboard UI. */
-
+/* Summary: Styles the current PolySignal dashboard UI. */
+/* Details: It controls layout, colors, spacing, mobile behavior, and visual states across the PolySignal interface. */
 :root {
     --bg: #070b12;
     --bg-soft: #0d1420;

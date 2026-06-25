@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Adds or updates saved watchlist wallets.
+# Summary: Adds or updates saved watchlist wallets.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """Seed the curated Polymarket wallet watchlist.
 
 This script is idempotent:

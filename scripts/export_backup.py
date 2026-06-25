@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Exports app data to a backup file.
+# Summary: Exports app data to a backup file.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """Export a full PolySignal JSON backup."""
 
 import argparse

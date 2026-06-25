@@ -1,4 +1,5 @@
-# Configures Render deployment for PolySignal.
+# Summary: Configures Render deployment for PolySignal.
+# Details: It stores deployment or container settings so the app can run the same way outside the local machine.
 services:
   - type: web
     name: polysignal

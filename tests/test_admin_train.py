@@ -1,4 +1,5 @@
-# Tests the model training admin page.
+# Summary: Tests the model training admin page.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for the /admin/train-model page and background training guard."""
 import threading
 import time

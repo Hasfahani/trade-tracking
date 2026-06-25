@@ -1,4 +1,5 @@
-# Tracks app usage and retention stats.
+# Summary: Tracks app usage and retention stats.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Retention signal tracking: event ingestion, identity, and live metrics queries.
 
 Event flow:

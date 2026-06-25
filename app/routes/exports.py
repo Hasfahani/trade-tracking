@@ -1,4 +1,5 @@
-# Handles CSV exports and backup imports.
+# Summary: Handles CSV exports and backup imports.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """CSV export routes."""
 import csv
 import io

@@ -1,4 +1,5 @@
-# Builds database searches for wallets and trades.
+# Summary: Builds database searches for wallets and trades.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple

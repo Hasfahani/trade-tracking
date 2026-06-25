@@ -1,4 +1,5 @@
-# Lists the Python packages needed by the app.
+# Summary: Lists the Python packages needed by the app.
+# Details: It lists the Python packages needed to install and run PolySignal in a clean environment.
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 gunicorn==22.0.0

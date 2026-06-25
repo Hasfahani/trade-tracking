@@ -1,4 +1,5 @@
-# Defines the database tables.
+# Summary: Defines the database tables.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """SQLAlchemy models for the watchlist app.
 
 SQLite compatibility changes are applied by app.db.run_schema_migrations.

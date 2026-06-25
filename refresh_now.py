@@ -1,4 +1,5 @@
-# Refreshes trades for all saved wallets.
+# Summary: Refreshes trades for all saved wallets.
+# Details: It supports the PolySignal application by keeping setup, UI, tests, or runtime behavior organized.
 from app.db import SessionLocal
 from app.models import Wallet
 from app.ingest import ingest_trades

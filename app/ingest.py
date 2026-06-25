@@ -1,4 +1,5 @@
-# Downloads and saves Polymarket trades.
+# Summary: Downloads and saves Polymarket trades.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 import hashlib
 import logging
 import re

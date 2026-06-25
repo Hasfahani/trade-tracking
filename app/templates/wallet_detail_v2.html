@@ -1,4 +1,5 @@
-{# Renders the wallet detail page. #}
+{# Summary: Renders the wallet detail page. #}
+{# Details: It uses Jinja and HTML to show stored PolySignal data, forms, messages, and actions for this screen. #}
 {% extends "base_v2.html" %}
 
 {% block title %}{{ wallet.label or short_address(wallet.address) }} - Wallet{% endblock %}

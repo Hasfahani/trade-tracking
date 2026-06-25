@@ -1,4 +1,5 @@
-# Tests AI trade analysis.
+# Summary: Tests AI trade analysis.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for app/ai_analysis.py â€” provider detection, parsing, caching, and DB persistence."""
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict

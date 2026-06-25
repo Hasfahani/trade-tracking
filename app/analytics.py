@@ -1,4 +1,5 @@
-# Builds dashboard charts and stats.
+# Summary: Builds dashboard charts and stats.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence

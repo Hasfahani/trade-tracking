@@ -1,4 +1,5 @@
-# Handles login and session checks.
+# Summary: Handles login and session checks.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Session-based authentication helpers.
 
 When DASHBOARD_PASSWORD is set the app requires a login before any route.

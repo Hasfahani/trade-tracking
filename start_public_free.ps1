@@ -1,6 +1,5 @@
-# Starts the app for free public tunnel access.
-# Usage: powershell -ExecutionPolicy Bypass -File .\start_public_free.ps1
-
+# Summary: Starts the app for free public tunnel access.
+# Details: It is a Windows PowerShell helper for starting, opening, or configuring the local PolySignal app.
 $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path

@@ -1,4 +1,6 @@
 @echo off
+REM Summary: Runs the open app batch helper.
+REM Details: It is a Windows batch helper for starting or opening the app with simple double-click commands.
 @REM Opens the local PolySignal app in a browser.
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"

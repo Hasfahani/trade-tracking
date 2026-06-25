@@ -1,4 +1,5 @@
-# Creates AI summaries and trade explanations.
+# Summary: Creates AI summaries and trade explanations.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """AI trade analysis.
 
 The app's own locally trained model (app/ml) is the default analyst: it

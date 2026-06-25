@@ -1,5 +1,5 @@
-# Builds the main PolySignal Docker image.
-
+# Summary: Builds the main PolySignal Docker image.
+# Details: It describes how Docker should build the runtime image and prepare services used by the app.
 ARG PYTHON_VERSION=3.11
 
 FROM python:${PYTHON_VERSION}-slim AS base

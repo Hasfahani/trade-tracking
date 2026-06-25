@@ -1,4 +1,5 @@
-# Builds and starts the FastAPI app.
+# Summary: Builds and starts the FastAPI app.
+# Details: It wires routes, middleware, login protection, health checks, startup work, and the optional wallet refresh scheduler.
 import contextvars
 import asyncio
 import json

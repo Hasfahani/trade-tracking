@@ -1,4 +1,5 @@
-# Tests the trade scoring model.
+# Summary: Tests the trade scoring model.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for app/ml/model.py â€” numpy-only signal model loading and inference."""
 import json
 import math

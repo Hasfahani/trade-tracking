@@ -1,4 +1,5 @@
-<!-- Explains how to deploy PolySignal with Docker. -->
+<!-- Summary: Explains how to deploy PolySignal with Docker. -->
+<!-- Details: It gives plain written instructions or reference notes for running, deploying, or understanding the project. -->
 # Docker Deployment
 
 This repo includes a production Docker image and a Compose stack with Postgres.

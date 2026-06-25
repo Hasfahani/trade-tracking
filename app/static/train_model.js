@@ -1,4 +1,5 @@
-// Adds browser behavior for model training.
+// Summary: Adds browser behavior for model training.
+// Details: It adds small browser interactions for the page without needing a separate frontend build system.
 (function () {
     var panel = document.getElementById('train-progress');
     if (!panel) return;

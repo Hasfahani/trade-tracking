@@ -1,4 +1,5 @@
-# Shares helper functions with pages and routes.
+# Summary: Shares helper functions with pages and routes.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Re-exports for backwards compatibility. Import from the focused sub-modules directly."""
 from app.analytics import (  # noqa: F401
     build_activity_heatmap,

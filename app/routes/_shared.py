@@ -1,4 +1,5 @@
-# Shares route helper code.
+# Summary: Shares route helper code.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """Shared helpers used across all route modules."""
 import logging
 import re

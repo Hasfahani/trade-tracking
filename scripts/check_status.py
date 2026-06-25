@@ -1,4 +1,5 @@
-# Prints basic wallet and trade counts.
+# Summary: Prints basic wallet and trade counts.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 import sys
 sys.path.insert(0, '.')
 from app.db import SessionLocal

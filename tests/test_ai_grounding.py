@@ -1,4 +1,5 @@
-# Tests that AI analysis is grounded in real resolved-market performance.
+# Summary: Tests that AI analysis is grounded in real resolved-market performance.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Phase 3: AI accuracy + reach.
 
 The trade context and prompts now include the wallet's realized track record

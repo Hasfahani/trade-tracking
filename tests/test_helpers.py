@@ -1,4 +1,5 @@
-# Tests shared helper functions.
+# Summary: Tests shared helper functions.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 from datetime import datetime, timedelta, timezone
 
 import pytest

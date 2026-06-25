@@ -1,4 +1,5 @@
-// Adds dashboard browser behavior.
+// Summary: Adds dashboard browser behavior.
+// Details: It adds small browser interactions for the page without needing a separate frontend build system.
 (function () {
     var els = document.querySelectorAll('[data-countup]');
     if (!els.length || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;

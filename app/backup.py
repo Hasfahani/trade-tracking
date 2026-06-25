@@ -1,4 +1,5 @@
-# Backs up and restores app data.
+# Summary: Backs up and restores app data.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Portable JSON backup helpers for all application-owned tables."""
 
 from __future__ import annotations

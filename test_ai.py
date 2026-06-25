@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Tests AI analysis on a local trade.
+# Summary: Tests AI analysis on a local trade.
+# Details: It supports the PolySignal application by keeping setup, UI, tests, or runtime behavior organized.
 """Quick test of AI analysis endpoint."""
 
 from app.ai_analysis import analyze_trade

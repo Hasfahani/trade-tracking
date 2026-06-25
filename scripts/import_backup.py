@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Imports app data from a backup file.
+# Summary: Imports app data from a backup file.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """Import a PolySignal JSON backup into SQLite or PostgreSQL."""
 
 import argparse

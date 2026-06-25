@@ -1,4 +1,5 @@
-# Tests model input creation.
+# Summary: Tests model input creation.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 import math
 from datetime import datetime, timedelta
 from types import SimpleNamespace

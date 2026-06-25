@@ -1,4 +1,5 @@
-# Defines the local Docker Compose app stack.
+# Summary: Defines the local Docker Compose app stack.
+# Details: It stores deployment or container settings so the app can run the same way outside the local machine.
 services:
   app:
     build:

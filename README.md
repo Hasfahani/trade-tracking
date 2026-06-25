@@ -1,4 +1,5 @@
-<!-- Introduces PolySignal and explains how to run it. -->
+<!-- Summary: Introduces PolySignal and explains how to run it. -->
+<!-- Details: It gives plain written instructions or reference notes for running, deploying, or understanding the project. -->
 # PolySignal
 
 PolySignal is a private FastAPI dashboard for tracking Polymarket wallet

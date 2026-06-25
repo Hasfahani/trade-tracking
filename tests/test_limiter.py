@@ -1,4 +1,5 @@
-# Tests request limiting.
+# Summary: Tests request limiting.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 from starlette.requests import Request
 
 from app.limiter import get_client_ip

@@ -1,4 +1,5 @@
-# Handles alert settings and refresh status pages.
+# Summary: Handles alert settings and refresh status pages.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """Settings and refresh/status routes."""
 import json
 import logging

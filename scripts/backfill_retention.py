@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Rebuilds saved retention stats.
+# Summary: Rebuilds saved retention stats.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """Backfill retention_daily and retention_weekly from event_log.
 
 Computes and upserts pre-aggregated retention snapshots for the last N days.

@@ -1,4 +1,5 @@
-# Tests app health and readiness.
+# Summary: Tests app health and readiness.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 from fastapi.testclient import TestClient
 import time
 

@@ -1,4 +1,5 @@
-# Opens the local PolySignal app in a browser.
+# Summary: Opens the local PolySignal app in a browser.
+# Details: It is a Windows PowerShell helper for starting, opening, or configuring the local PolySignal app.
 $port = if ($env:PORT) { [int]$env:PORT } else { 8000 }
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $startScript = Join-Path $scriptDir "start_dev.ps1"

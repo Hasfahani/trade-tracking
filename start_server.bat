@@ -1,4 +1,6 @@
 @echo off
+REM Summary: Runs the start server batch helper.
+REM Details: It is a Windows batch helper for starting or opening the app with simple double-click commands.
 @REM Starts the app server on Windows.
 REM This script starts the FastAPI server persistently
 

@@ -1,4 +1,5 @@
-<!-- Explains how to set up AI analysis providers. -->
+<!-- Summary: Explains how to set up AI analysis providers. -->
+<!-- Details: It gives plain written instructions or reference notes for running, deploying, or understanding the project. -->
 # AI Analysis Setup Guide
 
 Your trade tracking app now has AI-powered trade analysis built in!

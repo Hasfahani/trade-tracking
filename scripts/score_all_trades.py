@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Adds model scores to saved trades.
+# Summary: Adds model scores to saved trades.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """Backfill notable_score for all existing trades.
 
 Loads the exported model weights (data/model_weights.json â€” numpy only, no

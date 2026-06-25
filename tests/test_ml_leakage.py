@@ -1,4 +1,5 @@
-# Tests leakage-safe features, the training guard, and subset-width models.
+# Summary: Tests leakage-safe features, the training guard, and subset-width models.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Phase 1 ML-integrity tests.
 
 The training label is a deterministic 2-sigma threshold on the current trade's

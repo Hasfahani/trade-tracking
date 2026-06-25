@@ -1,4 +1,5 @@
-# Tests API routes.
+# Summary: Tests API routes.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 from datetime import datetime, timedelta, timezone
 
 from fastapi.routing import APIRoute

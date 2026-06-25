@@ -1,4 +1,5 @@
-# Tests security headers and basic app startup.
+# Summary: Tests security headers and basic app startup.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Security headers audit, deployment smoke tests, and rate limiting contract."""
 import logging
 import re

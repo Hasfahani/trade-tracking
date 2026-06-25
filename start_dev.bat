@@ -1,4 +1,6 @@
 @echo off
+REM Summary: Runs the start dev batch helper.
+REM Details: It is a Windows batch helper for starting or opening the app with simple double-click commands.
 @REM Starts the app in development mode on Windows.
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"

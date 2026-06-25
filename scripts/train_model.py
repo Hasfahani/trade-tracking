@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Trains the trade scoring model.
+# Summary: Trains the trade scoring model.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """Train the notable-trade scoring model. LOCAL-ONLY - never deployed.
 
 IMPORTANT - deployment boundary:

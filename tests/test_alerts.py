@@ -1,4 +1,5 @@
-# Tests Telegram alerts.
+# Summary: Tests Telegram alerts.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for Telegram alert logic in app/alerts.py."""
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch

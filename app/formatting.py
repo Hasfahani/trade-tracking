@@ -1,4 +1,5 @@
-# Formats text, dates, and numbers for pages.
+# Summary: Formats text, dates, and numbers for pages.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Pure formatting helpers with no database dependencies.
 
 All functions here are side-effect-free and safe to call from templates or

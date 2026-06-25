@@ -1,4 +1,5 @@
-# Trains the local trade scoring model.
+# Summary: Trains the local trade scoring model.
+# Details: It supports the local machine-learning workflow for feature creation, model training, scoring, or explanations.
 """Training orchestration for the notable-trade model.
 
 tensorflow is a heavy, LOCAL-ONLY dependency: it is imported inside

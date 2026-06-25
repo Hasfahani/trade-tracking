@@ -1,4 +1,5 @@
-# Tests database updates.
+# Summary: Tests database updates.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 from sqlalchemy import create_engine
 from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.pool import StaticPool

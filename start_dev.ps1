@@ -1,4 +1,5 @@
-# Starts the app in development mode on Windows.
+# Summary: Starts the app in development mode on Windows.
+# Details: It is a Windows PowerShell helper for starting, opening, or configuring the local PolySignal app.
 $port = if ($env:PORT) { [int]$env:PORT } else { 8000 }
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir

@@ -1,4 +1,5 @@
-# Explains which files Docker should ignore.
+# Summary: Explains which files Docker should ignore.
+# Details: It tells Git or Docker which local files should be ignored when saving or building the project.
 .git
 .gitignore
 .pytest_cache

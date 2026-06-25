@@ -1,4 +1,5 @@
-# Protects forms from fake POST requests.
+# Summary: Protects forms from fake POST requests.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 """Simple double-submit cookie CSRF protection.
 
 A random token is placed in a cookie and also injected into every HTML form as

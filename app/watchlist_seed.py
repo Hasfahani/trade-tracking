@@ -1,4 +1,5 @@
-# Adds the default wallet watchlist.
+# Summary: Adds the default wallet watchlist.
+# Details: It supports the FastAPI backend by keeping one main piece of app behavior clear and reusable.
 from dataclasses import dataclass
 from typing import Iterable, List
 

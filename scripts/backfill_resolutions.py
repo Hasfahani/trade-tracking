@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Backfills outcome tokens and resolved market outcomes.
+# Summary: Backfills outcome tokens and resolved market outcomes.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """Backfill realized-PnL inputs for existing trades.
 
 Two best-effort passes (both on by default), against the local/prod database:

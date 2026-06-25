@@ -1,4 +1,5 @@
-# Starts the PolySignal app.
+# Summary: Starts the PolySignal app.
+# Details: It supports the PolySignal application by keeping setup, UI, tests, or runtime behavior organized.
 """Application entrypoint.
 
 Reads PORT from the environment so the process works whether a host runs this

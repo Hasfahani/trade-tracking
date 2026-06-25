@@ -1,4 +1,5 @@
-# Explains which local files Git should ignore.
+# Summary: Explains which local files Git should ignore.
+# Details: It tells Git or Docker which local files should be ignored when saving or building the project.
 .venv/
 venv/
 __pycache__/

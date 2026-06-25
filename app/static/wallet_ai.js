@@ -1,4 +1,5 @@
-// Adds wallet AI summary browser behavior.
+// Summary: Adds wallet AI summary browser behavior.
+// Details: It adds small browser interactions for the page without needing a separate frontend build system.
 (function () {
     var section = document.getElementById('ai-summary-section');
     if (!section) return;

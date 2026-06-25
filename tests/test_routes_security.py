@@ -1,4 +1,5 @@
-# Tests login and form security.
+# Summary: Tests login and form security.
+# Details: It checks this part of the project so future code changes do not silently break expected behavior.
 """Tests for authentication and CSRF protection."""
 import pytest
 from fastapi.testclient import TestClient

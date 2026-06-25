@@ -1,4 +1,5 @@
-# Checks if the app is healthy in Docker.
+# Summary: Checks if the app is healthy in Docker.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """Container liveness probe.
 
 Uses only the Python standard library so the runtime image does not need curl.

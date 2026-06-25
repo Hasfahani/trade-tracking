@@ -1,4 +1,5 @@
-# Finds active Polymarket wallets.
+# Summary: Finds active Polymarket wallets.
+# Details: It is a command-line helper for setup, maintenance, migration, backup, scoring, or operational checks.
 """
 Find active Polymarket wallets from recent trades
 """

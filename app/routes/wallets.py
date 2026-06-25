@@ -1,4 +1,5 @@
-# Handles wallet pages and wallet actions.
+# Summary: Handles wallet pages and wallet actions.
+# Details: It connects browser requests to the right database work, page rendering, redirects, and JSON responses.
 """Wallet management routes: list, add, edit, pin, archive, delete, import."""
 import csv
 import io

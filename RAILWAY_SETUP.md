@@ -1,4 +1,5 @@
-<!-- Explains how to deploy PolySignal on Railway. -->
+<!-- Summary: Explains how to deploy PolySignal on Railway. -->
+<!-- Details: It gives plain written instructions or reference notes for running, deploying, or understanding the project. -->
 # Railway Deployment Setup
 
 ## Services to Deploy
