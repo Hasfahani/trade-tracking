@@ -14,10 +14,10 @@ from app.models import AppSettings, Trade, Wallet
 logger = logging.getLogger(__name__)
 
 _TELEGRAM_API = "https://api.telegram.org"
-_DEFAULT_MIN_VALUE = 100.0   # dollars (price * size) - alert on trades this big or larger
-# With a low ($100) threshold many trades qualify per refresh; allow more through
-# so genuinely big trades aren't silently marked "sent" and skipped. Over-cap
-# trades are still suppressed to avoid runaway spam on a busy refresh.
+_DEFAULT_MIN_VALUE = 1000.0   # dollars (price * size) - alert on trades this big or larger
+# A $1000 threshold keeps the chat to genuinely large trades; at lower values too
+# many trades qualify per refresh. The per-wallet cap still suppresses over-cap
+# trades to avoid runaway spam on a busy refresh.
 _MAX_ALERTS_PER_WALLET = 10
 _LOOKBACK_HOURS = 24
 

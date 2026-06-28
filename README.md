@@ -350,14 +350,14 @@ Telegram settings are stored in the `app_settings` database table:
 
 - Bot token
 - Chat ID
-- Minimum trade size (default: `$100` of `price * size`)
+- Minimum trade size (default: `$1000` of `price * size`)
 - Alerts enabled or disabled
 
 You can edit these any time in `/settings`. On startup the app also **seeds**
 working credentials so a plain deploy is self-configuring: it reads
 `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` from the environment when set,
 otherwise falls back to the baked-in defaults, enables alerts, and applies the
-`$100` minimum. Prefer the environment variables in any real deployment so the
+`$1000` minimum. Prefer the environment variables in any real deployment so the
 token is not committed in source and can be rotated without a code change.
 
 On the **first** time alerts are configured, the existing trade backlog is
