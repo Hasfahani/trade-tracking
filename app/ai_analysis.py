@@ -11,8 +11,10 @@ local model cannot score.
 
 import json
 import logging
+import math
 import time
 from datetime import datetime, timedelta, timezone
+from statistics import median
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -216,6 +218,151 @@ def build_trade_context(trade: Trade, db: Session) -> Dict[str, Any]:
         "wallet_win_rate_pct": round(perf["win_rate"] * 100) if perf["win_rate"] is not None else None,
         "wallet_realized_pnl": round(float(perf["realized_pnl"]), 2) if perf["has_data"] else None,
         "wallet_roi_pct": round(perf["roi"] * 100, 1) if perf["roi"] is not None else None,
+    }
+
+
+def _signal_level(score: Optional[float]) -> str:
+    """Human-facing score band used by the visible explanation panel."""
+    if score is None:
+        return "Not scored"
+    if score < 0.25:
+        return "Normal"
+    if score < 0.50:
+        return "Mildly unusual"
+    if score < 0.75:
+        return "Strong signal"
+    return "Very unusual"
+
+
+def explain_trade_signal(trade: Trade, db: Session) -> Dict[str, Any]:
+    """Build a grounded explanation for the visible "Why flagged?" panel.
+
+    This is deliberately deterministic and data-only. It uses stored scores or
+    live numpy model scoring, then explains the result with prior wallet history
+    and model contributions when the active weights are available. Current
+    trade value is used only as post-hoc context, never as a model feature.
+    """
+    model = get_signal_model()
+    live = score_trade(trade, db) if model is not None else None
+    score = live.score if live is not None else (
+        float(trade.notable_score) if trade.notable_score is not None else None
+    )
+    threshold = effective_signal_threshold()
+    current_value = float(trade.price) * float(trade.size)
+
+    prior_trades = (
+        db.query(Trade)
+        .filter(
+            Trade.wallet_address == trade.wallet_address,
+            Trade.traded_at < trade.traded_at,
+        )
+        .order_by(Trade.traded_at.asc(), Trade.id.asc())
+        .all()
+    )
+    prior_count = len(prior_trades)
+    reasons: List[str] = []
+    supporting: List[str] = []
+
+    if score is None:
+        supporting.append(
+            f"The local model needs at least {MIN_PRIOR_TRADES} prior trades; this wallet has {prior_count}."
+        )
+        return {
+            "score": None,
+            "threshold": threshold,
+            "level": "Not scored",
+            "flagged": False,
+            "prior_trades": prior_count,
+            "reasons": reasons,
+            "supporting": supporting,
+            "model_version": None,
+        }
+
+    if score >= threshold:
+        reasons.append(f"Score {score:.2f} is above the trained flag threshold {threshold:.2f}.")
+    else:
+        supporting.append(f"Score {score:.2f} is below the trained flag threshold {threshold:.2f}.")
+
+    if prior_count:
+        prior_values = [float(t.price) * float(t.size) for t in prior_trades]
+        avg_value = sum(prior_values) / prior_count
+        median_value = median(prior_values)
+        if avg_value > 0:
+            value_ratio = current_value / avg_value
+            if value_ratio >= 2.5:
+                reasons.append(
+                    f"Trade value is {value_ratio:.1f}x this wallet's prior average (${avg_value:,.2f})."
+                )
+            elif value_ratio >= 1.5:
+                supporting.append(
+                    f"Trade value is {value_ratio:.1f}x this wallet's prior average (${avg_value:,.2f})."
+                )
+            else:
+                supporting.append(
+                    f"Trade value is close to this wallet's prior average (${avg_value:,.2f}; median ${median_value:,.2f})."
+                )
+        if prior_count >= 2:
+            variance = sum((v - avg_value) ** 2 for v in prior_values) / prior_count
+            std = math.sqrt(max(variance, 0.0))
+            if std > 0:
+                z_score = (current_value - avg_value) / std
+                if z_score >= 2.0:
+                    reasons.append(f"Observed value is {z_score:.1f} standard deviations above prior history.")
+
+        previous = prior_trades[-1]
+        gap_hours = (trade.traded_at - previous.traded_at).total_seconds() / 3600.0
+        if gap_hours <= 1.0:
+            reasons.append(f"Wallet traded again after only {max(gap_hours, 0.0):.1f} hours.")
+        elif gap_hours <= 6.0:
+            supporting.append(f"Wallet traded again after {gap_hours:.1f} hours.")
+
+        cutoff = trade.traded_at - timedelta(hours=24)
+        recent_count = sum(1 for t in prior_trades if t.traded_at >= cutoff)
+        if recent_count >= 10:
+            reasons.append(f"Wallet had {recent_count} prior trades in the previous 24 hours.")
+        elif recent_count:
+            supporting.append(f"Wallet had {recent_count} prior trades in the previous 24 hours.")
+
+        prior_market_count = sum(1 for t in prior_trades if t.condition_id == trade.condition_id)
+        market_share = prior_market_count / prior_count
+        if prior_market_count == 0:
+            reasons.append("This is the wallet's first tracked trade on this market.")
+        elif market_share >= 0.25:
+            reasons.append(f"{market_share:.0%} of prior wallet trades were already on this market.")
+        else:
+            supporting.append(f"{prior_market_count} prior wallet trades were on this market.")
+    else:
+        supporting.append("This wallet has no prior tracked trades before this row.")
+
+    price_extremity = abs(float(trade.price) - 0.5) * 2.0
+    if price_extremity >= 0.7:
+        reasons.append(f"Entry price is near an extreme (${float(trade.price):.4f}).")
+    elif price_extremity >= 0.4:
+        supporting.append(f"Entry price is away from the midpoint (${float(trade.price):.4f}).")
+
+    if live is not None and live.contributions:
+        top_positive = [
+            FEATURE_LABELS.get(name, name.replace("_", " "))
+            for name, value in live.contributions
+            if value > 0.05
+        ][:2]
+        if top_positive:
+            supporting.append("Top model drivers: " + ", ".join(top_positive) + ".")
+
+    if not reasons and not supporting:
+        supporting.append("No strong unusual driver is visible from stored wallet context.")
+
+    return {
+        "score": score,
+        "threshold": threshold,
+        "level": _signal_level(score),
+        "flagged": score >= threshold,
+        "prior_trades": prior_count,
+        "reasons": reasons,
+        "supporting": supporting,
+        "model_version": (
+            f"trained {model.trained_at}" if model is not None and model.trained_at else "stored notable_score"
+        ),
     }
 
 
@@ -635,6 +782,14 @@ def local_unavailable_reason(trade: Trade, db: Session) -> str:
 # Persistent DB cache - individual trade analysis
 # ---------------------------------------------------------------------------
 
+def _current_local_model_version() -> Optional[str]:
+    """Version tag for the loaded local model, in the same format analyses store."""
+    model = get_signal_model()
+    if model is not None and model.trained_at:
+        return f"trained {model.trained_at}"
+    return None
+
+
 def _load_cached_analysis(trade_id: str, db: Session) -> Optional[Dict[str, Any]]:
     """Load a non-expired analysis from the DB cache."""
     row = db.query(TradeAnalysis).filter(TradeAnalysis.trade_id == trade_id).first()
@@ -643,6 +798,14 @@ def _load_cached_analysis(trade_id: str, db: Session) -> Optional[Dict[str, Any]
     if row.created_at:
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=settings.AI_CACHE_TTL_HOURS)
         if row.created_at < cutoff:
+            db.delete(row)
+            db.commit()
+            return None
+    # A retrained local model invalidates its own cached analyses: a stale score
+    # or threshold here would contradict the deployed model and the eval page.
+    if row.provider == _LOCAL_PROVIDER_NAME:
+        current_version = _current_local_model_version()
+        if current_version is not None and row.model_version != current_version:
             db.delete(row)
             db.commit()
             return None

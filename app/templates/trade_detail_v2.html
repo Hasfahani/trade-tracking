@@ -61,7 +61,34 @@
             <strong>{{ '%.1f'|format(trade.notable_score * 100) }}%</strong>
             <small class="subtle">Observed-trade anomaly score relative to this wallet&rsquo;s prior history. This is not a probability or trading recommendation.</small>
         </article>
+        {% if signal_explanation %}
+        <article class="metric-card">
+            <span class="metric-label">Signal level</span>
+            <strong>{{ signal_explanation.level }}</strong>
+            <small class="subtle">Flag line {{ '%.2f'|format(signal_explanation.threshold) }}{% if signal_explanation.model_version %} / {{ signal_explanation.model_version }}{% endif %}</small>
+        </article>
+        {% endif %}
     </div>
+    {% if signal_explanation %}
+    <div class="ai-detail-block" style="margin-top: 16px;">
+        <p class="ai-detail-label">{{ "Why flagged?" if signal_explanation.flagged else "Why this level?" }}</p>
+        {% if signal_explanation.reasons %}
+        <ul class="subtle">
+            {% for reason in signal_explanation.reasons %}
+            <li>{{ reason }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if signal_explanation.supporting %}
+        <ul class="subtle">
+            {% for item in signal_explanation.supporting %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        <p class="subtle">Reasons use stored trade data and prior wallet history only; they are context for review, not a profit prediction.</p>
+    </div>
+    {% endif %}
     {% else %}
     <p class="subtle">Not scored &mdash; insufficient wallet history.</p>
     {% endif %}

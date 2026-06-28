@@ -212,6 +212,59 @@ class TestTradeAnalysisCache:
     def test_invalidate_nonexistent_returns_false(self, db):
         assert invalidate_cache("ghost", db) is False
 
+    def test_stale_local_model_cache_is_invalidated_on_retrain(self, db):
+        from app.ai_analysis import _LOCAL_PROVIDER_NAME
+
+        _wallet(db)
+        _trade(db)
+        r = {
+            "signal": "CONSENSUS", "risk": "LOW", "price_insight": "x",
+            "behavior": "x", "verdict": "x", "provider": _LOCAL_PROVIDER_NAME,
+            "model_version": "trained 2026-01-01T00:00:00+00:00",
+        }
+        _save_analysis_to_db("t1", r, {}, db)
+
+        # Current model is a newer version -> stale local cache must be dropped.
+        with patch("app.ai_analysis._current_local_model_version",
+                   return_value="trained 2026-06-28T00:00:00+00:00"):
+            assert _load_cached_analysis("t1", db) is None
+        assert db.query(TradeAnalysis).filter(TradeAnalysis.trade_id == "t1").first() is None
+
+    def test_matching_local_model_cache_is_kept(self, db):
+        from app.ai_analysis import _LOCAL_PROVIDER_NAME
+
+        _wallet(db)
+        _trade(db)
+        version = "trained 2026-06-28T00:00:00+00:00"
+        r = {
+            "signal": "CONSENSUS", "risk": "LOW", "price_insight": "x",
+            "behavior": "x", "verdict": "x", "provider": _LOCAL_PROVIDER_NAME,
+            "model_version": version,
+        }
+        _save_analysis_to_db("t1", r, {}, db)
+
+        with patch("app.ai_analysis._current_local_model_version", return_value=version):
+            loaded = _load_cached_analysis("t1", db)
+        assert loaded is not None
+        assert loaded["_from_cache"] is True
+
+    def test_external_provider_cache_unaffected_by_model_version(self, db):
+        # An LLM analysis must not be evicted just because the local model changed.
+        _wallet(db)
+        _trade(db)
+        r = {
+            "signal": "CONVICTION", "risk": "HIGH", "price_insight": "x",
+            "behavior": "x", "verdict": "x", "provider": "Claude (claude-sonnet-4-6)",
+            "model_version": "claude-sonnet-4-6",
+        }
+        _save_analysis_to_db("t1", r, {}, db)
+
+        with patch("app.ai_analysis._current_local_model_version",
+                   return_value="trained 2026-06-28T00:00:00+00:00"):
+            loaded = _load_cached_analysis("t1", db)
+        assert loaded is not None
+        assert loaded["provider"] == "Claude (claude-sonnet-4-6)"
+
 
 # ---------------------------------------------------------------------------
 # DB cache â€” wallet summary

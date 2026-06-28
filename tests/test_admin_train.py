@@ -87,6 +87,103 @@ class TestTrainModelPage:
         assert response.json() == {"state": "idle"}
 
 
+class TestOutcomeModelStatus:
+    """The experimental profitability model must be reported honestly."""
+
+    def test_weak_outcome_model_is_labelled_experimental(self):
+        from app.routes import alerts
+
+        weak = {
+            "trained_at": "2026-06-28T00:00:00+00:00",
+            "feature_names": list(range(16)),
+            "n_train": 836,
+            "n_val": 179,
+            "n_test": 180,
+            "threshold": 0.47,
+            "val_metrics": {"roc_auc": 0.97, "base_rate": 0.93},
+            "test_metrics": {"roc_auc": 0.544, "pr_auc": 0.74, "base_rate": 0.66},
+        }
+        with patch("pathlib.Path.read_text", return_value=__import__("json").dumps(weak)):
+            status = alerts._outcome_model_status()
+        assert status is not None
+        assert status["experimental"] is True
+        assert status["test_roc_auc"] == pytest.approx(0.544)
+
+    def test_strong_outcome_model_is_not_experimental(self):
+        from app.routes import alerts
+
+        strong = {
+            "trained_at": "2026-06-28T00:00:00+00:00",
+            "feature_names": list(range(16)),
+            "n_train": 8000,
+            "n_val": 1700,
+            "n_test": 1800,
+            "val_metrics": {"roc_auc": 0.80, "base_rate": 0.55},
+            "test_metrics": {"roc_auc": 0.78, "pr_auc": 0.80, "base_rate": 0.55},
+            "baseline_metrics": {
+                "market_implied_win_prob": {
+                    "test_metrics": {"roc_auc": 0.70, "pr_auc": 0.72}
+                }
+            },
+            "model_vs_market": {"roc_auc_delta": 0.08, "pr_auc_delta": 0.08},
+        }
+        with patch("pathlib.Path.read_text", return_value=__import__("json").dumps(strong)):
+            status = alerts._outcome_model_status()
+        assert status is not None
+        assert status["experimental"] is False
+        assert status["roc_auc_edge"] == pytest.approx(0.08)
+
+    def test_outcome_model_must_beat_market_baseline(self):
+        from app.routes import alerts
+
+        market_led = {
+            "trained_at": "2026-06-28T00:00:00+00:00",
+            "feature_names": list(range(17)),
+            "n_train": 8000,
+            "n_val": 1700,
+            "n_test": 1800,
+            "val_metrics": {"roc_auc": 0.84, "base_rate": 0.55},
+            "test_metrics": {"roc_auc": 0.88, "pr_auc": 0.89, "base_rate": 0.55},
+            "baseline_metrics": {
+                "market_implied_win_prob": {
+                    "test_metrics": {"roc_auc": 0.875, "pr_auc": 0.89}
+                }
+            },
+            "model_vs_market": {"roc_auc_delta": 0.005, "pr_auc_delta": 0.0},
+        }
+        with patch("pathlib.Path.read_text", return_value=__import__("json").dumps(market_led)):
+            status = alerts._outcome_model_status()
+        assert status is not None
+        assert status["experimental"] is True
+        assert status["limitation"] == "market_baseline_not_beaten"
+
+    def test_page_shows_validation_rows_and_honest_disclaimer(self):
+        client = _build_client()
+        with patch("app.ml.train.tensorflow_available", return_value=True):
+            response = client.get("/admin/train-model")
+        assert response.status_code == 200
+        # The deployed model metrics block must surface the validation split and
+        # the no-profit disclaimer (the app ships with real weights).
+        assert "validation" in response.text
+        assert "does not guarantee profit" in response.text
+
+    def test_page_shows_anomaly_baselines_and_runtime_contract(self):
+        client = _build_client()
+        with patch("app.ml.train.tensorflow_available", return_value=False):
+            response = client.get("/admin/train-model")
+        assert response.status_code == 200
+        assert "unusual trade detection" in response.text
+        assert "single sigmoid neuron" in response.text
+        assert "NumPy" in response.text
+        assert "Baseline comparisons" in response.text
+        assert "wallet size zscore" in response.text
+        assert "Test Brier" in response.text
+        assert "Label definition" in response.text
+        assert "Lecture connection" in response.text
+        assert "binary cross-entropy" in response.text
+        assert "does not beat the market-implied baseline" in response.text
+
+
 class TestStartTraining:
     def test_post_rejected_while_run_active(self):
         client = _build_client()

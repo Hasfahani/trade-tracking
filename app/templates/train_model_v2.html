@@ -45,19 +45,47 @@
     </p>
     {% endif %}
     <dl class="grid-form">
+        <div><dt>Task</dt><dd>{{ model_status.task }}</dd></div>
+        <div><dt>Model</dt><dd>{{ model_status.model_type }}</dd></div>
+        <div><dt>Inference</dt><dd>{{ model_status.inference }}</dd></div>
+        <div><dt>Training</dt><dd>{{ model_status.training_stack }}</dd></div>
         <div><dt>Trained at</dt><dd>{{ model_status.trained_at }}</dd></div>
+        <div><dt>Model version</dt><dd>{{ model_status.model_version or "legacy" }}</dd></div>
         <div><dt>Mode</dt><dd>{{ model_status.mode or "legacy" }}</dd></div>
         <div><dt>Feature set</dt><dd>{{ model_status.feature_set or "legacy" }}{% if model_status.n_features %} ({{ model_status.n_features }} features){% endif %}</dd></div>
         <div><dt>Operating threshold</dt><dd>{{ "%.4f" | format(model_status.threshold) if model_status.threshold is not none else "default 0.7" }}</dd></div>
-        <div><dt>Rows</dt><dd>{{ model_status.n_train }} train / {{ model_status.n_test }} test</dd></div>
+        <div><dt>Rows</dt><dd>{{ model_status.n_train }} train / {{ model_status.n_val if model_status.n_val is not none else "—" }} validation / {{ model_status.n_test }} test</dd></div>
+        <div><dt>Leakage-safe</dt><dd>{% if model_status.leakage_safe %}<span class="pill success">yes</span>{% elif model_status.feature_set == "all_features_leaky" %}<span class="pill warning">no — leaky</span>{% else %}—{% endif %}</dd></div>
         <div><dt>Test base rate</dt><dd>{{ "%.4f" | format(model_status.base_rate) if model_status.base_rate is not none else "—" }}</dd></div>
         <div><dt>Test ROC-AUC</dt><dd>{{ "%.4f" | format(model_status.roc_auc) if model_status.roc_auc is not none else "—" }}</dd></div>
         <div><dt>Test PR-AUC</dt><dd>{{ "%.4f" | format(model_status.pr_auc) if model_status.pr_auc is not none else "—" }}</dd></div>
+        <div><dt>Test Brier</dt><dd>{{ "%.4f" | format(model_status.brier) if model_status.brier is not none else "—" }}</dd></div>
         <div><dt>Test precision</dt><dd>{{ "%.4f" | format(model_status.precision) if model_status.precision is not none else "—" }}</dd></div>
         <div><dt>Test recall</dt><dd>{{ "%.4f" | format(model_status.recall) if model_status.recall is not none else "—" }}</dd></div>
         <div><dt>Test F1</dt><dd>{{ "%.4f" | format(model_status.f1) if model_status.f1 is not none else "—" }}</dd></div>
         <div><dt>Flag rate</dt><dd>{{ "%.4f" | format(model_status.flag_rate) if model_status.flag_rate is not none else "—" }}</dd></div>
     </dl>
+
+    {% if model_status.baselines %}
+    <h3 style="margin-top: 18px;">Baseline comparisons</h3>
+    <p class="subtle">Simple baselines help catch fake-perfect models. Diagnostic baselines that use current trade value are shown for comparison only; the production model does not use those features.</p>
+    <table class="trade-table">
+        <thead>
+            <tr><th>Baseline</th><th>ROC-AUC</th><th>PR-AUC</th><th>Brier</th><th>F1</th></tr>
+        </thead>
+        <tbody>
+            {% for row in model_status.baselines %}
+            <tr>
+                <td data-label="Baseline">{{ row.name }}{% if row.note %}<br><span class="subtle">{{ row.note }}</span>{% endif %}</td>
+                <td data-label="ROC-AUC">{{ "%.4f" | format(row.roc_auc) if row.roc_auc is not none else "—" }}</td>
+                <td data-label="PR-AUC">{{ "%.4f" | format(row.pr_auc) if row.pr_auc is not none else "—" }}</td>
+                <td data-label="Brier">{{ "%.4f" | format(row.brier) if row.brier is not none else "—" }}</td>
+                <td data-label="F1">{{ "%.4f" | format(row.f1) if row.f1 is not none else "—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
 
     {% if model_status.threshold_sweep %}
     <h3 style="margin-top: 18px;">Precision / recall vs. threshold</h3>
@@ -80,6 +108,9 @@
     </table>
     {% endif %}
 
+    <p class="flash flash-warning" style="margin-top: 14px;">
+        <strong>This model flags unusual trades. It does not guarantee profit.</strong>
+    </p>
     <p class="subtle" style="margin-top: 14px;">
         <strong>What the score means.</strong> The model estimates how unusual an observed trade is
         versus the wallet's own prior history, from behavioral and contextual signals only (trading
@@ -88,10 +119,107 @@
         score as "worth a look", not a guarantee. Reported metrics are point estimates on a single
         temporal split and will move as more data arrives.
     </p>
+    <p class="subtle" style="margin-top: 10px;">
+        <strong>Label definition.</strong> A training row is positive when the observed trade value is
+        unusually large versus that wallet's prior value history. To avoid leakage, the production
+        model excludes the current trade's own value, value ratio, and value z-score, so it learns
+        surrounding behavior rather than rediscovering the label rule.
+    </p>
     {% else %}
     <p class="subtle">No model yet — train one below to start scoring trades.</p>
     {% endif %}
 </section>
+
+{% if model_status %}
+<section class="card">
+    <div class="section-head">
+        <h2>Lecture connection</h2>
+        <span class="pill">Course model</span>
+    </div>
+    <div class="tutorial-checklist">
+        <div>
+            <strong>Lecture baseline</strong>
+            <p>Single sigmoid neuron, MSE loss, and an epoch loop with gradient updates.</p>
+        </div>
+        <div>
+            <strong>Production version</strong>
+            <p>Same single-sigmoid idea, but trained with binary cross-entropy and class weighting because notable trades are rare.</p>
+        </div>
+        <div>
+            <strong>Why not plain MSE?</strong>
+            <p>With an imbalanced label, the MSE sigmoid baseline can settle into predicting the majority class and miss rare notable trades.</p>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% if outcome_status %}
+<section class="card">
+    <div class="section-head">
+        <h2>Outcome model (research)</h2>
+        {% if outcome_status.experimental %}
+        <span class="pill warning">experimental</span>
+        {% else %}
+        <span class="pill success">validated research signal</span>
+        {% endif %}
+    </div>
+    {% if outcome_status.limitation == "market_baseline_not_beaten" %}
+    <p class="flash flash-warning" style="margin-bottom: 14px;">
+        <strong>Baseline check:</strong> the model is strong, but it does not yet beat the simple
+        market-implied probability baseline by the required margin. Keep it as experimental until
+        it proves extra edge beyond price.
+    </p>
+    {% elif outcome_status.limitation == "missing_baseline" %}
+    <p class="flash flash-warning" style="margin-bottom: 14px;">
+        <strong>Baseline check needed:</strong> this outcome weights file was trained before baseline
+        metrics were exported. Retrain before treating it as final.
+    </p>
+    {% elif not outcome_status.experimental %}
+    <p class="flash flash-success" style="margin-bottom: 14px;">
+        <strong>Validated against the market baseline:</strong> the model clears the held-out ROC-AUC
+        bar and beats market-implied probability by {{ "%.4f" | format(outcome_status.roc_auc_edge) }}
+        ROC-AUC on the test period.
+    </p>
+    {% endif %}
+    {% if outcome_status.experimental %}
+    <p class="flash flash-warning" style="margin-bottom: 14px;">
+        <strong>Experimental — not used in the app.</strong> This separate model tries to predict whether
+        a trade will <em>win</em> once its market resolves, using only leakage-safe, time-gated features.
+        Its held-out <strong>test ROC-AUC is {{ "%.3f" | format(outcome_status.test_roc_auc) if outcome_status.test_roc_auc is not none else "—" }}</strong>
+        (chance is 0.50; the bar to graduate is {{ "%.2f" | format(outcome_status.min_test_roc_auc) }}), so it is
+        <strong>not wired into trade scoring</strong> and must not be read as a profit predictor. The current limitation is
+        shown above: either the test score is too weak, the baseline check is missing, or the model does not yet beat market price.
+        Dataset mix still matters: {{ outcome_status.n_train }}/{{ outcome_status.n_val }}/{{ outcome_status.n_test }}
+        resolved-market rows, with validation/test win rates of
+        ({{ "%.0f%%" | format(outcome_status.val_base_rate * 100) if outcome_status.val_base_rate is not none else "—" }}
+        vs {{ "%.0f%%" | format(outcome_status.test_base_rate * 100) if outcome_status.test_base_rate is not none else "—" }}).
+        <strong>Fix:</strong> grow the tracked-wallet universe and resolve more markets
+        (<code>scripts/discover_wallets.py --add --ingest</code> →
+        <code>scripts/backfill_resolutions.py</code> → <code>scripts/train_outcome_model.py</code>), then re-evaluate.
+    </p>
+    {% endif %}
+    <dl class="grid-form">
+        <div><dt>Status</dt><dd>{{ "experimental" if outcome_status.experimental else "validated research signal" }}</dd></div>
+        <div><dt>Trained at</dt><dd>{{ outcome_status.trained_at }}</dd></div>
+        <div><dt>Features</dt><dd>{{ outcome_status.n_features }} (leakage-safe, time-gated)</dd></div>
+        <div><dt>Market baseline ROC-AUC</dt><dd>{{ "%.4f" | format(outcome_status.market_baseline_roc_auc) if outcome_status.market_baseline_roc_auc is not none else "retrain needed" }}</dd></div>
+        <div><dt>ROC-AUC edge vs market</dt><dd>{{ "%+.4f" | format(outcome_status.roc_auc_edge) if outcome_status.roc_auc_edge is not none else "retrain needed" }}</dd></div>
+        <div><dt>PR-AUC edge vs market</dt><dd>{{ "%+.4f" | format(outcome_status.pr_auc_edge) if outcome_status.pr_auc_edge is not none else "retrain needed" }}</dd></div>
+        <div><dt>Test F1</dt><dd>{{ "%.4f" | format(outcome_status.test_f1) if outcome_status.test_f1 is not none else "n/a" }}</dd></div>
+        <div><dt>Brier score</dt><dd>{{ "%.4f" | format(outcome_status.test_brier) if outcome_status.test_brier is not none else "n/a" }}</dd></div>
+        <div><dt>Resolved rows</dt><dd>{{ outcome_status.n_train }} train / {{ outcome_status.n_val if outcome_status.n_val is not none else "—" }} validation / {{ outcome_status.n_test }} test</dd></div>
+        <div><dt>Resolved markets</dt><dd>{{ outcome_status.resolved_market_count if outcome_status.resolved_market_count is not none else "—" }}</dd></div>
+        <div><dt>Validation ROC-AUC</dt><dd>{{ "%.4f" | format(outcome_status.val_roc_auc) if outcome_status.val_roc_auc is not none else "—" }}</dd></div>
+        <div><dt>Test ROC-AUC</dt><dd>{{ "%.4f" | format(outcome_status.test_roc_auc) if outcome_status.test_roc_auc is not none else "—" }}</dd></div>
+        <div><dt>Test PR-AUC</dt><dd>{{ "%.4f" | format(outcome_status.test_pr_auc) if outcome_status.test_pr_auc is not none else "—" }}</dd></div>
+        <div><dt>Test precision</dt><dd>{{ "%.4f" | format(outcome_status.test_precision) if outcome_status.test_precision is not none else "—" }}</dd></div>
+        <div><dt>Test recall</dt><dd>{{ "%.4f" | format(outcome_status.test_recall) if outcome_status.test_recall is not none else "—" }}</dd></div>
+    </dl>
+    <p class="flash flash-warning" style="margin-top: 14px;">
+        <strong>This model is not used as a production trading signal because it does not beat the market-implied baseline.</strong>
+    </p>
+</section>
+{% endif %}
 
 <section class="card">
     <div class="section-head">

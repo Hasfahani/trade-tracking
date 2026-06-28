@@ -108,7 +108,7 @@
             <a href="/all-trades">
                 <span class="nav-glyph">T</span>
                 <strong>Trades</strong>
-                <small>Search and export stored trades across the whole database.</small>
+                <small>Search stored trades, then open a trade detail page for score context.</small>
             </a>
             <a href="/admin/sync-status">
                 <span class="nav-glyph">S</span>
@@ -125,8 +125,29 @@
                 <strong>Ops</strong>
                 <small>Check database readiness, migration status, build info, and AI provider state.</small>
             </a>
+            <a href="/admin/train-model">
+                <span class="nav-glyph">M</span>
+                <strong>Train Model</strong>
+                <small>Review active model version, leakage status, metrics, thresholds, and baselines.</small>
+            </a>
         </div>
     </article>
+</section>
+
+<section class="card tutorial-panel">
+    <div class="section-head">
+        <h2>Best demo path</h2>
+        <span class="pill">Presentation flow</span>
+    </div>
+    <div class="tutorial-map">
+        <a href="/wallets"><strong>1. Open Wallets</strong><small>Pick one wallet from the watchlist.</small></a>
+        <a href="/wallets"><strong>2. Refresh one wallet</strong><small>Pull the newest stored activity.</small></a>
+        <a href="/dashboard"><strong>3. Open Dashboard</strong><small>Scan recent trades and model-flagged activity.</small></a>
+        <a href="/all-trades"><strong>4. Click a flagged trade</strong><small>Open its detail page from a table or dashboard event.</small></a>
+        <a href="/all-trades"><strong>5. Read Why flagged?</strong><small>Use the score, level, threshold, and context.</small></a>
+        <a href="/admin/train-model"><strong>6. Open Train Model</strong><small>Show metrics, leakage-safe status, and baselines.</small></a>
+        <a href="/admin/sync-status"><strong>7. Open Sync Status</strong><small>Show refresh evidence and operational health.</small></a>
+    </div>
 </section>
 
 <section class="card tutorial-panel">
@@ -150,6 +171,22 @@
         <div>
             <span class="pill info">Signal score</span>
             <p>A trade crossed the configured model threshold and deserves a closer read.</p>
+        </div>
+        <div>
+            <span class="pill">Normal</span>
+            <p>The score is low and the trade looks routine for the tracked wallet context.</p>
+        </div>
+        <div>
+            <span class="pill info">Mildly unusual</span>
+            <p>Some context is elevated, but the trade may still be below the trained flag line.</p>
+        </div>
+        <div>
+            <span class="pill warning">Strong signal</span>
+            <p>The model sees meaningful unusual context; open trade detail and read Why flagged?</p>
+        </div>
+        <div>
+            <span class="pill success">Very unusual</span>
+            <p>The trade is among the strongest anomaly signals and should be reviewed first.</p>
         </div>
     </div>
 </section>
@@ -178,6 +215,11 @@
         All Trades, a wallet's trades, or a dashboard event &mdash; it runs the analysis on the
         spot. The write-up factors in the wallet's real resolved-market track record (win rate
         and ROI), so it reflects actual outcomes, not just stored value.</li>
+        <li><strong>The outcome model is separate research.</strong> It stays experimental unless
+        it beats market-implied probability on held-out resolved markets. Even then, it is a
+        research signal, not a guaranteed trading system.</li>
+        <li><strong>Alerts are monitoring, not automation.</strong> Telegram can notify you about
+        large or unusual activity, but the app does not place trades or promise a profitable action.</li>
     </ul>
 </section>
 

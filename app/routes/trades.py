@@ -249,6 +249,7 @@ async def trade_detail(request: Request, trade_id: str, db: Session = Depends(ge
             "local_model_loaded": local_model_loaded,
             "ai_analysis_available": ai_analysis_available,
             "ai_unavailable_message": ai_unavailable_message,
+            "signal_explanation": ai_analysis.explain_trade_signal(trade, db),
             "short_address": vh.short_address,
         },
     )

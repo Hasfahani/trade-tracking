@@ -17,3 +17,4 @@ uvicorn_err.log
 .env
 tools/
 backups/
+outputs/

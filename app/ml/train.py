@@ -220,10 +220,22 @@ def _metrics_at(y_true, y_score, threshold) -> Dict[str, float]:
         "base_rate": float(np.asarray(y_true, dtype=float).mean()) if len(y_true) else 0.0,
         "roc_auc": roc_auc(y_true, y_score),
         "pr_auc": average_precision(y_true, y_score),
+        "brier": float(np.mean((y_score - np.asarray(y_true, dtype=float)) ** 2)) if len(y_true) else 0.0,
         "precision_at_threshold": precision,
         "recall_at_threshold": recall,
         "f1_at_threshold": f1,
         "flag_rate_at_threshold": float((y_score >= threshold).mean()) if len(y_score) else 0.0,
+    }
+
+
+def _baseline_report(y_val, y_test, val_score, test_score, *, note: str = "") -> Dict[str, Any]:
+    """Evaluate a simple scoring baseline with threshold selected on validation."""
+    threshold, val_fbeta = select_threshold(y_val, val_score)
+    return {
+        "note": note,
+        "threshold": float(threshold),
+        "val_metrics": {**_metrics_at(y_val, val_score, threshold), "fbeta_at_selection": val_fbeta},
+        "test_metrics": {**_metrics_at(y_test, test_score, threshold), "threshold": float(threshold)},
     }
 
 
@@ -294,6 +306,9 @@ def train_and_export(
     X = select_feature_columns(X_full, active_feature_names)
 
     X_train, y_train, X_val, y_val, X_test, y_test = temporal_split(X, y, timestamps)
+    _X_full_train, _y_full_train, X_full_val, _y_full_val, X_full_test, _y_full_test = temporal_split(
+        X_full, y, timestamps
+    )
     if len(y_train) == 0 or len(y_val) == 0 or len(y_test) == 0:
         raise RuntimeError(f"Not enough rows for a temporal train/val/test split (got {len(y)} total).")
     X_train, X_val, X_test, means, stds = standardize(X_train, X_val, X_test)
@@ -368,6 +383,38 @@ def train_and_export(
         p, r, f = precision_recall_f1(y_test, test_scores, sweep_threshold)
         sweep[str(sweep_threshold)] = {"precision": p, "recall": r, "f1": f}
 
+    feature_index = {name: i for i, name in enumerate(FEATURE_NAMES)}
+    rng = np.random.default_rng(20260628)
+    random_val = rng.random(len(y_val))
+    random_test = rng.random(len(y_test))
+    baseline_metrics = {
+        "random": _baseline_report(
+            y_val, y_test, random_val, random_test,
+            note="Deterministic random scores; sanity check only.",
+        ),
+        "large_trade_only": _baseline_report(
+            y_val,
+            y_test,
+            X_full_val[:, feature_index["log1p_trade_value"]],
+            X_full_test[:, feature_index["log1p_trade_value"]],
+            note="Observed trade value baseline. It is not used by the production model.",
+        ),
+        "wallet_size_zscore": _baseline_report(
+            y_val,
+            y_test,
+            X_full_val[:, feature_index["value_zscore_capped"]],
+            X_full_test[:, feature_index["value_zscore_capped"]],
+            note="Diagnostic label-rule baseline: this is the target boundary and must not be a model feature.",
+        ),
+        "prior_wallet_average": _baseline_report(
+            y_val,
+            y_test,
+            X_full_val[:, feature_index["log1p_prior_mean_value"]],
+            X_full_test[:, feature_index["log1p_prior_mean_value"]],
+            note="Prior wallet average trade value only; leakage-safe but weak on its own.",
+        ),
+    }
+
     output_path = Path(output_path) if output_path is not None else Path(ml_model.DEFAULT_WEIGHTS_PATH)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -401,6 +448,7 @@ def train_and_export(
             "f1_at_0_5": f1_05,
             "threshold_sweep": sweep,
         },
+        "baseline_metrics": baseline_metrics,
     }
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     logger.info(

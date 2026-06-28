@@ -291,6 +291,19 @@ def _migrate_phase4_performance_indexes(conn) -> None:
         )
 
 
+def _migrate_ai_demo_performance_indexes(conn) -> None:
+    if _table_exists(conn, "trades"):
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_trades_notable_score_traded_at "
+            "ON trades (notable_score, traded_at)"
+        )
+    if _table_exists(conn, "sync_events"):
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_sync_events_created_at "
+            "ON sync_events (created_at)"
+        )
+
+
 SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("001_wallet_compat_columns", _migrate_wallet_columns),
     ("002_sync_event_columns", _migrate_sync_event_columns),
@@ -306,6 +319,7 @@ SCHEMA_MIGRATIONS: Tuple[Migration, ...] = (
     ("012_trade_outcome_token", _migrate_trade_outcome_token),
     ("013_market_resolutions_table", _migrate_market_resolutions_table),
     ("014_phase4_performance_indexes", _migrate_phase4_performance_indexes),
+    ("015_ai_demo_performance_indexes", _migrate_ai_demo_performance_indexes),
 )
 
 POSTGRES_INDEX_STATEMENTS: Tuple[str, ...] = (
@@ -315,6 +329,10 @@ POSTGRES_INDEX_STATEMENTS: Tuple[str, ...] = (
     "ON trades (wallet_address, condition_id, traded_at)",
     "CREATE INDEX IF NOT EXISTS ix_market_resolutions_outcome "
     "ON market_resolutions (outcome)",
+    "CREATE INDEX IF NOT EXISTS ix_trades_notable_score_traded_at "
+    "ON trades (notable_score, traded_at)",
+    "CREATE INDEX IF NOT EXISTS ix_sync_events_created_at "
+    "ON sync_events (created_at)",
 )
 
 

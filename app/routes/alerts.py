@@ -21,7 +21,7 @@ from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
 from app.ingest import cleanup_duplicate_trades, find_duplicate_groups, refresh_wallet
-from app.models import SyncEvent, Trade
+from app.models import MarketResolution, SyncEvent, Trade
 from app.routes._shared import _flash_redirect_to, resolve_wallet, sanitize_search, templates
 from app.settings import APP_NAME, DEFAULT_REFRESH_LIMIT, RETENTION_METRICS_ENABLED
 
@@ -186,16 +186,36 @@ def _model_weights_status() -> Optional[Dict[str, Any]]:
             }
             for key, row in sorted(sweep_raw.items(), key=lambda item: float(item[0]))
         ]
+        baselines_raw = payload.get("baseline_metrics") or {}
+        baselines = []
+        for key, row in baselines_raw.items():
+            test_row = (row or {}).get("test_metrics") or {}
+            baselines.append({
+                "name": str(key).replace("_", " "),
+                "note": (row or {}).get("note"),
+                "roc_auc": test_row.get("roc_auc"),
+                "pr_auc": test_row.get("pr_auc"),
+                "precision": test_row.get("precision_at_threshold"),
+                "recall": test_row.get("recall_at_threshold"),
+                "f1": test_row.get("f1_at_threshold"),
+                "brier": test_row.get("brier"),
+            })
         excluded = payload.get("excluded_features") or []
         return {
             "trained_at": payload.get("trained_at"),
+            "model_version": payload.get("trained_at"),
             "mode": payload.get("mode"),
+            "model_type": "single sigmoid neuron",
+            "task": "unusual trade detection",
+            "inference": "NumPy",
+            "training_stack": "TensorFlow local/admin only",
             "feature_set": payload.get("feature_set"),
             "leakage_safe": payload.get("leakage_safe"),
             "n_features": len(payload.get("feature_names") or []),
             "excluded_features": excluded,
             "threshold": payload.get("threshold"),
             "n_train": payload.get("n_train"),
+            "n_val": payload.get("n_val"),
             "n_test": payload.get("n_test"),
             "base_rate": metrics.get("base_rate"),
             "roc_auc": metrics.get("roc_auc"),
@@ -205,11 +225,96 @@ def _model_weights_status() -> Optional[Dict[str, Any]]:
             "precision": metrics.get("precision_at_threshold", metrics.get("precision_at_0_5")),
             "recall": metrics.get("recall_at_threshold", metrics.get("recall_at_0_5")),
             "f1": metrics.get("f1_at_threshold", metrics.get("f1_at_0_5")),
+            "brier": metrics.get("brier"),
             "flag_rate": metrics.get("flag_rate_at_threshold"),
             "threshold_sweep": sweep,
+            "baselines": baselines,
         }
     except Exception:
         return None
+
+
+# A profitability/outcome model is only trustworthy once its held-out test
+# ROC-AUC is clearly above chance and it beats the market-implied-probability
+# baseline. A model that only restates market price is useful context, but not a
+# separate wallet edge.
+OUTCOME_MODEL_MIN_TEST_ROC_AUC = 0.65
+OUTCOME_MODEL_MIN_MARKET_ROC_EDGE = 0.01
+
+
+def _outcome_model_status() -> Optional[Dict[str, Any]]:
+    """Summarize data/outcome_model_weights.json (the experimental win-prob model).
+
+    Returns None when the file is absent/invalid. The ``experimental`` flag is
+    True whenever the held-out test ROC-AUC is not clearly above chance, so the
+    UI never presents a data-starved model as finished.
+    """
+    from app.ml.outcome_model import DEFAULT_OUTCOME_WEIGHTS_PATH
+
+    try:
+        payload = json.loads(Path(DEFAULT_OUTCOME_WEIGHTS_PATH).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+    test = payload.get("test_metrics") or {}
+    val = payload.get("val_metrics") or {}
+    baselines = payload.get("baseline_metrics") or {}
+    market_baseline = baselines.get("market_implied_win_prob") or {}
+    market_test = market_baseline.get("test_metrics") or {}
+    model_vs_market = payload.get("model_vs_market") or {}
+    test_roc = test.get("roc_auc")
+    market_roc = market_test.get("roc_auc")
+    roc_edge = model_vs_market.get("roc_auc_delta")
+    if roc_edge is None and test_roc is not None and market_roc is not None:
+        roc_edge = test_roc - market_roc
+    experimental = (
+        test_roc is None
+        or test_roc < OUTCOME_MODEL_MIN_TEST_ROC_AUC
+        or market_roc is None
+        or roc_edge is None
+        or roc_edge < OUTCOME_MODEL_MIN_MARKET_ROC_EDGE
+    )
+    if market_roc is None:
+        limitation = "missing_baseline"
+    elif roc_edge is not None and roc_edge < OUTCOME_MODEL_MIN_MARKET_ROC_EDGE:
+        limitation = "market_baseline_not_beaten"
+    elif test_roc is None or test_roc < OUTCOME_MODEL_MIN_TEST_ROC_AUC:
+        limitation = "weak_test_roc"
+    else:
+        limitation = "validated"
+    return {
+        "trained_at": payload.get("trained_at"),
+        "n_features": len(payload.get("feature_names") or []),
+        "n_train": payload.get("n_train"),
+        "n_val": payload.get("n_val"),
+        "n_test": payload.get("n_test"),
+        "threshold": payload.get("threshold"),
+        "experimental": experimental,
+        "limitation": limitation,
+        "min_test_roc_auc": OUTCOME_MODEL_MIN_TEST_ROC_AUC,
+        "min_market_roc_edge": OUTCOME_MODEL_MIN_MARKET_ROC_EDGE,
+        "val_roc_auc": val.get("roc_auc"),
+        "val_base_rate": val.get("base_rate"),
+        "test_roc_auc": test_roc,
+        "test_pr_auc": test.get("pr_auc"),
+        "test_base_rate": test.get("base_rate"),
+        "test_precision": test.get("precision_at_threshold"),
+        "test_recall": test.get("recall_at_threshold"),
+        "test_f1": test.get("f1_at_threshold"),
+        "test_accuracy": test.get("accuracy"),
+        "test_brier": test.get("brier"),
+        "market_baseline_threshold": market_baseline.get("threshold"),
+        "market_baseline_roc_auc": market_roc,
+        "market_baseline_pr_auc": market_test.get("pr_auc"),
+        "market_baseline_accuracy": market_test.get("accuracy"),
+        "market_baseline_brier": market_test.get("brier"),
+        "market_baseline_f1": market_test.get("f1_at_threshold"),
+        "roc_auc_edge": roc_edge,
+        "pr_auc_edge": model_vs_market.get("pr_auc_delta"),
+        "accuracy_edge": model_vs_market.get("accuracy_delta"),
+        "brier_edge": model_vs_market.get("brier_delta"),
+        "f1_edge": model_vs_market.get("f1_delta"),
+    }
 
 
 @router.get("/admin/train-model")
@@ -221,6 +326,15 @@ async def train_model_page(request: Request, db: Session = Depends(get_db)):
         db.query(func.count(Trade.id)).group_by(Trade.wallet_address).all()
     )
     scorable_trades = sum(max(count - MIN_PRIOR_TRADES, 0) for (count,) in wallet_counts)
+    outcome_status = _outcome_model_status()
+    if outcome_status:
+        resolved_market_count = (
+            db.query(func.count(MarketResolution.condition_id))
+            .filter(MarketResolution.outcome.in_(("YES", "NO")))
+            .scalar()
+            or 0
+        )
+        outcome_status = {**outcome_status, "resolved_market_count": int(resolved_market_count)}
 
     return templates.TemplateResponse(
         request,
@@ -229,6 +343,7 @@ async def train_model_page(request: Request, db: Session = Depends(get_db)):
             "request": request,
             "app_name": APP_NAME,
             "model_status": _model_weights_status(),
+            "outcome_status": outcome_status,
             "scorable_trades": scorable_trades,
             "tf_available": ml_train.tensorflow_available(),
             "training": ml_train.get_training_status(),
@@ -253,10 +368,11 @@ async def start_train_model(request: Request):
     app = request.app
 
     def _reload_model(_result: Dict[str, Any]) -> None:
-        from app.ml.model import get_signal_model, reset_signal_model_cache
+        from app.ml.model import effective_signal_threshold, get_signal_model, reset_signal_model_cache
 
         reset_signal_model_cache()
         app.state.signal_model = get_signal_model()
+        templates.env.globals["signal_threshold"] = effective_signal_threshold()
         logger.info("Signal model reloaded after training")
 
     if not ml_train.start_training_in_background(on_success=_reload_model):

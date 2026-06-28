@@ -342,6 +342,55 @@ def test_wallet_and_trade_routes_render():
     assert "Will X happen?" in trades_response.text
 
 
+def test_trade_detail_renders_why_flagged_explanation():
+    client, session_factory = build_client()
+    db = session_factory()
+    wallet = Wallet(address="0x4545454545454545454545454545454545454545", label="Signal Desk")
+    db.add(wallet)
+    db.flush()
+    db.add(
+        Trade(
+            wallet_address=wallet.address,
+            trade_id="flagged-detail",
+            condition_id="flagged-cond",
+            market_title="Flagged market",
+            side="YES",
+            price=0.92,
+            size=50,
+            traded_at=datetime.now(timezone.utc),
+            notable_score=0.95,
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/trades/flagged-detail")
+
+    assert response.status_code == 200
+    assert "Why flagged?" in response.text
+    assert "Very unusual" in response.text
+    assert "not a profit prediction" in response.text
+
+
+def test_tutorial_explains_ai_and_links_demo_flow():
+    client, _ = build_client()
+    response = client.get("/tutorial")
+
+    assert response.status_code == 200
+    assert "not a profit prediction" in response.text
+    assert "Alerts are monitoring, not automation" in response.text
+    assert "Read Why flagged?" in response.text
+    for href in (
+        'href="/wallets"',
+        'href="/dashboard"',
+        'href="/all-trades"',
+        'href="/admin/sync-status"',
+        'href="/admin/train-model"',
+        'href="/settings"',
+    ):
+        assert href in response.text
+
+
 def test_dashboard_renders_visible_summary_charts():
     client, session_factory = build_client()
     db = session_factory()

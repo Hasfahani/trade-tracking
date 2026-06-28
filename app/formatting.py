@@ -109,14 +109,14 @@ def format_percent(value: Any, decimals: int = 1) -> str:
 
 # Signal-strength bands for the model's per-trade notable_score (roughly 0-1).
 _SIGNAL_BANDS = (
-    (0.25, "Weak", ""),
-    (0.50, "Medium", "info"),
-    (0.75, "Strong", "warning"),
+    (0.25, "Normal", ""),
+    (0.50, "Mildly unusual", "info"),
+    (0.75, "Strong signal", "warning"),
 )
 
 
 def signal_label(score: Any) -> str:
-    """Map a notable_score to a strength label (Weak/Medium/Strong/Very Strong)."""
+    """Map a notable_score to a strength label."""
     try:
         s = float(score)
     except (TypeError, ValueError):
@@ -124,7 +124,7 @@ def signal_label(score: Any) -> str:
     for upper, label, _tone in _SIGNAL_BANDS:
         if s < upper:
             return label
-    return "Very Strong"
+    return "Very unusual"
 
 
 def signal_tone(score: Any) -> str:
