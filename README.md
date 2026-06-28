@@ -346,13 +346,25 @@ python scripts/backfill_resolutions.py --wallet 0x... --limit 200
 
 ## Telegram Alerts
 
-Telegram settings are configured in `/settings` and stored in the
-`app_settings` database table:
+Telegram settings are stored in the `app_settings` database table:
 
 - Bot token
 - Chat ID
-- Minimum trade size
+- Minimum trade size (default: `$100` of `price * size`)
 - Alerts enabled or disabled
+
+You can edit these any time in `/settings`. On startup the app also **seeds**
+working credentials so a plain deploy is self-configuring: it reads
+`TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` from the environment when set,
+otherwise falls back to the baked-in defaults, enables alerts, and applies the
+`$100` minimum. Prefer the environment variables in any real deployment so the
+token is not committed in source and can be rotated without a code change.
+
+On the **first** time alerts are configured, the existing trade backlog is
+marked as already-alerted so going live never floods the chat with historical
+trades on the first refresh — only trades ingested afterward can fire an alert.
+Alerts are sent during wallet refresh, capped per wallet per refresh, deduped so
+each trade alerts at most once, and skipped for trades older than 24 hours.
 
 Alert credentials live in the database. Protect database access, backup files,
 and filesystem permissions in any deployment.
@@ -364,12 +376,14 @@ and filesystem permissions in any deployment.
 - `GET /` redirects to `/wallets`
 - `GET /login`
 - `GET /logout`
+- `GET /tutorial`
 - `GET /wallets`
 - `GET /wallets/import`
 - `GET /wallets/{identifier}`
 - `GET /wallets/{identifier}/edit`
 - `GET /wallets/{identifier}/delete-confirm`
 - `GET /wallets/{identifier}/trades`
+- `GET /leaderboard`
 - `GET /all-trades`
 - `GET /trades/{trade_id}`
 - `GET /dashboard`

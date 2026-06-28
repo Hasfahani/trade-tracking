@@ -110,6 +110,11 @@
                 <strong>Trades</strong>
                 <small>Search stored trades, then open a trade detail page for score context.</small>
             </a>
+            <a href="/leaderboard">
+                <span class="nav-glyph">L</span>
+                <strong>Leaderboard</strong>
+                <small>Rank wallets by realized PnL, ROI, and win rate from resolved markets.</small>
+            </a>
             <a href="/admin/sync-status">
                 <span class="nav-glyph">S</span>
                 <strong>Sync</strong>
@@ -242,5 +247,33 @@
         resolved markets recorded — refresh it (or run the resolution backfill) and the real
         numbers appear as markets settle. We never show a fabricated figure.</li>
     </ul>
+</section>
+
+<section class="card tutorial-panel">
+    <div class="section-head">
+        <h2>Summary</h2>
+        <span class="pill">The whole tutorial in one place</span>
+    </div>
+    <p>{{ app_name or "PolySignal" }} is a review tool, not a trading bot — it watches
+    wallets and helps you read their activity, but it never places trades.</p>
+    <ul>
+        <li><strong>Workflow:</strong> add wallets &rarr; refresh to pull trades &rarr; scan the
+        dashboard &rarr; filter <a href="/all-trades">All Trades</a> &rarr; check
+        <a href="/admin/sync-status">Sync</a> when something looks off.</li>
+        <li><strong>Signal score:</strong> a local model's <em>anomaly</em> score (how unusual a
+        trade is for that wallet), not a profit prediction. Flags are rare by design; open
+        <em>Why flagged?</em> on a trade for the details.</li>
+        <li><strong>Real performance:</strong> wallet profiles and the
+        <a href="/leaderboard">leaderboard</a> show realized PnL, ROI, and win rate computed
+        only from markets that actually resolved — never fabricated.</li>
+        <li><strong>AI analysis:</strong> the <em>Analyze with AI</em> link runs on demand and is
+        grounded in the wallet's real resolved-market track record.</li>
+        <li><strong>Alerts:</strong> Telegram can notify you about large or unusual trades. It is
+        monitoring only — the app never trades or promises a profitable action.</li>
+    </ul>
+    <div class="hero-actions-row">
+        <a href="/wallets" class="btn btn-primary btn-small">Start with wallets</a>
+        <a href="/dashboard" class="btn btn-small">Open dashboard</a>
+    </div>
 </section>
 {% endblock %}
