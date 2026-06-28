@@ -277,6 +277,9 @@ def _run_startup_maintenance() -> None:
                 )
             elif trade_seed["reason"]:
                 logger.info("Startup maintenance: trade seed skipped (%s)", trade_seed["reason"])
+        from app.alerts import seed_telegram_settings
+
+        seed_telegram_settings(db)
         removed = prune_old_sync_events(db, keep_days=90)
         if removed:
             logger.info("Startup maintenance: pruned %d old sync events", removed)

@@ -3,6 +3,7 @@
 """Telegram alert helpers for trade notifications."""
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -13,9 +14,73 @@ from app.models import AppSettings, Trade, Wallet
 logger = logging.getLogger(__name__)
 
 _TELEGRAM_API = "https://api.telegram.org"
-_DEFAULT_MIN_VALUE = 1000.0   # dollars (price * size)
-_MAX_ALERTS_PER_WALLET = 3
+_DEFAULT_MIN_VALUE = 100.0   # dollars (price * size) - alert on trades this big or larger
+# With a low ($100) threshold many trades qualify per refresh; allow more through
+# so genuinely big trades aren't silently marked "sent" and skipped. Over-cap
+# trades are still suppressed to avoid runaway spam on a busy refresh.
+_MAX_ALERTS_PER_WALLET = 10
 _LOOKBACK_HOURS = 24
+
+# Default Telegram credentials baked in so a plain code deploy is self-configuring.
+# An env var (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) overrides these without a code
+# edit, so the token can be rotated from the Render dashboard after a /revoke.
+_DEFAULT_BOT_TOKEN = "8648652719:AAFZmxQFWYV3T5CRMx01VrObhYxIHkBGs14"
+_DEFAULT_CHAT_ID = "8708428862"
+
+
+def seed_telegram_settings(db: Session) -> bool:
+    """Ensure the app_settings row carries working Telegram credentials.
+
+    Reads the token/chat ID from the environment when present, otherwise falls
+    back to the baked-in defaults, then writes them onto the settings row and
+    enables alerts. Idempotent: only commits when something actually changes, so
+    it is safe to run on every startup. Returns True if the row was updated.
+    """
+    token = (os.getenv("TELEGRAM_BOT_TOKEN") or _DEFAULT_BOT_TOKEN).strip()
+    chat_id = (os.getenv("TELEGRAM_CHAT_ID") or _DEFAULT_CHAT_ID).strip()
+    if not token or not chat_id:
+        return False
+
+    settings = get_app_settings(db)
+    # Was Telegram already configured before this run? If not, this is the very
+    # first setup and we baseline the existing trade backlog below so the first
+    # refresh doesn't fire an alert for every historical trade at once.
+    first_time = not (settings.telegram_bot_token or "").strip()
+    changed = False
+    if (settings.telegram_bot_token or "").strip() != token:
+        settings.telegram_bot_token = token
+        changed = True
+    if (settings.telegram_chat_id or "").strip() != chat_id:
+        settings.telegram_chat_id = chat_id
+        changed = True
+    if not settings.alerts_enabled:
+        settings.alerts_enabled = 1
+        changed = True
+    if not settings.alert_min_size:
+        settings.alert_min_size = _DEFAULT_MIN_VALUE
+        changed = True
+
+    if first_time:
+        # Mark every pre-existing unsent trade as already-alerted so going live
+        # never dumps the whole backlog into the chat on the first refresh. Only
+        # trades ingested after this point will ever fire an alert.
+        baselined = (
+            db.query(Trade)
+            .filter(Trade.alert_sent == 0)
+            .update({"alert_sent": 1}, synchronize_session=False)
+        )
+        if baselined:
+            changed = True
+            logger.info(
+                "Startup maintenance: baselined %d existing trades (no alert on first refresh)",
+                baselined,
+            )
+
+    if changed:
+        settings.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.commit()
+        logger.info("Startup maintenance: seeded Telegram alert settings (chat_id=%s)", chat_id)
+    return changed
 
 
 def get_app_settings(db: Session) -> AppSettings:
