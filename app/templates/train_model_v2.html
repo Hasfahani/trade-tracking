@@ -138,16 +138,16 @@
     </div>
     <div class="tutorial-checklist">
         <div>
-            <strong>Lecture baseline</strong>
-            <p>Single sigmoid neuron, MSE loss, and an epoch loop with gradient updates.</p>
+            <strong>Active presentation mode</strong>
+            <p>Single sigmoid neuron, MSE loss, SGD 0.1, and an epoch loop with gradient updates.</p>
         </div>
         <div>
-            <strong>Production version</strong>
-            <p>Same single-sigmoid idea, but trained with binary cross-entropy and class weighting because notable trades are rare.</p>
+            <strong>BCE version preserved</strong>
+            <p>The same single-sigmoid implementation can still train with binary cross-entropy and class weighting after the presentation.</p>
         </div>
         <div>
-            <strong>Why not plain MSE?</strong>
-            <p>With an imbalanced label, the MSE sigmoid baseline can settle into predicting the majority class and miss rare notable trades.</p>
+            <strong>Restore path</strong>
+            <p>Switch the training mode back to the improved BCE path when the lecture-only requirement is finished.</p>
         </div>
     </div>
 </section>

@@ -11,6 +11,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app import cache
 from app import retention as ret
 from app.backup import BACKUP_MODELS
 from app.db import check_database_ready, get_db, get_applied_migration_versions
@@ -317,7 +318,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             route="dashboard",
         ))
 
-    stats = get_dashboard_stats(db)
+    stats = cache.cached("dashboard_stats", lambda: get_dashboard_stats(db))
 
     recent_trades = db.query(Trade).order_by(Trade.traded_at.desc()).limit(20).all()
 
@@ -341,8 +342,8 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         for row in top_wallets_rows
     ]
 
-    top_markets = vh.build_top_markets(db)
-    activity_days = vh.build_activity_heatmap(db)
+    top_markets = cache.cached("dashboard_top_markets", lambda: vh.build_top_markets(db))
+    activity_days = cache.cached("dashboard_activity_days", lambda: vh.build_activity_heatmap(db))
 
     last_success_at = stats["last_success_at"]
     last_error_at = stats["last_error_at"]
@@ -360,7 +361,9 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "latest_error": latest_sync_event.error_message if latest_sync_event and latest_sync_event.error_message else None,
         "tone": "danger" if last_error_at and (not last_success_at or last_error_at > last_success_at) else "success",
     }
-    interesting_activity = vh.detect_interesting_activity(db)
+    interesting_activity = cache.cached(
+        "dashboard_interesting_activity", lambda: vh.detect_interesting_activity(db)
+    )
     insight_cards = [
         {
             "label": "24h value",

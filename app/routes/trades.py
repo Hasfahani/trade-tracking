@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app import ai_analysis, retention as ret, settings, view_helpers as vh
+from app import ai_analysis, cache, retention as ret, settings, view_helpers as vh
 from app.db import get_db
 from app.limiter import limiter
 from app.models import Trade, Wallet
@@ -122,26 +122,51 @@ async def all_trades(  # noqa: PLR0913
     filtered_base = query.order_by(False)
 
     page, total_trades, total_pages, pagination, trades = paginated_query(query, page, page_size)
-    summary_row = filtered_base.with_entities(
-        func.min(Trade.traded_at).label("oldest_trade_at"),
-        func.max(Trade.traded_at).label("newest_trade_at"),
-    ).first()
-    pnl = vh.trade_pnl_summary(filtered_base)
+
+    # These summary aggregations each scan the full filtered set (the trades
+    # table is large), so cache the plain-data results per filter combination.
+    # The common default (no filters) view is hit repeatedly while navigating.
+    filter_sig = repr((side, market_search, date_from, date_to, wallet_search))
+
+    def _summary_row():
+        row = filtered_base.with_entities(
+            func.min(Trade.traded_at).label("oldest_trade_at"),
+            func.max(Trade.traded_at).label("newest_trade_at"),
+        ).first()
+        return {"oldest_trade_at": row.oldest_trade_at, "newest_trade_at": row.newest_trade_at}
+
+    summary_row = cache.cached(f"alltrades_summary:{filter_sig}", _summary_row)
+    pnl = cache.cached(f"alltrades_pnl:{filter_sig}", lambda: vh.trade_pnl_summary(filtered_base))
     total_value = float(pnl["total_value"] or 0)
     yes_value = float(pnl["yes_value"] or 0)
     no_value = float(pnl["no_value"] or 0)
     yes_value_pct = round((yes_value / total_value) * 100) if total_value else 0
     no_value_pct = 100 - yes_value_pct if total_value else 0
 
-    uniq_row = filtered_base.with_entities(
-        func.count(func.distinct(Trade.wallet_address)).label("wallets"),
-        func.count(func.distinct(Trade.condition_id)).label("markets"),
-    ).first()
-    unique_wallets = int(uniq_row.wallets or 0)
-    unique_markets = int(uniq_row.markets or 0)
-    largest_trade = filtered_base.order_by((Trade.price * Trade.size).desc()).first()
-    filtered_top_wallets_raw = vh.build_filtered_top_wallets(filtered_base)
-    filtered_top_markets = vh.build_filtered_top_markets(filtered_base)
+    def _uniq():
+        row = filtered_base.with_entities(
+            func.count(func.distinct(Trade.wallet_address)).label("wallets"),
+            func.count(func.distinct(Trade.condition_id)).label("markets"),
+        ).first()
+        return {"wallets": int(row.wallets or 0), "markets": int(row.markets or 0)}
+
+    uniq = cache.cached(f"alltrades_uniq:{filter_sig}", _uniq)
+    unique_wallets = uniq["wallets"]
+    unique_markets = uniq["markets"]
+
+    def _largest():
+        row = filtered_base.order_by((Trade.price * Trade.size).desc()).first()
+        if row is None:
+            return None
+        return {"value": float(row.price * row.size), "title": row.market_title or row.condition_id}
+
+    largest_trade = cache.cached(f"alltrades_largest:{filter_sig}", _largest)
+    filtered_top_wallets_raw = cache.cached(
+        f"alltrades_top_wallets:{filter_sig}", lambda: vh.build_filtered_top_wallets(filtered_base)
+    )
+    filtered_top_markets = cache.cached(
+        f"alltrades_top_markets:{filter_sig}", lambda: vh.build_filtered_top_markets(filtered_base)
+    )
 
     # Load only wallets needed for this page and the top-wallets panel
     needed_addresses = {t.wallet_address for t in trades} | {w["address"] for w in filtered_top_wallets_raw}
@@ -163,8 +188,8 @@ async def all_trades(  # noqa: PLR0913
         },
         {
             "label": "Largest trade",
-            "value": f"${(largest_trade.price * largest_trade.size):,.2f}" if largest_trade else "$0.00",
-            "detail": (largest_trade.market_title or largest_trade.condition_id) if largest_trade else "No matching trades",
+            "value": f"${largest_trade['value']:,.2f}" if largest_trade else "$0.00",
+            "detail": largest_trade["title"] if largest_trade else "No matching trades",
             "tone": "success" if largest_trade else "info",
         },
     ]

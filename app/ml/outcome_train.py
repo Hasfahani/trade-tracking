@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_EPOCHS = 600
 DEFAULT_LR = 0.1
 DEFAULT_L2 = 1e-2  # validation sweep favours stronger L2 now the feature set is richer
+DEFAULT_LOSS_MODE = "mse"
 MIN_ROWS = 30  # below this a temporal split is meaningless
 
 
@@ -50,10 +51,10 @@ def _sigmoid(z: np.ndarray) -> np.ndarray:
 
 
 def _train_logreg(
-    X_train, y_train, X_val, y_val, epochs, lr, l2, pos_weight,
+    X_train, y_train, X_val, y_val, epochs, lr, l2, pos_weight, loss_mode,
     progress_callback: Optional[Callable[[int, int, float], None]] = None,
 ):
-    """Gradient-descent logistic regression with class weights + L2.
+    """Gradient-descent logistic regression with a selectable loss + L2.
 
     Tracks validation average-precision each epoch and restores the best weights
     (a light early-stopping that prevents overfitting the small resolved set).
@@ -61,13 +62,20 @@ def _train_logreg(
     n, d = X_train.shape
     w = np.zeros(d, dtype=np.float64)
     b = 0.0
-    sample_w = np.where(y_train == 1.0, pos_weight, 1.0)
+    sample_w = np.ones_like(y_train, dtype=np.float64)
+    if loss_mode == "weighted_bce":
+        sample_w = np.where(y_train == 1.0, pos_weight, 1.0)
     sw_sum = float(sample_w.sum())
 
     best_w, best_b, best_ap = w.copy(), b, -1.0
     for epoch in range(1, epochs + 1):
         p = _sigmoid(X_train @ w + b)
-        error = p - y_train
+        if loss_mode == "mse":
+            error = 2.0 * (p - y_train) * p * (1.0 - p)
+        elif loss_mode == "weighted_bce":
+            error = p - y_train
+        else:
+            raise ValueError(f"Unknown outcome loss mode: {loss_mode!r}")
         grad_w = X_train.T @ (sample_w * error) / sw_sum + l2 * w
         grad_b = float((sample_w * error).sum()) / sw_sum
         w -= lr * grad_w
@@ -78,9 +86,12 @@ def _train_logreg(
         if np.isfinite(val_ap) and val_ap > best_ap:
             best_ap, best_w, best_b = val_ap, w.copy(), b
         if progress_callback is not None and (epoch <= 10 or epoch % 50 == 0):
-            train_loss = float(
-                -(sample_w * (y_train * np.log(p) + (1 - y_train) * np.log(1 - p))).sum() / sw_sum
-            )
+            if loss_mode == "mse":
+                train_loss = float((sample_w * (p - y_train) ** 2).sum() / sw_sum)
+            else:
+                train_loss = float(
+                    -(sample_w * (y_train * np.log(p) + (1 - y_train) * np.log(1 - p))).sum() / sw_sum
+                )
             progress_callback(epoch, epochs, train_loss)
 
     if best_ap >= 0.0:
@@ -132,6 +143,7 @@ def train_outcome_and_export(
     epochs: int = DEFAULT_EPOCHS,
     lr: float = DEFAULT_LR,
     l2: float = DEFAULT_L2,
+    loss_mode: str = DEFAULT_LOSS_MODE,
     output_path: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, int, float], None]] = None,
 ) -> Dict[str, Any]:
@@ -139,6 +151,9 @@ def train_outcome_and_export(
 
     Raises RuntimeError when there is not enough resolved data to train.
     """
+    if loss_mode not in ("mse", "weighted_bce"):
+        raise ValueError(f"Unknown outcome loss mode: {loss_mode!r}")
+
     from app.db import get_db_context
 
     with get_db_context() as session:
@@ -161,7 +176,7 @@ def train_outcome_and_export(
     pos_weight = (n_neg / n_pos) if n_pos > 0 else 1.0
 
     w, b, best_val_ap = _train_logreg(
-        X_train, y_train, X_val, y_val, epochs, lr, l2, pos_weight, progress_callback
+        X_train, y_train, X_val, y_val, epochs, lr, l2, pos_weight, loss_mode, progress_callback
     )
 
     val_scores = _sigmoid(X_val @ w + b)
@@ -203,10 +218,11 @@ def train_outcome_and_export(
         "feature_stds": [float(v) for v in stds],
         "feature_names": list(FEATURE_NAMES),
         "trained_at": datetime.now(timezone.utc).isoformat(),
-        "loss": "weighted_binary_crossentropy",
+        "mode": loss_mode,
+        "loss": "mse" if loss_mode == "mse" else "weighted_binary_crossentropy",
         "optimizer": f"numpy_gd(lr={lr}, l2={l2})",
         "epochs": int(epochs),
-        "class_weight_positive": float(pos_weight),
+        "class_weight_positive": float(pos_weight) if loss_mode == "weighted_bce" else None,
         "threshold": float(threshold),
         "n_train": int(len(y_train)),
         "n_val": int(len(y_val)),

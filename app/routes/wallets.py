@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from sqlalchemy import case, desc, func
 from sqlalchemy.orm import Session
 
-from app import ai_analysis, alerts, settings
+from app import ai_analysis, alerts, cache, settings
 from app import retention as ret
 from app import view_helpers as vh
 from app.db import get_db
@@ -138,7 +138,9 @@ async def list_wallets(
         status_filter=status_filter,
         include_archived=bool(include_archived),
     ).all()
-    wallet_stats = vh.wallet_stats_map(db, [wallet.address for wallet in wallets])
+    # Full-table GROUP BY; cache the whole map and look up per wallet. Callers
+    # only ever read via .get(address), so a superset is safe.
+    wallet_stats = cache.cached("wallet_stats_map_all", lambda: vh.wallet_stats_map(db))
     recent_events = db.query(SyncEvent).order_by(desc(SyncEvent.created_at)).limit(12).all()
     summary = {
         "wallet_count": len(wallets),
@@ -280,41 +282,46 @@ async def leaderboard(request: Request, db: Session = Depends(get_db)):
             route="leaderboard",
         ))
 
-    trade_value = Trade.price * Trade.size
-    ranked = (
-        db.query(
-            Trade.wallet_address,
-            func.count(Trade.id).label("trade_count"),
-            func.sum(trade_value).label("total_value"),
+    def _build_rows():
+        trade_value = Trade.price * Trade.size
+        ranked = (
+            db.query(
+                Trade.wallet_address,
+                func.count(Trade.id).label("trade_count"),
+                func.sum(trade_value).label("total_value"),
+            )
+            .group_by(Trade.wallet_address)
+            .order_by(func.sum(trade_value).desc())
+            .limit(100)
+            .all()
         )
-        .group_by(Trade.wallet_address)
-        .order_by(func.sum(trade_value).desc())
-        .limit(100)
-        .all()
-    )
-    addresses = [r.wallet_address for r in ranked]
-    wallet_map = {
-        w.address: w
-        for w in db.query(Wallet).filter(Wallet.address.in_(addresses)).all()
-    } if addresses else {}
+        addresses = [r.wallet_address for r in ranked]
+        wallet_map = {
+            w.address: w
+            for w in db.query(Wallet).filter(Wallet.address.in_(addresses)).all()
+        } if addresses else {}
 
-    # Real realized performance (resolved markets only); empty until data exists.
-    perf_map = vh.compute_wallet_performance_map(db)
+        # Real realized performance (resolved markets only); empty until data exists.
+        perf_map = vh.compute_wallet_performance_map(db)
 
-    rows = []
-    for position, row in enumerate(ranked, start=1):
-        wallet = wallet_map.get(row.wallet_address)
-        tags = vh.tag_list(wallet.tags) if wallet and wallet.tags else []
-        wallet_perf = perf_map.get(row.wallet_address)
-        rows.append({
-            "rank": position,
-            "address": row.wallet_address,
-            "label": wallet.label if wallet and wallet.label else None,
-            "focus": tags[0] if tags else None,
-            "trade_count": int(row.trade_count or 0),
-            "total_value": float(row.total_value or 0),
-            "perf": wallet_perf if (wallet_perf and wallet_perf["has_data"]) else None,
-        })
+        built = []
+        for position, row in enumerate(ranked, start=1):
+            wallet = wallet_map.get(row.wallet_address)
+            tags = vh.tag_list(wallet.tags) if wallet and wallet.tags else []
+            wallet_perf = perf_map.get(row.wallet_address)
+            built.append({
+                "rank": position,
+                "address": row.wallet_address,
+                "label": wallet.label if wallet and wallet.label else None,
+                "focus": tags[0] if tags else None,
+                "trade_count": int(row.trade_count or 0),
+                "total_value": float(row.total_value or 0),
+                "perf": wallet_perf if (wallet_perf and wallet_perf["has_data"]) else None,
+            })
+        return built
+
+    # Plain-dict rows (no ORM instances), safe to cache between refreshes.
+    rows = cache.cached("leaderboard_rows", _build_rows)
 
     return templates.TemplateResponse(
         request,

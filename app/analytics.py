@@ -221,8 +221,21 @@ def compute_wallet_performance_map(
     Scoped to one wallet when ``wallet_address`` is given. Returns ``{}`` when no
     resolved+tokened trades exist, so callers fall back to honest placeholders.
     """
+    # Select only the columns the PnL math needs instead of hydrating full Trade
+    # ORM objects. At scale this join returns >100k rows; ORM hydration of that
+    # many instances is the dominant cost (seconds), while a column query is
+    # near-instant. ``compute_performance_from_trades`` reads these attributes by
+    # name, which lightweight Row objects also provide.
     trade_query = (
-        db.query(Trade, MarketResolution.outcome)
+        db.query(
+            Trade.wallet_address,
+            Trade.condition_id,
+            Trade.outcome_token,
+            Trade.side,
+            Trade.price,
+            Trade.size,
+            MarketResolution.outcome,
+        )
         .join(MarketResolution, Trade.condition_id == MarketResolution.condition_id)
         .filter(
             Trade.outcome_token.in_(("YES", "NO")),
@@ -237,9 +250,9 @@ def compute_wallet_performance_map(
 
     by_wallet: Dict[str, List] = defaultdict(list)
     outcome_by_condition: Dict[str, str] = {}
-    for trade, outcome in rows:
-        outcome_by_condition[trade.condition_id] = outcome
-        by_wallet[trade.wallet_address].append(trade)
+    for row in rows:
+        outcome_by_condition[row.condition_id] = row.outcome
+        by_wallet[row.wallet_address].append(row)
 
     return {
         address: compute_performance_from_trades(wallet_trades, outcome_by_condition)

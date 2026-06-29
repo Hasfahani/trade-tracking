@@ -18,7 +18,7 @@ from the lecture (Manually Written Lecture AP SS26):
 - "lecture" mode reproduces the lecture training exactly: MSE loss
   (E = 1/N * sum (t - y)^2) minimised with SGD(learning_rate=0.1), no class
   weighting - the same math as the hand-worked epochs in the notes.
-- "improved" mode (default) keeps the neuron but trains it with binary
+- "improved" mode keeps the neuron but trains it with binary
   cross-entropy and class weights. With a ~3.5% positive rate, MSE+sigmoid
   has vanishing gradients near y~=0 and converges to "predict 0 everywhere"
   (precision/recall 0.0). BCE is the maximum-likelihood loss for a sigmoid
@@ -36,6 +36,7 @@ import importlib.util
 import json
 import logging
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence
@@ -45,7 +46,10 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 DEFAULT_EPOCHS = 100
-DEFAULT_MODE = "improved"  # "improved" | "lecture"
+# Temporary presentation switch:
+# - "lecture" = MSE + SGD(0.1), no class weights
+# - "improved" = BCE + Adam(0.01), positive class weights
+DEFAULT_MODE = "lecture"
 TRAIN_FRACTION = 0.7
 VAL_FRACTION = 0.15  # remainder (0.15) is the test set
 SWEEP_THRESHOLDS = (0.3, 0.5, 0.7)
@@ -215,16 +219,24 @@ def select_threshold(y_true, y_score, beta: float = THRESHOLD_FBETA, max_flag_ra
 
 def _metrics_at(y_true, y_score, threshold) -> Dict[str, float]:
     precision, recall, f1 = precision_recall_f1(y_true, y_score, threshold)
+    y_true_arr = np.asarray(y_true, dtype=float)
     y_score = np.asarray(y_score, dtype=float)
+    y_pred = (y_score >= threshold).astype(float)
+    tp = int(np.sum((y_pred == 1.0) & (y_true_arr == 1.0)))
+    fp = int(np.sum((y_pred == 1.0) & (y_true_arr == 0.0)))
+    fn = int(np.sum((y_pred == 0.0) & (y_true_arr == 1.0)))
+    tn = int(np.sum((y_pred == 0.0) & (y_true_arr == 0.0)))
     return {
-        "base_rate": float(np.asarray(y_true, dtype=float).mean()) if len(y_true) else 0.0,
+        "base_rate": float(y_true_arr.mean()) if len(y_true_arr) else 0.0,
         "roc_auc": roc_auc(y_true, y_score),
         "pr_auc": average_precision(y_true, y_score),
-        "brier": float(np.mean((y_score - np.asarray(y_true, dtype=float)) ** 2)) if len(y_true) else 0.0,
+        "brier": float(np.mean((y_score - y_true_arr) ** 2)) if len(y_true_arr) else 0.0,
+        "accuracy": float((y_pred == y_true_arr).mean()) if len(y_true_arr) else 0.0,
         "precision_at_threshold": precision,
         "recall_at_threshold": recall,
         "f1_at_threshold": f1,
         "flag_rate_at_threshold": float((y_score >= threshold).mean()) if len(y_score) else 0.0,
+        "confusion_matrix": {"tn": tn, "fp": fp, "fn": fn, "tp": tp},
     }
 
 
@@ -251,8 +263,8 @@ def train_and_export(
 
     Args:
         epochs: Number of training epochs.
-        mode: "improved" (BCE + class weights, default) or "lecture"
-            (exact lecture math: MSE + SGD(0.1), no class weights).
+        mode: "lecture" (MSE + SGD(0.1), temporary default) or
+            "improved" (BCE + class weights, preserved for restoration).
         feature_names: Which features to train on. Defaults to the leakage-safe
             set (DEFAULT_FEATURE_NAMES); the deployed model excludes the
             current-value features the label is derived from.
@@ -271,6 +283,7 @@ def train_and_export(
         RuntimeError: not enough data to train.
         ValueError: unknown mode or label-leaking feature set.
     """
+    started_at = time.perf_counter()
     if mode not in ("improved", "lecture"):
         raise ValueError(f"Unknown training mode: {mode!r}")
 
@@ -339,8 +352,10 @@ def train_and_export(
     best_epoch = 0
     epochs_without_improvement = 0
     epochs_completed = 0
+    last_train_loss = None
     for epoch in range(1, epochs + 1):
         history = model.fit(X_train, y_train, epochs=1, verbose=0, class_weight=class_weight)
+        last_train_loss = float(history.history["loss"][0])
         epochs_completed = epoch
         if mode == "improved":
             epoch_val_scores = model.predict(X_val, verbose=0).flatten()
@@ -354,9 +369,7 @@ def train_and_export(
                 epochs_without_improvement += 1
         if progress_callback is not None:
             weights, bias = model.layers[0].get_weights()
-            progress_callback(
-                epoch, epochs, float(history.history["loss"][0]), weights.flatten(), float(bias[0])
-            )
+            progress_callback(epoch, epochs, last_train_loss, weights.flatten(), float(bias[0]))
         if (
             mode == "improved"
             and epoch >= EARLY_STOPPING_MIN_EPOCHS
@@ -434,6 +447,9 @@ def train_and_export(
         "epochs_completed": int(epochs_completed),
         "best_epoch": int(best_epoch or epochs_completed),
         "best_val_pr_auc": float(best_val_ap) if best_val_ap >= 0.0 else None,
+        "final_train_loss": float(last_train_loss) if last_train_loss is not None else None,
+        "final_mse_loss": float(last_train_loss) if loss_name == "mse" and last_train_loss is not None else None,
+        "training_time_seconds": float(time.perf_counter() - started_at),
         "class_weight_positive": pos_weight,
         "threshold": float(threshold),
         "n_train": int(len(y_train)),
@@ -492,7 +508,7 @@ def _run_training(epochs: int, on_success: Optional[Callable[[Dict[str, Any]], N
     def _progress(epoch, total_epochs, train_loss, _weights, _bias):
         with _status_lock:
             # Key kept as "train_mse" for the status JSON contract; holds the
-            # active mode's training loss (BCE in improved mode).
+            # active mode's training loss (MSE by default; BCE in improved mode).
             _status.update({"epoch": epoch, "total_epochs": total_epochs, "train_mse": train_loss})
 
     try:

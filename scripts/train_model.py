@@ -15,17 +15,16 @@ IMPORTANT - deployment boundary:
 This is a thin CLI wrapper around app.ml.train.train_and_export.
 
 Usage (from the repo root):
-    python scripts/train_model.py [--epochs 100] [--lecture] [--leaked] [--output PATH]
+    python scripts/train_model.py [--epochs 100] [--improved-bce] [--leaked] [--output PATH]
 
 By default the model is trained on the LEAKAGE-SAFE feature set: the current
 trade's value features (which the label is derived from) are excluded, so the
 reported metrics are an honest estimate of skill rather than ROC-AUC 1.0.
 
---lecture trains with the exact lecture math (single sigmoid neuron, MSE
-loss, SGD lr=0.1, no class weights). The default "improved" mode keeps the
-same neuron but uses binary cross-entropy + class weights so the rare
-notable class actually gets learned, and exports a validation-chosen
-operating threshold.
+The temporary default trains with the exact lecture math (single sigmoid
+neuron, MSE loss, SGD lr=0.1, no class weights). --improved-bce keeps the same
+neuron but uses the preserved binary cross-entropy + class weights path, and
+exports a validation-chosen operating threshold.
 
 --leaked reproduces the OLD leaky baseline on all features (for comparison
 only - never deploy it). --output writes elsewhere than the deployed
@@ -41,11 +40,17 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Train the notable-trade model (local only).")
-    parser.add_argument("--epochs", type=int, default=100, help="Maximum epochs; improved mode uses early stopping (default: 100)")
-    parser.add_argument(
+    parser.add_argument("--epochs", type=int, default=100, help="Maximum epochs (default: 100)")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
         "--lecture",
         action="store_true",
-        help="Train with the exact lecture setup (MSE + SGD 0.1, no class weights) instead of the improved default.",
+        help="Train with the exact lecture setup (MSE + SGD 0.1, no class weights). This is currently the default.",
+    )
+    mode_group.add_argument(
+        "--improved-bce",
+        action="store_true",
+        help="Train with the preserved BCE + class weights implementation.",
     )
     parser.add_argument(
         "--leaked",
@@ -60,9 +65,14 @@ def main() -> int:
     args = parser.parse_args()
 
     from app.ml.features import DEFAULT_FEATURE_NAMES, FEATURE_NAMES
-    from app.ml.train import train_and_export
+    from app.ml.train import DEFAULT_MODE, train_and_export
 
-    mode = "lecture" if args.lecture else "improved"
+    if args.improved_bce:
+        mode = "improved"
+    elif args.lecture:
+        mode = "lecture"
+    else:
+        mode = DEFAULT_MODE
     if args.leaked:
         feature_names = list(FEATURE_NAMES)
         allow_leakage = True
@@ -116,6 +126,12 @@ def main() -> int:
         f"Epochs: best {result.get('best_epoch', result['epochs_completed'])}, "
         f"completed {result['epochs_completed']} / requested {result['epochs_requested']}"
     )
+    if result.get("final_mse_loss") is not None:
+        print(f"Final MSE loss: {result['final_mse_loss']:.6f}")
+    elif result.get("final_train_loss") is not None:
+        print(f"Final train loss: {result['final_train_loss']:.6f}")
+    if result.get("training_time_seconds") is not None:
+        print(f"Training time: {result['training_time_seconds']:.2f}s")
     print(f"Chosen operating threshold (max F0.5 on validation): {result['threshold']:.4f}")
     print()
     print(f"{'':>12} | {'val':>8} | {'test':>8}")
@@ -123,12 +139,19 @@ def main() -> int:
         ("base_rate", "base rate"),
         ("roc_auc", "ROC-AUC"),
         ("pr_auc", "PR-AUC"),
+        ("accuracy", "accuracy"),
         ("precision_at_threshold", "precision"),
         ("recall_at_threshold", "recall"),
         ("f1_at_threshold", "F1"),
         ("flag_rate_at_threshold", "flag rate"),
     ):
         print(f"{label:>12} | {val[key]:>8.4f} | {test[key]:>8.4f}")
+    cm = test.get("confusion_matrix") or {}
+    if cm:
+        print()
+        print("Confusion matrix (test, rows=true 0/1, columns=pred 0/1):")
+        print(f"[[{cm.get('tn', 0)}, {cm.get('fp', 0)}],")
+        print(f" [{cm.get('fn', 0)}, {cm.get('tp', 0)}]]")
     print()
     print(f"{'threshold':>9} | {'precision':>9} | {'recall':>9} | {'f1':>9}  (test sweep)")
     for threshold_key, row in test["threshold_sweep"].items():

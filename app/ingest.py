@@ -13,6 +13,7 @@ import httpx
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app import cache
 from app.models import MarketResolution, SyncEvent, Trade, Wallet
 from app.settings import (
     POLYMARKET_CONNECT_TIMEOUT_SECONDS,
@@ -313,6 +314,7 @@ def cleanup_duplicate_trades(db: Session) -> int:
 
     if removed:
         db.commit()
+        cache.invalidate()
     return removed
 
 
@@ -599,6 +601,11 @@ def refresh_wallet(
                 logger.warning(
                     "Resolution fetch failed for wallet=%s - refresh unaffected", wallet.address, exc_info=True
                 )
+
+        # New trades and/or resolutions can shift every cached aggregation
+        # (dashboard, leaderboard, wallet stats, all-trades summaries). Drop the
+        # cache so the next page load reflects the refresh immediately.
+        cache.invalidate()
 
         stats = calculate_wallet_stats_snapshot(db, wallet.address)
         return {

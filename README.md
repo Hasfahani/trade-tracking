@@ -260,14 +260,16 @@ exists, so the verdicts reflect actual outcomes rather than stored value alone.
 (not just the trade detail page) and run the analysis on arrival.
 
 The model is a single sigmoid neuron (the course's `Dense(1, sigmoid)`), trained
-locally with TensorFlow and deployed as plain-numpy weights. It is **leakage-safe
-by default**: the training label is a 2-sigma threshold on a trade's value
+locally with TensorFlow and deployed as plain-numpy weights. For the presentation
+window, training defaults to the lecture setup: **MSE loss + SGD 0.1**. The BCE
+implementation is still intact behind `--improved-bce` for quick restoration.
+It is **leakage-safe by default**: the training label is a 2-sigma threshold on a trade's value
 relative to the wallet's history, so the current-trade value features the label
 is derived from (`log1p_trade_value`, `log_value_vs_prior_mean`,
 `value_zscore_capped`) are **excluded** from the deployed model. Training refuses
 to re-introduce them (see `assert_leakage_safe`). Reported metrics are therefore
-honest point estimates of skill (test ROC-AUC ~0.7), not the ROC-AUC 1.0 a
-leaky model produces by rediscovering its own label.
+honest point estimates of skill, not the ROC-AUC 1.0 a leaky model produces by
+rediscovering its own label.
 
 Provider priority for optional external analysis is Claude, then Ollama, then
 Hugging Face.
@@ -295,12 +297,12 @@ The running app does not import TensorFlow (never add it to
 (`pip install tensorflow`).
 
 ```powershell
-# Default: leakage-safe "improved" model (BCE + class weights), deployed
+# Temporary default for presentation: leakage-safe lecture model (MSE + SGD 0.1), deployed
 python scripts/train_model.py
 python scripts/score_all_trades.py --overwrite
 
-# Exact lecture math (single sigmoid neuron, MSE + SGD 0.1, no class weights)
-python scripts/train_model.py --lecture --output data/model_weights.lecture.json
+# Preserved BCE implementation for after the presentation
+python scripts/train_model.py --improved-bce --output data/model_weights.bce.json
 
 # Leaky baseline on all 15 features (comparison only - do NOT deploy)
 python scripts/train_model.py --leaked --output data/model_weights.leaked.json
